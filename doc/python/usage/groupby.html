@@ -1,0 +1,520 @@
+
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+  <head>
+    <meta charset="utf-8" />
+    <title>GroupBy &#8212; arkouda 0.0.9 documentation</title>
+    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
+    <script src="../_static/jquery.js"></script>
+    <script src="../_static/underscore.js"></script>
+    <script src="../_static/doctools.js"></script>
+    <script src="../_static/language_data.js"></script>
+    <link rel="index" title="Index" href="../genindex.html" />
+    <link rel="search" title="Search" href="../search.html" />
+    <link rel="next" title="Strings in Arkouda" href="strings.html" />
+    <link rel="prev" title="Array Set Operations" href="setops.html" />
+   
+  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="groupby">
+<span id="groupby-label"></span><h1>GroupBy<a class="headerlink" href="#groupby" title="Permalink to this headline">¶</a></h1>
+<p>The groupby-aggregate pattern is the workhorse operation in many data science applications, such as feature extraction and graph construction. It relies on <code class="docutils literal notranslate"><span class="pre">argsort()</span></code> to group an array of keys and then perform aggregations on other arrays of values.</p>
+<p>For example, imagine a dataset with two columns, <code class="docutils literal notranslate"><span class="pre">userID</span></code> and <code class="docutils literal notranslate"><span class="pre">dayOfWeek</span></code>. The following groupby-aggregate operation would show how many user IDs were active on each day of the week:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">byDayOfWeek</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">GroupBy</span><span class="p">(</span><span class="n">dayOfWeek</span><span class="p">)</span>
+<span class="n">day</span><span class="p">,</span> <span class="n">numIDs</span> <span class="o">=</span> <span class="n">byDayOfWeek</span><span class="o">.</span><span class="n">aggregate</span><span class="p">(</span><span class="n">userID</span><span class="p">,</span> <span class="s1">&#39;nunique&#39;</span><span class="p">)</span>
+</pre></div>
+</div>
+<dl class="class">
+<dt id="arkouda.GroupBy">
+<em class="property">class </em><code class="sig-prename descclassname">arkouda.</code><code class="sig-name descname">GroupBy</code><span class="sig-paren">(</span><em class="sig-param">keys</em>, <em class="sig-param">assume_sorted=False</em>, <em class="sig-param">hash_strings=True</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy" title="Permalink to this definition">¶</a></dt>
+<dd><p>Group an array or list of arrays by value, usually in preparation
+for aggregating the within-group values of another array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>keys</strong> (<em>(</em><em>list of</em><em>) </em><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>int64</em><em> or </em><em>Strings</em>) – The array to group by value, or if list, the column arrays to group by row</p></li>
+<li><p><strong>assume_sorted</strong> (<em>bool</em>) – If True, assume keys is already sorted (Default: False)</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="attribute">
+<dt id="arkouda.GroupBy.nkeys">
+<code class="sig-name descname">nkeys</code><a class="headerlink" href="#arkouda.GroupBy.nkeys" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of key arrays (columns)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="arkouda.GroupBy.size">
+<code class="sig-name descname">size</code><a class="headerlink" href="#arkouda.GroupBy.size" title="Permalink to this definition">¶</a></dt>
+<dd><p>The length of the array(s), i.e. number of rows</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="arkouda.GroupBy.permutation">
+<code class="sig-name descname">permutation</code><a class="headerlink" href="#arkouda.GroupBy.permutation" title="Permalink to this definition">¶</a></dt>
+<dd><p>The permutation that sorts the keys array(s) by value (row)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="arkouda.GroupBy.unique_keys">
+<code class="sig-name descname">unique_keys</code><a class="headerlink" href="#arkouda.GroupBy.unique_keys" title="Permalink to this definition">¶</a></dt>
+<dd><p>The unique values of the keys array(s), in grouped order</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>(list of) <a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a> or Strings</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="arkouda.GroupBy.segments">
+<code class="sig-name descname">segments</code><a class="headerlink" href="#arkouda.GroupBy.segments" title="Permalink to this definition">¶</a></dt>
+<dd><p>The start index of each group in the grouped array(s)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="attribute">
+<dt id="arkouda.GroupBy.unique_key_indices">
+<code class="sig-name descname">unique_key_indices</code><a class="headerlink" href="#arkouda.GroupBy.unique_key_indices" title="Permalink to this definition">¶</a></dt>
+<dd><p>The first index in the raw (ungrouped) keys array(s) where each
+unique value (row) occurs</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<p class="rubric">Notes</p>
+<p>Only accepts pdarrays of int64 dtype or Strings.</p>
+<dl class="method">
+<dt id="arkouda.GroupBy.aggregate">
+<code class="sig-name descname">aggregate</code><span class="sig-paren">(</span><em class="sig-param">values</em>, <em class="sig-param">operator</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.aggregate" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and apply a reduction to each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and reduce</p></li>
+<li><p><strong>operator</strong> (<em>str</em>) – The name of the reduction operator to use</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>aggregates</strong> (<em>pdarray</em>) – One aggregate value per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.all">
+<code class="sig-name descname">all</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.all" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and perform an “and” reduction on each group.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>bool</em>) – The values to group and reduce with “and”</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_any</strong> (<em>pdarray, bool</em>) – One bool per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.any">
+<code class="sig-name descname">any</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.any" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and perform an “or” reduction on each group.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>bool</em>) – The values to group and reduce with “or”</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_any</strong> (<em>pdarray, bool</em>) – One bool per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.argmax">
+<code class="sig-name descname">argmax</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.argmax" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and return the location of the first maximum of each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and find argmax</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_argmaxima</strong> (<em>pdarray, int64</em>) – One index per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The returned indices refer to the original values array as passed in, not
+the permutation applied by the GroupBy instance.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">B</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">byA</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">GroupBy</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">byA</span><span class="o">.</span><span class="n">argmax</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+<span class="go">(array([0, 1]), array([2, 1]))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.argmin">
+<code class="sig-name descname">argmin</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.argmin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and return the location of the first minimum of each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and find argmin</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_argminima</strong> (<em>pdarray, int64</em>) – One index per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The returned indices refer to the original values array as passed in, not
+the permutation applied by the GroupBy instance.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">B</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">byA</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">GroupBy</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">byA</span><span class="o">.</span><span class="n">argmin</span><span class="p">(</span><span class="n">B</span><span class="p">)</span>
+<span class="go">(array([0, 1]), array([0, 3]))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.broadcast">
+<code class="sig-name descname">broadcast</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.broadcast" title="Permalink to this definition">¶</a></dt>
+<dd><p>Fill each group’s segment with a constant value.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to put in each group’s segment</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The broadcast values</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This function is a sparse analog of <code class="docutils literal notranslate"><span class="pre">np.broadcast</span></code>. If a
+GroupBy object represents a sparse matrix (tensor), then
+this function takes a (dense) column vector and replicates
+each value to the non-zero elements in the corresponding row.</p>
+<p>The returned array is in permuted (grouped) order. To get
+back to the order of the array on which GroupBy was called,
+the user must invert the permutation (see below).</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">values</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">g</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">GroupBy</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go"># Result is in grouped order</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">g</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+<span class="go">array([3, 3, 3, 5, 5]</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="go"># Result is in original order</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span><span class="p">[</span><span class="n">g</span><span class="o">.</span><span class="n">permutation</span><span class="p">]</span> <span class="o">=</span> <span class="n">g</span><span class="o">.</span><span class="n">broadcast</span><span class="p">(</span><span class="n">values</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span>
+<span class="go">array([3, 5, 3, 5, 3])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.count">
+<code class="sig-name descname">count</code><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.count" title="Permalink to this definition">¶</a></dt>
+<dd><p>Count the number of elements in each group, i.e. the number of times
+each key appears.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>none</strong> – </p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>counts</strong> (<em>pdarray, int64</em>) – The number of times each unique key appears</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.max">
+<code class="sig-name descname">max</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.max" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and return the maximum of each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and find maxima</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_maxima</strong> (<em>pdarray</em>) – One maximum per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.mean">
+<code class="sig-name descname">mean</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.mean" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and compute the mean of each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and average</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_means</strong> (<em>pdarray, float64</em>) – One mean value per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The return dtype is always float64.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.min">
+<code class="sig-name descname">min</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.min" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and return the minimum of each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and find minima</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_minima</strong> (<em>pdarray</em>) – One minimum per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.nunique">
+<code class="sig-name descname">nunique</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.nunique" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and return the number of unique values in each group.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>int64</em>) – The values to group and find unique values</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_nunique</strong> (<em>pdarray, int64</em>) – Number of unique values per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.prod">
+<code class="sig-name descname">prod</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.prod" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and compute the product of each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and multiply</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_products</strong> (<em>pdarray, float64</em>) – One product per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The return dtype is always float64.</p>
+</dd></dl>
+
+<dl class="method">
+<dt id="arkouda.GroupBy.sum">
+<code class="sig-name descname">sum</code><span class="sig-paren">(</span><em class="sig-param">values</em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.GroupBy.sum" title="Permalink to this definition">¶</a></dt>
+<dd><p>Using the permutation stored in the GroupBy instance, group another array
+of values and sum each group’s values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to group and sum</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_keys</strong> (<em>(list of) pdarray or Strings</em>) – The unique keys, in grouped order</p></li>
+<li><p><strong>group_sums</strong> (<em>pdarray</em>) – One sum per unique key in the GroupBy instance</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The grouped sum of a boolean <code class="docutils literal notranslate"><span class="pre">pdarray</span></code> returns integers.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../index.html">arkouda</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul class="current">
+<li class="toctree-l1"><a class="reference internal" href="../setup/prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../setup/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../setup/testing.html">Performance Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../setup/quickstart.html">Quickstart</a></li>
+<li class="toctree-l1 current"><a class="reference internal" href="../usage.html">Usage</a><ul class="current">
+<li class="toctree-l2"><a class="reference internal" href="startup.html">Startup</a></li>
+<li class="toctree-l2"><a class="reference internal" href="pdarray.html">The <code class="docutils literal notranslate"><span class="pre">pdarray</span></code> class</a></li>
+<li class="toctree-l2"><a class="reference internal" href="creation.html">Creating Arrays</a></li>
+<li class="toctree-l2"><a class="reference internal" href="IO.html">Data I/O</a></li>
+<li class="toctree-l2"><a class="reference internal" href="arithmetic.html">Arithmetic and Numeric Operations</a></li>
+<li class="toctree-l2"><a class="reference internal" href="indexing.html">Indexing and Assignment</a></li>
+<li class="toctree-l2"><a class="reference internal" href="histogram.html">Summarizing Data</a></li>
+<li class="toctree-l2"><a class="reference internal" href="argsort.html">Sorting</a></li>
+<li class="toctree-l2"><a class="reference internal" href="setops.html">Array Set Operations</a></li>
+<li class="toctree-l2 current"><a class="current reference internal" href="#">GroupBy</a></li>
+<li class="toctree-l2"><a class="reference internal" href="strings.html">Strings in Arkouda</a></li>
+<li class="toctree-l2"><a class="reference internal" href="categorical.html">Categoricals</a></li>
+</ul>
+</li>
+<li class="toctree-l1"><a class="reference internal" href="../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../index.html">Documentation overview</a><ul>
+  <li><a href="../usage.html">Usage</a><ul>
+      <li>Previous: <a href="setops.html" title="previous chapter">Array Set Operations</a></li>
+      <li>Next: <a href="strings.html" title="next chapter">Strings in Arkouda</a></li>
+  </ul></li>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Michael Merrill and William Reus.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 2.4.0</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../_sources/usage/groupby.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
