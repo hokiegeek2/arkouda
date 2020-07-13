@@ -19,7 +19,7 @@ Welcome to arkouda's documentation!
    examples
    contributing
    server/index
-   client
+   client/index
 
 Indices and tables
 ==================
