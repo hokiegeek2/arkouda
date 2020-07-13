@@ -19,6 +19,7 @@ Welcome to arkouda's documentation!
    examples
    contributing
    server/index
+   client
 
 Indices and tables
 ==================

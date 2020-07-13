@@ -5,31 +5,40 @@
   <head>
     <meta charset="utf-8" />
     <title>Data I/O &#8212; arkouda 0.0.9 documentation</title>
-    <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../_static/classic.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
     <script src="../_static/jquery.js"></script>
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Arithmetic and Numeric Operations" href="arithmetic.html" />
-    <link rel="prev" title="Creating Arrays" href="creation.html" />
-   
-  <link rel="stylesheet" href="../_static/custom.css" type="text/css" />
-  
-  
-  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
-
+    <link rel="prev" title="Creating Arrays" href="creation.html" /> 
   </head><body>
-  
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             accesskey="I">index</a></li>
+        <li class="right" >
+          <a href="arithmetic.html" title="Arithmetic and Numeric Operations"
+             accesskey="N">next</a> |</li>
+        <li class="right" >
+          <a href="creation.html" title="Creating Arrays"
+             accesskey="P">previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">arkouda 0.0.9 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../usage.html" accesskey="U">Usage</a> &#187;</li> 
+      </ul>
+    </div>  
 
     <div class="document">
       <div class="documentwrapper">
         <div class="bodywrapper">
-          
-
           <div class="body" role="main">
             
   <div class="section" id="data-i-o">
@@ -419,58 +428,38 @@ is present or dataset names already exist, a RuntimeError is raised.</p>
 
 
           </div>
-          
         </div>
       </div>
       <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
         <div class="sphinxsidebarwrapper">
-<h1 class="logo"><a href="../index.html">arkouda</a></h1>
-
-
-
-
-
-
-
-
-<h3>Navigation</h3>
-<p class="caption"><span class="caption-text">Contents:</span></p>
-<ul class="current">
-<li class="toctree-l1"><a class="reference internal" href="../setup/prerequisites.html">Prerequisites</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../setup/installation.html">Installation</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../setup/testing.html">Performance Testing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../setup/quickstart.html">Quickstart</a></li>
-<li class="toctree-l1 current"><a class="reference internal" href="../usage.html">Usage</a><ul class="current">
-<li class="toctree-l2"><a class="reference internal" href="startup.html">Startup</a></li>
-<li class="toctree-l2"><a class="reference internal" href="pdarray.html">The <code class="docutils literal notranslate"><span class="pre">pdarray</span></code> class</a></li>
-<li class="toctree-l2"><a class="reference internal" href="creation.html">Creating Arrays</a></li>
-<li class="toctree-l2 current"><a class="current reference internal" href="#">Data I/O</a></li>
-<li class="toctree-l2"><a class="reference internal" href="arithmetic.html">Arithmetic and Numeric Operations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="indexing.html">Indexing and Assignment</a></li>
-<li class="toctree-l2"><a class="reference internal" href="histogram.html">Summarizing Data</a></li>
-<li class="toctree-l2"><a class="reference internal" href="argsort.html">Sorting</a></li>
-<li class="toctree-l2"><a class="reference internal" href="setops.html">Array Set Operations</a></li>
-<li class="toctree-l2"><a class="reference internal" href="groupby.html">GroupBy</a></li>
-<li class="toctree-l2"><a class="reference internal" href="strings.html">Strings in Arkouda</a></li>
-<li class="toctree-l2"><a class="reference internal" href="categorical.html">Categoricals</a></li>
+  <h3><a href="../index.html">Table of Contents</a></h3>
+  <ul>
+<li><a class="reference internal" href="#">Data I/O</a><ul>
+<li><a class="reference internal" href="#between-client-and-server">Between client and server</a></li>
+<li><a class="reference internal" href="#large-datasets">Large Datasets</a><ul>
+<li><a class="reference internal" href="#data-preprocessing">Data Preprocessing</a></li>
+<li><a class="reference internal" href="#reading-hdf5-data-from-disk">Reading HDF5 data from disk</a></li>
+<li><a class="reference internal" href="#persisting-pdarray-data-to-disk">Persisting <code class="docutils literal notranslate"><span class="pre">pdarray</span></code> data to disk</a></li>
+<li><a class="reference internal" href="#loading-persisted-arrays-from-disk">Loading persisted arrays from disk</a></li>
 </ul>
 </li>
-<li class="toctree-l1"><a class="reference internal" href="../examples.html">Examples</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
-<li class="toctree-l1"><a class="reference internal" href="../server/index.html">Chapel Docs</a></li>
+</ul>
+</li>
 </ul>
 
-<div class="relations">
-<h3>Related Topics</h3>
-<ul>
-  <li><a href="../index.html">Documentation overview</a><ul>
-  <li><a href="../usage.html">Usage</a><ul>
-      <li>Previous: <a href="creation.html" title="previous chapter">Creating Arrays</a></li>
-      <li>Next: <a href="arithmetic.html" title="next chapter">Arithmetic and Numeric Operations</a></li>
-  </ul></li>
-  </ul></li>
-</ul>
-</div>
+  <h4>Previous topic</h4>
+  <p class="topless"><a href="creation.html"
+                        title="previous chapter">Creating Arrays</a></p>
+  <h4>Next topic</h4>
+  <p class="topless"><a href="arithmetic.html"
+                        title="next chapter">Arithmetic and Numeric Operations</a></p>
+  <div role="note" aria-label="source link">
+    <h3>This Page</h3>
+    <ul class="this-page-menu">
+      <li><a href="../_sources/usage/IO.rst.txt"
+            rel="nofollow">Show Source</a></li>
+    </ul>
+   </div>
 <div id="searchbox" style="display: none" role="search">
   <h3 id="searchlabel">Quick search</h3>
     <div class="searchformwrapper">
@@ -481,32 +470,29 @@ is present or dataset names already exist, a RuntimeError is raised.</p>
     </div>
 </div>
 <script>$('#searchbox').show(0);</script>
-
-
-
-
-
-
-
-
         </div>
       </div>
       <div class="clearer"></div>
     </div>
-    <div class="footer">
-      &copy;2019, Michael Merrill and William Reus.
-      
-      |
-      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
-      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
-      
-      |
-      <a href="../_sources/usage/IO.rst.txt"
-          rel="nofollow">Page source</a>
+    <div class="related" role="navigation" aria-label="related navigation">
+      <h3>Navigation</h3>
+      <ul>
+        <li class="right" style="margin-right: 10px">
+          <a href="../genindex.html" title="General Index"
+             >index</a></li>
+        <li class="right" >
+          <a href="arithmetic.html" title="Arithmetic and Numeric Operations"
+             >next</a> |</li>
+        <li class="right" >
+          <a href="creation.html" title="Creating Arrays"
+             >previous</a> |</li>
+        <li class="nav-item nav-item-0"><a href="../index.html">arkouda 0.0.9 documentation</a> &#187;</li>
+          <li class="nav-item nav-item-1"><a href="../usage.html" >Usage</a> &#187;</li> 
+      </ul>
     </div>
-
-    
-
-    
+    <div class="footer" role="contentinfo">
+        &#169; Copyright 2020, Michael Merrill and William Reus.
+      Created using <a href="http://sphinx-doc.org/">Sphinx</a> 3.0.4.
+    </div>
   </body>
 </html>
