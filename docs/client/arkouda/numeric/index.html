@@ -1,0 +1,315 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>arkouda.numeric &#8212; arkouda 0.0.9 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-arkouda.numeric">
+<span id="arkouda-numeric"></span><h1><a class="reference internal" href="#module-arkouda.numeric" title="arkouda.numeric"><code class="xref py py-mod docutils literal notranslate"><span class="pre">arkouda.numeric</span></code></a><a class="headerlink" href="#module-arkouda.numeric" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.numeric.abs" title="arkouda.numeric.abs"><code class="xref py py-obj docutils literal notranslate"><span class="pre">abs</span></code></a>(pda)</p></td>
+<td><p>Return the element-wise absolute value of the array.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.numeric.log" title="arkouda.numeric.log"><code class="xref py py-obj docutils literal notranslate"><span class="pre">log</span></code></a>(pda)</p></td>
+<td><p>Return the element-wise natural log of the array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.numeric.exp" title="arkouda.numeric.exp"><code class="xref py py-obj docutils literal notranslate"><span class="pre">exp</span></code></a>(pda)</p></td>
+<td><p>Return the element-wise exponential of the array.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.numeric.cumsum" title="arkouda.numeric.cumsum"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cumsum</span></code></a>(pda)</p></td>
+<td><p>Return the cumulative sum over the array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.numeric.cumprod" title="arkouda.numeric.cumprod"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cumprod</span></code></a>(pda)</p></td>
+<td><p>Return the cumulative product over the array.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.numeric.sin" title="arkouda.numeric.sin"><code class="xref py py-obj docutils literal notranslate"><span class="pre">sin</span></code></a>(pda)</p></td>
+<td><p>Return the element-wise sine of the array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.numeric.cos" title="arkouda.numeric.cos"><code class="xref py py-obj docutils literal notranslate"><span class="pre">cos</span></code></a>(pda)</p></td>
+<td><p>Return the element-wise cosine of the array.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.numeric.where" title="arkouda.numeric.where"><code class="xref py py-obj docutils literal notranslate"><span class="pre">where</span></code></a>(condition, A, B)</p></td>
+<td><p>Return an array with elements chosen from A and B based on a conditioning array.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.numeric.histogram" title="arkouda.numeric.histogram"><code class="xref py py-obj docutils literal notranslate"><span class="pre">histogram</span></code></a>(pda, bins=10)</p></td>
+<td><p>Compute a histogram of evenly spaced bins over the range of an array.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.numeric.value_counts" title="arkouda.numeric.value_counts"><code class="xref py py-obj docutils literal notranslate"><span class="pre">value_counts</span></code></a>(pda)</p></td>
+<td><p>Count the occurrences of the unique values of an array.</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt id="arkouda.numeric.abs">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">abs</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.abs" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the element-wise absolute value of the array.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.log">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">log</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.log" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the element-wise natural log of the array.</p>
+<p class="rubric">Notes</p>
+<p>Logarithms with other bases can be computed as follows:</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">1</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">100</span><span class="p">])</span>
+<span class="go"># Natural log</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="go">array([0, 2.3025850929940459, 4.6051701859880918])</span>
+<span class="go"># Log base 10</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">A</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">10</span><span class="p">)</span>
+<span class="go">array([0, 1, 2])</span>
+<span class="go"># Log base 2</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="n">A</span><span class="p">)</span> <span class="o">/</span> <span class="n">np</span><span class="o">.</span><span class="n">log</span><span class="p">(</span><span class="mi">2</span><span class="p">)</span>
+<span class="go">array([0, 3.3219280948873626, 6.6438561897747253])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.exp">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">exp</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.exp" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the element-wise exponential of the array.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.cumsum">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">cumsum</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.cumsum" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the cumulative sum over the array.</p>
+<p>The sum is inclusive, such that the <code class="docutils literal notranslate"><span class="pre">i</span></code> th element of the
+result is the sum of elements up to and including <code class="docutils literal notranslate"><span class="pre">i</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.cumprod">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">cumprod</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.cumprod" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the cumulative product over the array.</p>
+<p>The product is inclusive, such that the <code class="docutils literal notranslate"><span class="pre">i</span></code> th element of the
+result is the product of elements up to and including <code class="docutils literal notranslate"><span class="pre">i</span></code>.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.sin">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">sin</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.sin" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the element-wise sine of the array.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.cos">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">cos</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.cos" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the element-wise cosine of the array.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.where">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">where</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">condition</span></em>, <em class="sig-param"><span class="n">A</span></em>, <em class="sig-param"><span class="n">B</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.where" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return an array with elements chosen from A and B based on a conditioning array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>condition</strong> (<a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – Used to choose values from A or B</p></li>
+<li><p><strong>A</strong> (<em>scalar</em><em> or </em><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – Value(s) used when condition is True</p></li>
+<li><p><strong>B</strong> (<em>scalar</em><em> or </em><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – Value(s) used when condition is False</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Values chosen from A and B according to condition</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>A and B must have the same dtype.</p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.histogram">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">histogram</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em>, <em class="sig-param"><span class="n">bins</span><span class="o">=</span><span class="default_value">10</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.histogram" title="Permalink to this definition">¶</a></dt>
+<dd><p>Compute a histogram of evenly spaced bins over the range of an array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>pda</strong> (<a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – The values to histogram</p></li>
+<li><p><strong>bins</strong> (<em>int</em>) – The number of equal-size bins to use (default: 10)</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The number of values present in each bin</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.numeric.value_counts" title="arkouda.numeric.value_counts"><code class="xref py py-func docutils literal notranslate"><span class="pre">value_counts()</span></code></a></p>
+</div>
+<p class="rubric">Notes</p>
+<p>The bins are evenly spaced in the interval [pda.min(), pda.max()]. Currently,
+the user must re-compute the bin edges, e.g. with np.linspace (see below)
+in order to plot the histogram.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">nbins</span> <span class="o">=</span> <span class="mi">3</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">h</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">histogram</span><span class="p">(</span><span class="n">A</span><span class="p">,</span> <span class="n">bins</span><span class="o">=</span><span class="n">nbins</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">h</span>
+<span class="go">array([3, 3, 4])</span>
+<span class="go"># Recreate the bin edges in NumPy</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">binEdges</span> <span class="o">=</span> <span class="n">np</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="n">A</span><span class="o">.</span><span class="n">min</span><span class="p">(),</span> <span class="n">A</span><span class="o">.</span><span class="n">max</span><span class="p">(),</span> <span class="n">nbins</span><span class="o">+</span><span class="mi">1</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">binEdges</span>
+<span class="go">array([0., 3., 6., 9.])</span>
+<span class="go"># To plot, use only the left edges, and export the histogram to NumPy</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">plt</span><span class="o">.</span><span class="n">plot</span><span class="p">(</span><span class="n">binEdges</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">],</span> <span class="n">h</span><span class="o">.</span><span class="n">to_ndarray</span><span class="p">())</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.numeric.value_counts">
+<code class="sig-prename descclassname">arkouda.numeric.</code><code class="sig-name descname">value_counts</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.numeric.value_counts" title="Permalink to this definition">¶</a></dt>
+<dd><p>Count the occurrences of the unique values of an array.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>pda</strong> (<a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>int64</em>) – The array of values to count</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p><ul class="simple">
+<li><p><strong>unique_values</strong> (<em>pdarray, int64</em>) – The unique values, sorted in ascending order</p></li>
+<li><p><strong>counts</strong> (<em>pdarray, int64</em>) – The number of times the corresponding unique value occurs</p></li>
+</ul>
+</p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">unique()</span></code>, <a class="reference internal" href="#arkouda.numeric.histogram" title="arkouda.numeric.histogram"><code class="xref py py-func docutils literal notranslate"><span class="pre">histogram()</span></code></a></p>
+</div>
+<p class="rubric">Notes</p>
+<p>This function differs from <code class="docutils literal notranslate"><span class="pre">histogram()</span></code> in that it only returns counts
+for values that are present, leaving out empty “bins”.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">A</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">([</span><span class="mi">2</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">2</span><span class="p">,</span> <span class="mi">4</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">value_counts</span><span class="p">(</span><span class="n">A</span><span class="p">)</span>
+<span class="go">(array([0, 2, 4]), array([3, 2, 1]))</span>
+</pre></div>
+</div>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">arkouda</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/testing.html">Performance Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../server/index.html">Chapel Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../client.html">Python Client Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Michael Merrill and William Reus.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../../../_sources/autoapi/arkouda/numeric/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

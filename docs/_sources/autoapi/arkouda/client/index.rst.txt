@@ -1,0 +1,104 @@
+:mod:`arkouda.client`
+=====================
+
+.. py:module:: arkouda.client
+
+
+Module Contents
+---------------
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   arkouda.client.set_defaults
+   arkouda.client.connect
+   arkouda.client.disconnect
+   arkouda.client.shutdown
+   arkouda.client.get_config
+   arkouda.client.get_mem_used
+
+
+.. data:: __version__
+   
+
+   
+
+.. data:: verbose
+   
+
+   
+
+.. data:: pdarrayIterThresh
+   
+
+   
+
+.. data:: maxTransferBytes
+   
+
+   
+
+.. data:: AllSymbols
+   :annotation: = __AllSymbols__
+
+   
+
+.. function:: set_defaults()
+
+
+.. function:: connect(server='localhost', port=5555, timeout=0)
+
+   Connect to a running arkouda server.
+
+   :param server: The hostname of the server (must be visible to the current
+                  machine). Defaults to `localhost`.
+   :type server: str, optional
+   :param port: The port of the server. Defaults to 5555.
+   :type port: int, optional
+   :param timeout: The timeout in seconds for client send and receive operations.
+                   Defaults to 0 seconds, whicn is interpreted as no timeout
+   :type timeout: int, optional
+
+   :returns:
+   :rtype: None
+
+   .. rubric:: Notes
+
+   On success, prints the connected address, as seen by the server. If called
+   with an existing connection, the socket will be re-initialized.
+
+
+.. function:: disconnect()
+
+   Disconnect from the arkouda server.
+
+
+.. function:: shutdown()
+
+   Tell the arkouda server to delete all objects and shut itself down.
+
+
+.. function:: get_config()
+
+   Get runtime information about the server.
+
+   :returns: serverHostname
+             serverPort
+             numLocales
+             numPUs (number of processor units per locale)
+             maxTaskPar (maximum number of tasks per locale)
+             physicalMemory
+   :rtype: dict
+
+
+.. function:: get_mem_used()
+
+   Compute the amount of memory used by objects in the server's symbol table.
+
+   :returns: Amount of memory allocated to symbol table objects.
+   :rtype: int
+
+

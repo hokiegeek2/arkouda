@@ -7,11 +7,13 @@
     <title>GroupBy &#8212; arkouda 0.0.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
     <script src="../_static/jquery.js"></script>
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Strings in Arkouda" href="strings.html" />
@@ -48,7 +50,7 @@ for aggregating the within-group values of another array.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>keys</strong> (<em>(</em><em>list of</em><em>) </em><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>int64</em><em> or </em><em>Strings</em>) – The array to group by value, or if list, the column arrays to group by row</p></li>
+<li><p><strong>keys</strong> (<em>(</em><em>list of</em><em>) </em><a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>int64</em><em> or </em><a class="reference internal" href="../autoapi/arkouda/index.html#arkouda.Strings" title="arkouda.Strings"><em>Strings</em></a>) – The array to group by value, or if list, the column arrays to group by row</p></li>
 <li><p><strong>assume_sorted</strong> (<em>bool</em>) – If True, assume keys is already sorted (Default: False)</p></li>
 </ul>
 </dd>
@@ -92,7 +94,7 @@ for aggregating the within-group values of another array.</p>
 <dd><p>The unique values of the keys array(s), in grouped order</p>
 <dl class="field-list simple">
 <dt class="field-odd">Type</dt>
-<dd class="field-odd"><p>(list of) <a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a> or Strings</p>
+<dd class="field-odd"><p>(list of) <a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a> or <a class="reference internal" href="../autoapi/arkouda/index.html#arkouda.Strings" title="arkouda.Strings">Strings</a></p>
 </dd>
 </dl>
 </dd></dl>
@@ -468,6 +470,7 @@ of values and sum each group’s values.</p>
 <li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../server/index.html">Chapel Docs</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../client.html">Python Client Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../autoapi/index.html">API Reference</a></li>
 </ul>
 
 <div class="relations">

@@ -13,6 +13,7 @@
 import os
 import sys
 sys.path.insert(0, os.path.abspath('../benchmarks'))
+sys.path.insert(0, os.path.abspath('../arkouda'))
 sys.path.insert(0, os.path.abspath('..'))
 
 # -- Project information -----------------------------------------------------
@@ -30,7 +31,12 @@ release = '0.0.9'
 # Add any Sphinx extension module names here, as strings. They can be
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
-extensions = ['sphinx.ext.autodoc', 'sphinx.ext.napoleon', 'sphinxarg.ext']
+extensions = ['sphinx.ext.autodoc', 'sphinx.ext.napoleon', 
+              'sphinxarg.ext', 'sphinx.ext.githubpages',
+              'sphinx.ext.coverage', 'autoapi.extension'
+             ]
+
+autoapi_dirs = ['../arkouda']
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']

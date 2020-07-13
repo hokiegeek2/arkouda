@@ -1,0 +1,535 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>arkouda.pdarraycreation &#8212; arkouda 0.0.9 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-arkouda.pdarraycreation">
+<span id="arkouda-pdarraycreation"></span><h1><a class="reference internal" href="#module-arkouda.pdarraycreation" title="arkouda.pdarraycreation"><code class="xref py py-mod docutils literal notranslate"><span class="pre">arkouda.pdarraycreation</span></code></a><a class="headerlink" href="#module-arkouda.pdarraycreation" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="functions">
+<h3>Functions<a class="headerlink" href="#functions" title="Permalink to this headline">¶</a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.array" title="arkouda.pdarraycreation.array"><code class="xref py py-obj docutils literal notranslate"><span class="pre">array</span></code></a>(a)</p></td>
+<td><p>Convert an iterable to a pdarray, sending data to the arkouda server.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.zeros" title="arkouda.pdarraycreation.zeros"><code class="xref py py-obj docutils literal notranslate"><span class="pre">zeros</span></code></a>(size, dtype=np.float64)</p></td>
+<td><p>Create a pdarray filled with zeros.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.ones" title="arkouda.pdarraycreation.ones"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ones</span></code></a>(size, dtype=float64)</p></td>
+<td><p>Create a pdarray filled with ones.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.zeros_like" title="arkouda.pdarraycreation.zeros_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">zeros_like</span></code></a>(pda)</p></td>
+<td><p>Create a zero-filled pdarray of the same size and dtype as an existing pdarray.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.ones_like" title="arkouda.pdarraycreation.ones_like"><code class="xref py py-obj docutils literal notranslate"><span class="pre">ones_like</span></code></a>(pda)</p></td>
+<td><p>Create a one-filled pdarray of the same size and dtype as an existing pdarray.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.arange" title="arkouda.pdarraycreation.arange"><code class="xref py py-obj docutils literal notranslate"><span class="pre">arange</span></code></a>(*args)</p></td>
+<td><p>arange([start,] stop[, stride])</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.linspace" title="arkouda.pdarraycreation.linspace"><code class="xref py py-obj docutils literal notranslate"><span class="pre">linspace</span></code></a>(start, stop, length)</p></td>
+<td><p>Create a pdarray of linearly spaced points in a closed interval.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.randint" title="arkouda.pdarraycreation.randint"><code class="xref py py-obj docutils literal notranslate"><span class="pre">randint</span></code></a>(low, high, size, dtype=int64)</p></td>
+<td><p>Generate a pdarray with random values in a specified range.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.uniform" title="arkouda.pdarraycreation.uniform"><code class="xref py py-obj docutils literal notranslate"><span class="pre">uniform</span></code></a>(size, low=0.0, high=1.0)</p></td>
+<td><p>Generate a pdarray with uniformly distributed random values in a specified range.</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.standard_normal" title="arkouda.pdarraycreation.standard_normal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">standard_normal</span></code></a>(size)</p></td>
+<td><p>Draw real numbers from the standard normal distribution.</p></td>
+</tr>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.random_strings_uniform" title="arkouda.pdarraycreation.random_strings_uniform"><code class="xref py py-obj docutils literal notranslate"><span class="pre">random_strings_uniform</span></code></a>(minlen, maxlen, size, characters=’uppercase’)</p></td>
+<td><p>Generate random strings with lengths uniformly distributed between</p></td>
+</tr>
+<tr class="row-even"><td><p><a class="reference internal" href="#arkouda.pdarraycreation.random_strings_lognormal" title="arkouda.pdarraycreation.random_strings_lognormal"><code class="xref py py-obj docutils literal notranslate"><span class="pre">random_strings_lognormal</span></code></a>(logmean, logstd, size, characters=’uppercase’)</p></td>
+<td><p>Generate random strings with log-normally distributed lengths and</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.array">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">array</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">a</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.array" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert an iterable to a pdarray, sending data to the arkouda server.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>a</strong> (<em>array_like</em>) – Rank-1 array of a supported dtype</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Instance of pdarray stored on arkouda server</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><code class="xref py py-func docutils literal notranslate"><span class="pre">pdarray.to_ndarray()</span></code></p>
+</div>
+<p class="rubric">Notes</p>
+<p>The number of bytes in the input array cannot exceed <cite>arkouda.maxTransferBytes</cite>,
+otherwise a RuntimeError will be raised. This is to protect the user
+from overwhelming the connection between the Python client and the arkouda
+server, under the assumption that it is a low-bandwidth connection. The user
+may override this limit by setting ak.maxTransferBytes to a larger value,
+but should proceed with caution.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">a</span> <span class="o">=</span> <span class="p">[</span><span class="mi">3</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">7</span><span class="p">]</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span> <span class="o">=</span> <span class="n">ak</span><span class="o">.</span><span class="n">array</span><span class="p">(</span><span class="n">a</span><span class="p">)</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">b</span>
+<span class="go">array([3, 5, 7])</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="nb">type</span><span class="p">(</span><span class="n">b</span><span class="p">)</span>
+<span class="go">arkouda.pdarray</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.zeros">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">zeros</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span></em>, <em class="sig-param"><span class="n">dtype</span><span class="o">=</span><span class="default_value">np.float64</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.zeros" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a pdarray filled with zeros.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>size</strong> (<em>int</em>) – Size of the array (only rank-1 arrays supported)</p></li>
+<li><p><strong>dtype</strong> (<em>{float64</em><em>, </em><em>int64</em><em>, </em><em>bool}</em>) – Type of resulting array, default float64</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Zeros of the requested size and dtype</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.ones" title="arkouda.pdarraycreation.ones"><code class="xref py py-func docutils literal notranslate"><span class="pre">ones()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.zeros_like" title="arkouda.pdarraycreation.zeros_like"><code class="xref py py-func docutils literal notranslate"><span class="pre">zeros_like()</span></code></a></p>
+</div>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+<span class="go">array([0, 0, 0, 0, 0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="go">array([0, 0, 0, 0, 0])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">zeros</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+<span class="go">array([False, False, False, False, False])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.ones">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">ones</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span></em>, <em class="sig-param"><span class="n">dtype</span><span class="o">=</span><span class="default_value">float64</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.ones" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a pdarray filled with ones.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>size</strong> (<em>int</em>) – Size of the array (only rank-1 arrays supported)</p></li>
+<li><p><strong>dtype</strong> (<em>{float64</em><em>, </em><em>int64</em><em>, </em><em>bool}</em>) – Resulting array type, default float64</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Ones of the requested size and dtype</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.zeros" title="arkouda.pdarraycreation.zeros"><code class="xref py py-func docutils literal notranslate"><span class="pre">zeros()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.ones_like" title="arkouda.pdarraycreation.ones_like"><code class="xref py py-func docutils literal notranslate"><span class="pre">ones_like()</span></code></a></p>
+</div>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">int64</span><span class="p">)</span>
+<span class="go">array([1, 1, 1, 1, 1])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="go">array([1, 1, 1, 1, 1])</span>
+<span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+<span class="go">array([True, True, True, True, True])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.zeros_like">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">zeros_like</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.zeros_like" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a zero-filled pdarray of the same size and dtype as an existing pdarray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>pda</strong> (<a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – Array to use for size and dtype</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Equivalent to ak.zeros(pda.size, pda.dtype)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.zeros" title="arkouda.pdarraycreation.zeros"><code class="xref py py-func docutils literal notranslate"><span class="pre">zeros()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.ones_like" title="arkouda.pdarraycreation.ones_like"><code class="xref py py-func docutils literal notranslate"><span class="pre">ones_like()</span></code></a></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.ones_like">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">ones_like</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">pda</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.ones_like" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a one-filled pdarray of the same size and dtype as an existing pdarray.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>pda</strong> (<a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a>) – Array to use for size and dtype</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Equivalent to ak.ones(pda.size, pda.dtype)</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.ones" title="arkouda.pdarraycreation.ones"><code class="xref py py-func docutils literal notranslate"><span class="pre">ones()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.zeros_like" title="arkouda.pdarraycreation.zeros_like"><code class="xref py py-func docutils literal notranslate"><span class="pre">zeros_like()</span></code></a></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.arange">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">arange</code><span class="sig-paren">(</span><em class="sig-param"><span class="o">*</span><span class="n">args</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.arange" title="Permalink to this definition">¶</a></dt>
+<dd><p>arange([start,] stop[, stride])</p>
+<p>Create a pdarray of consecutive integers within the interval [start, stop).
+If only one arg is given then arg is the stop parameter. If two args are given
+then the first arg is start and second is stop. If three args are given
+then the first arg is start, second is stop, third is stride.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start</strong> (<em>int</em><em>, </em><em>optional</em>) – Starting value (inclusive), the default starting value is 0</p></li>
+<li><p><strong>stop</strong> (<em>int</em>) – Stopping value (exclusive)</p></li>
+<li><p><strong>stride</strong> (<em>int</em><em>, </em><em>optional</em>) – The difference between consecutive elements, the default stride is 1,
+if stride is specified then start must also be specified</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Integers from start (inclusive) to stop (exclusive) by stride</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, int64</p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.linspace" title="arkouda.pdarraycreation.linspace"><code class="xref py py-func docutils literal notranslate"><span class="pre">linspace()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.zeros" title="arkouda.pdarraycreation.zeros"><code class="xref py py-func docutils literal notranslate"><span class="pre">zeros()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.ones" title="arkouda.pdarraycreation.ones"><code class="xref py py-func docutils literal notranslate"><span class="pre">ones()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.randint" title="arkouda.pdarraycreation.randint"><code class="xref py py-func docutils literal notranslate"><span class="pre">randint()</span></code></a></p>
+</div>
+<p class="rubric">Notes</p>
+<p>Negative strides result in decreasing values. Currently, only int64 pdarrays
+can be created with this function. For float64 arrays, use linspace.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="mi">1</span><span class="p">)</span>
+<span class="go">array([0, 1, 2, 3, 4])</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">5</span><span class="p">,</span> <span class="mi">0</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">)</span>
+<span class="go">array([5, 4, 3, 2, 1])</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">2</span><span class="p">)</span>
+<span class="go">array([0, 2, 4, 6, 8])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.linspace">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">linspace</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">start</span></em>, <em class="sig-param"><span class="n">stop</span></em>, <em class="sig-param"><span class="n">length</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.linspace" title="Permalink to this definition">¶</a></dt>
+<dd><p>Create a pdarray of linearly spaced points in a closed interval.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>start</strong> (<em>scalar</em>) – Start of interval (inclusive)</p></li>
+<li><p><strong>stop</strong> (<em>scalar</em>) – End of interval (inclusive)</p></li>
+<li><p><strong>length</strong> (<em>int</em>) – Number of points</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Array of evenly spaced points along the interval</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, float64</p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.arange" title="arkouda.pdarraycreation.arange"><code class="xref py py-func docutils literal notranslate"><span class="pre">arange()</span></code></a></p>
+</div>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">linspace</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+<span class="go">array([0, 0.25, 0.5, 0.75, 1])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.randint">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">randint</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">low</span></em>, <em class="sig-param"><span class="n">high</span></em>, <em class="sig-param"><span class="n">size</span></em>, <em class="sig-param"><span class="n">dtype</span><span class="o">=</span><span class="default_value">int64</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.randint" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a pdarray with random values in a specified range.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>low</strong> (<em>int</em>) – The low value (inclusive) of the range</p></li>
+<li><p><strong>high</strong> (<em>int</em>) – The high value (exclusive for int, inclusive for float) of the range</p></li>
+<li><p><strong>size</strong> (<em>int</em>) – The length of the returned array</p></li>
+<li><p><strong>dtype</strong> (<em>{int64</em><em>, </em><em>float64</em><em>, </em><em>bool}</em>) – The dtype of the array</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Values drawn uniformly from the specified range having the desired dtype</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>Calling randint with dtype=float64 will result in uniform non-integral
+floating point values.</p>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">10</span><span class="p">,</span> <span class="mi">5</span><span class="p">)</span>
+<span class="go">array([5, 7, 4, 8, 3])</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">float64</span><span class="p">)</span>
+<span class="go">array([0.92176432277231968, 0.083130710959903542, 0.68894208386667544])</span>
+</pre></div>
+</div>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">randint</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">5</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">ak</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span>
+<span class="go">array([True, False, True, True, True])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.uniform">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">uniform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span></em>, <em class="sig-param"><span class="n">low</span><span class="o">=</span><span class="default_value">0.0</span></em>, <em class="sig-param"><span class="n">high</span><span class="o">=</span><span class="default_value">1.0</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.uniform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate a pdarray with uniformly distributed random values in a specified range.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>low</strong> (<em>int</em>) – The low value (inclusive) of the range</p></li>
+<li><p><strong>high</strong> (<em>int</em>) – The high value (inclusive) of the range</p></li>
+<li><p><strong>size</strong> (<em>int</em>) – The length of the returned array</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>Values drawn uniformly from the specified range</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, float64</p>
+</dd>
+</dl>
+<p class="rubric">Examples</p>
+<div class="doctest highlight-default notranslate"><div class="highlight"><pre><span></span><span class="gp">&gt;&gt;&gt; </span><span class="n">ak</span><span class="o">.</span><span class="n">uniform</span><span class="p">(</span><span class="mi">3</span><span class="p">)</span>
+<span class="go">array([0.92176432277231968, 0.083130710959903542, 0.68894208386667544])</span>
+</pre></div>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.standard_normal">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">standard_normal</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">size</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.standard_normal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Draw real numbers from the standard normal distribution.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>size</strong> (<em>int</em>) – The number of samples to draw (size of the returned array)</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The array of random numbers</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, float64</p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.randint" title="arkouda.pdarraycreation.randint"><code class="xref py py-func docutils literal notranslate"><span class="pre">randint()</span></code></a></p>
+</div>
+<p class="rubric">Notes</p>
+<p>For random samples from <span class="math notranslate nohighlight">\(N(\mu, \sigma^2)\)</span>, use:</p>
+<p><code class="docutils literal notranslate"><span class="pre">(sigma</span> <span class="pre">*</span> <span class="pre">standard_normal(size))</span> <span class="pre">+</span> <span class="pre">mu</span></code></p>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.random_strings_uniform">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">random_strings_uniform</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">minlen</span></em>, <em class="sig-param"><span class="n">maxlen</span></em>, <em class="sig-param"><span class="n">size</span></em>, <em class="sig-param"><span class="n">characters</span><span class="o">=</span><span class="default_value">'uppercase'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.random_strings_uniform" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate random strings with lengths uniformly distributed between
+minlen and maxlen, and with characters drawn from a specified set.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>minlen</strong> (<em>int</em>) – The minimum allowed length of string</p></li>
+<li><p><strong>maxlen</strong> (<em>int</em>) – The maximum allowed length of string</p></li>
+<li><p><strong>size</strong> (<em>int</em>) – The number of strings to generate</p></li>
+<li><p><strong>characters</strong> (<em>(</em><em>uppercase</em><em>, </em><em>lowercase</em><em>, </em><em>numeric</em><em>, </em><em>printable</em><em>, </em><em>binary</em><em>)</em>) – The set of characters to draw from</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The array of random strings</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#arkouda.Strings" title="arkouda.Strings">Strings</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.random_strings_lognormal" title="arkouda.pdarraycreation.random_strings_lognormal"><code class="xref py py-func docutils literal notranslate"><span class="pre">random_strings_lognormal()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.randint" title="arkouda.pdarraycreation.randint"><code class="xref py py-func docutils literal notranslate"><span class="pre">randint()</span></code></a></p>
+</div>
+</dd></dl>
+
+<dl class="py function">
+<dt id="arkouda.pdarraycreation.random_strings_lognormal">
+<code class="sig-prename descclassname">arkouda.pdarraycreation.</code><code class="sig-name descname">random_strings_lognormal</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">logmean</span></em>, <em class="sig-param"><span class="n">logstd</span></em>, <em class="sig-param"><span class="n">size</span></em>, <em class="sig-param"><span class="n">characters</span><span class="o">=</span><span class="default_value">'uppercase'</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.pdarraycreation.random_strings_lognormal" title="Permalink to this definition">¶</a></dt>
+<dd><p>Generate random strings with log-normally distributed lengths and
+with characters drawn from a specified set.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>logmean</strong> (<em>float</em>) – The log-mean of the length distribution</p></li>
+<li><p><strong>logstd</strong> (<em>float</em>) – The log-standard-deviation of the length distribution</p></li>
+<li><p><strong>size</strong> (<em>int</em>) – The number of strings to generate</p></li>
+<li><p><strong>characters</strong> (<em>(</em><em>uppercase</em><em>, </em><em>lowercase</em><em>, </em><em>numeric</em><em>, </em><em>printable</em><em>, </em><em>binary</em><em>)</em>) – The set of characters to draw from</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>The array of random strings</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#arkouda.Strings" title="arkouda.Strings">Strings</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.pdarraycreation.random_strings_lognormal" title="arkouda.pdarraycreation.random_strings_lognormal"><code class="xref py py-func docutils literal notranslate"><span class="pre">random_strings_lognormal()</span></code></a>, <a class="reference internal" href="#arkouda.pdarraycreation.randint" title="arkouda.pdarraycreation.randint"><code class="xref py py-func docutils literal notranslate"><span class="pre">randint()</span></code></a></p>
+</div>
+<p class="rubric">Notes</p>
+<p>The lengths of the generated strings are distributed $Lognormal(mu, sigma^2)$,
+with <span class="math notranslate nohighlight">\(\mu = logmean\)</span> and <span class="math notranslate nohighlight">\(\sigma = logstd\)</span>. Thus, the strings will have
+an average length of <span class="math notranslate nohighlight">\(exp(\mu + 0.5*\sigma^2)\)</span>, a minimum length of zero, and
+a heavy tail towards longer strings.</p>
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">arkouda</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/testing.html">Performance Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../server/index.html">Chapel Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../client.html">Python Client Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Michael Merrill and William Reus.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../../../_sources/autoapi/arkouda/pdarraycreation/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>

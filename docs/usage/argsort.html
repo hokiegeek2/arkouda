@@ -7,11 +7,13 @@
     <title>Sorting &#8212; arkouda 0.0.9 documentation</title>
     <link rel="stylesheet" href="../_static/alabaster.css" type="text/css" />
     <link rel="stylesheet" href="../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../_static/graphviz.css" />
     <script id="documentation_options" data-url_root="../" src="../_static/documentation_options.js"></script>
     <script src="../_static/jquery.js"></script>
     <script src="../_static/underscore.js"></script>
     <script src="../_static/doctools.js"></script>
     <script src="../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
     <link rel="index" title="Index" href="../genindex.html" />
     <link rel="search" title="Search" href="../search.html" />
     <link rel="next" title="Array Set Operations" href="setops.html" />
@@ -41,7 +43,7 @@
 <dd><p>Return the permutation that sorts the array.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>pda</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em> or </em><em>Strings</em>) – The array to sort (int64 or float64)</p>
+<dd class="field-odd"><p><strong>pda</strong> (<a class="reference internal" href="pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em> or </em><a class="reference internal" href="../autoapi/arkouda/index.html#arkouda.Strings" title="arkouda.Strings"><em>Strings</em></a>) – The array to sort (int64 or float64)</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>The indices such that <code class="docutils literal notranslate"><span class="pre">pda[indices]</span></code> is sorted</p>
@@ -74,7 +76,7 @@ input arrays are treated as columns. The permutation sorts numeric
 columns, but not strings – strings are grouped, but not ordered.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters</dt>
-<dd class="field-odd"><p><strong>arrays</strong> (<em>iterable of pdarray</em><em> or </em><em>Strings</em>) – The columns (int64, float64, or Strings) to sort by row</p>
+<dd class="field-odd"><p><strong>arrays</strong> (<em>iterable of pdarray</em><em> or </em><a class="reference internal" href="../autoapi/arkouda/index.html#arkouda.Strings" title="arkouda.Strings"><em>Strings</em></a>) – The columns (int64, float64, or Strings) to sort by row</p>
 </dd>
 <dt class="field-even">Returns</dt>
 <dd class="field-even"><p>The indices that permute the rows to grouped order</p>
@@ -151,6 +153,7 @@ strings is guaranteed, lexicographic ordering of the groups is not.</p>
 <li class="toctree-l1"><a class="reference internal" href="../contributing.html">Contributing</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../server/index.html">Chapel Docs</a></li>
 <li class="toctree-l1"><a class="reference internal" href="../client.html">Python Client Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../autoapi/index.html">API Reference</a></li>
 </ul>
 
 <div class="relations">
