@@ -147,7 +147,7 @@ setup(
     # Similar to `install_requires` above, these must be valid existing
     # projects.
     extras_require={  # Optional
-        'doc': ['Sphinx', 'sphinx-argparse'],
+        'doc': ['Sphinx', 'sphinx-argparse','sphinx-autoapi'],
         'dev': ['h5py'],
         'test': ['pandas', 'pexpect', 'pytest', 'pytest-env'],
     },
