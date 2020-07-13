@@ -1,0 +1,486 @@
+
+<!DOCTYPE html>
+
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>arkouda.categorical &#8212; arkouda 0.0.9 documentation</title>
+    <link rel="stylesheet" href="../../../_static/alabaster.css" type="text/css" />
+    <link rel="stylesheet" href="../../../_static/pygments.css" type="text/css" />
+    <link rel="stylesheet" type="text/css" href="../../../_static/graphviz.css" />
+    <script id="documentation_options" data-url_root="../../../" src="../../../_static/documentation_options.js"></script>
+    <script src="../../../_static/jquery.js"></script>
+    <script src="../../../_static/underscore.js"></script>
+    <script src="../../../_static/doctools.js"></script>
+    <script src="../../../_static/language_data.js"></script>
+    <script async="async" src="https://cdnjs.cloudflare.com/ajax/libs/mathjax/2.7.5/latest.js?config=TeX-AMS-MML_HTMLorMML"></script>
+    <link rel="index" title="Index" href="../../../genindex.html" />
+    <link rel="search" title="Search" href="../../../search.html" />
+   
+  <link rel="stylesheet" href="../../../_static/custom.css" type="text/css" />
+  
+  
+  <meta name="viewport" content="width=device-width, initial-scale=0.9, maximum-scale=0.9" />
+
+  </head><body>
+  
+
+    <div class="document">
+      <div class="documentwrapper">
+        <div class="bodywrapper">
+          
+
+          <div class="body" role="main">
+            
+  <div class="section" id="module-arkouda.categorical">
+<span id="arkouda-categorical"></span><h1><a class="reference internal" href="#module-arkouda.categorical" title="arkouda.categorical"><code class="xref py py-mod docutils literal notranslate"><span class="pre">arkouda.categorical</span></code></a><a class="headerlink" href="#module-arkouda.categorical" title="Permalink to this headline">¶</a></h1>
+<div class="section" id="module-contents">
+<h2>Module Contents<a class="headerlink" href="#module-contents" title="Permalink to this headline">¶</a></h2>
+<div class="section" id="classes">
+<h3>Classes<a class="headerlink" href="#classes" title="Permalink to this headline">¶</a></h3>
+<table class="longtable docutils align-default">
+<colgroup>
+<col style="width: 10%" />
+<col style="width: 90%" />
+</colgroup>
+<tbody>
+<tr class="row-odd"><td><p><a class="reference internal" href="#arkouda.categorical.Categorical" title="arkouda.categorical.Categorical"><code class="xref py py-obj docutils literal notranslate"><span class="pre">Categorical</span></code></a>(values, **kwargs)</p></td>
+<td><p>Represents an array of values belonging to named categories. Converting a Strings</p></td>
+</tr>
+</tbody>
+</table>
+<dl class="py class">
+<dt id="arkouda.categorical.Categorical">
+<em class="property">class </em><code class="sig-prename descclassname">arkouda.categorical.</code><code class="sig-name descname">Categorical</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">values</span></em>, <em class="sig-param"><span class="o">**</span><span class="n">kwargs</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical" title="Permalink to this definition">¶</a></dt>
+<dd><p>Represents an array of values belonging to named categories. Converting a Strings
+object to Categorical often saves memory and speeds up operations, especially
+if there are many repeated values, at the cost of some one-time work in initialization.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>values</strong> (<a class="reference internal" href="../index.html#arkouda.Strings" title="arkouda.Strings"><em>Strings</em></a>) – String values to convert to categories</p>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.categories">
+<code class="sig-name descname">categories</code><a class="headerlink" href="#arkouda.categorical.Categorical.categories" title="Permalink to this definition">¶</a></dt>
+<dd><p>The set of category labels (determined automatically)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../index.html#arkouda.Strings" title="arkouda.Strings">Strings</a></p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.codes">
+<code class="sig-name descname">codes</code><a class="headerlink" href="#arkouda.categorical.Categorical.codes" title="Permalink to this definition">¶</a></dt>
+<dd><p>The category indices of the values or -1 for N/A</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, int64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.permutation">
+<code class="sig-name descname">permutation</code><a class="headerlink" href="#arkouda.categorical.Categorical.permutation" title="Permalink to this definition">¶</a></dt>
+<dd><p>The permutation that groups the values in the same order as categories</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, int64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.segments">
+<code class="sig-name descname">segments</code><a class="headerlink" href="#arkouda.categorical.Categorical.segments" title="Permalink to this definition">¶</a></dt>
+<dd><p>When values are grouped, the starting offset of each group</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, int64</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.size">
+<code class="sig-name descname">size</code><a class="headerlink" href="#arkouda.categorical.Categorical.size" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of items in the array</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.nlevels">
+<code class="sig-name descname">nlevels</code><a class="headerlink" href="#arkouda.categorical.Categorical.nlevels" title="Permalink to this definition">¶</a></dt>
+<dd><p>The number of distinct categories</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.ndim">
+<code class="sig-name descname">ndim</code><a class="headerlink" href="#arkouda.categorical.Categorical.ndim" title="Permalink to this definition">¶</a></dt>
+<dd><p>The rank of the array (currently only rank 1 arrays supported)</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>int</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.shape">
+<code class="sig-name descname">shape</code><a class="headerlink" href="#arkouda.categorical.Categorical.shape" title="Permalink to this definition">¶</a></dt>
+<dd><p>The sizes of each dimension of the array</p>
+<dl class="field-list simple">
+<dt class="field-odd">Type</dt>
+<dd class="field-odd"><p>tuple</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.BinOps">
+<code class="sig-name descname">BinOps</code><a class="headerlink" href="#arkouda.categorical.Categorical.BinOps" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="arkouda.categorical.Categorical.objtype">
+<code class="sig-name descname">objtype</code><em class="property"> = category</em><a class="headerlink" href="#arkouda.categorical.Categorical.objtype" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="id0">
+<code class="sig-name descname">permutation</code><a class="headerlink" href="#id0" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt id="id1">
+<code class="sig-name descname">segments</code><a class="headerlink" href="#id1" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.from_codes">
+<em class="property">classmethod </em><code class="sig-name descname">from_codes</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">cls</span></em>, <em class="sig-param"><span class="n">codes</span></em>, <em class="sig-param"><span class="n">categories</span></em>, <em class="sig-param"><span class="n">permutation</span><span class="o">=</span><span class="default_value">None</span></em>, <em class="sig-param"><span class="n">segments</span><span class="o">=</span><span class="default_value">None</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.from_codes" title="Permalink to this definition">¶</a></dt>
+<dd><p>Make a Categorical from codes and categories arrays. If codes and categories
+have already been precomputed, this constructor saves time. If not, please
+use the normal constructor.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>codes</strong> (<a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray"><em>pdarray</em></a><em>, </em><em>int64</em>) – Category indices of each value</p></li>
+<li><p><strong>categories</strong> (<em>String</em>) – Unique category labels</p></li>
+</ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.to_ndarray">
+<code class="sig-name descname">to_ndarray</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.to_ndarray" title="Permalink to this definition">¶</a></dt>
+<dd><p>Convert the array to a np.ndarray, transferring array data from the
+arkouda server to Python. This conversion discards category information
+and produces an ndarray of strings. If the array exceeds a builtin size limit,
+a RuntimeError is raised.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>A numpy ndarray of strings corresponding to the values in this array</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p>np.ndarray</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>The number of bytes in the array cannot exceed <code class="docutils literal notranslate"><span class="pre">arkouda.maxTransferBytes</span></code>,
+otherwise a <code class="docutils literal notranslate"><span class="pre">RuntimeError</span></code> will be raised. This is to protect the user
+from overflowing the memory of the system on which the Python client
+is running, under the assumption that the server is running on a
+distributed system with much more memory than the client. The user
+may override this limit by setting ak.maxTransferBytes to a larger
+value, but proceed with caution.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__iter__">
+<code class="sig-name descname">__iter__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__iter__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__len__">
+<code class="sig-name descname">__len__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__len__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__str__">
+<code class="sig-name descname">__str__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__str__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return str(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__repr__">
+<code class="sig-name descname">__repr__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__repr__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return repr(self).</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.binop">
+<code class="sig-name descname">binop</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">other</span></em>, <em class="sig-param"><span class="n">op</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.binop" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.r_binop">
+<code class="sig-name descname">r_binop</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">other</span></em>, <em class="sig-param"><span class="n">op</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.r_binop" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__eq__">
+<code class="sig-name descname">__eq__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">other</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__eq__" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return self==value.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__neq__">
+<code class="sig-name descname">__neq__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">other</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__neq__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.__getitem__">
+<code class="sig-name descname">__getitem__</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">key</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.__getitem__" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.reset_categories">
+<code class="sig-name descname">reset_categories</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.reset_categories" title="Permalink to this definition">¶</a></dt>
+<dd><p>Recompute the category labels, discarding any unused labels. This method
+is often useful after slicing or indexing a Categorical array, when the
+resulting array only contains a subset of the original categories. In
+this case, eliminating unused categories can speed up other operations.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.contains">
+<code class="sig-name descname">contains</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">substr</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.contains" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether each element contains the given substring.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>substr</strong> (<em>str</em>) – The substring to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True for elements that contain substr, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, bool</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This method can be significantly faster than the corresponding method
+on Strings objects, because it searches the unique category labels
+instead of the full array.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.categorical.Categorical.startswith" title="arkouda.categorical.Categorical.startswith"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Categorical.startswith()</span></code></a>, <a class="reference internal" href="#arkouda.categorical.Categorical.endswith" title="arkouda.categorical.Categorical.endswith"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Categorical.endswith()</span></code></a></p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.startswith">
+<code class="sig-name descname">startswith</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">substr</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.startswith" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether each element starts with the given substring.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>substr</strong> (<em>str</em>) – The substring to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True for elements that contain substr, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, bool</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This method can be significantly faster than the corresponding method
+on Strings objects, because it searches the unique category labels
+instead of the full array.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.categorical.Categorical.contains" title="arkouda.categorical.Categorical.contains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Categorical.contains()</span></code></a>, <a class="reference internal" href="#arkouda.categorical.Categorical.endswith" title="arkouda.categorical.Categorical.endswith"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Categorical.endswith()</span></code></a></p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.endswith">
+<code class="sig-name descname">endswith</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">substr</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.endswith" title="Permalink to this definition">¶</a></dt>
+<dd><p>Check whether each element ends with the given substring.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>substr</strong> (<em>str</em>) – The substring to search for</p>
+</dd>
+<dt class="field-even">Returns</dt>
+<dd class="field-even"><p>True for elements that contain substr, False otherwise</p>
+</dd>
+<dt class="field-odd">Return type</dt>
+<dd class="field-odd"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a>, bool</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This method can be significantly faster than the corresponding method
+on Strings objects, because it searches the unique category labels
+instead of the full array.</p>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><a class="reference internal" href="#arkouda.categorical.Categorical.startswith" title="arkouda.categorical.Categorical.startswith"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Categorical.startswith()</span></code></a>, <a class="reference internal" href="#arkouda.categorical.Categorical.contains" title="arkouda.categorical.Categorical.contains"><code class="xref py py-meth docutils literal notranslate"><span class="pre">Categorical.contains()</span></code></a></p>
+</div>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.in1d">
+<code class="sig-name descname">in1d</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">test</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.in1d" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.unique">
+<code class="sig-name descname">unique</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.unique" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.group">
+<code class="sig-name descname">group</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.group" title="Permalink to this definition">¶</a></dt>
+<dd><p>Return the permutation that groups the array, placing equivalent
+categories together. All instances of the same category are guaranteed to lie
+in one contiguous block of the permuted array, but the blocks are not
+necessarily ordered.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Returns</dt>
+<dd class="field-odd"><p>The permutation that groups the array by value</p>
+</dd>
+<dt class="field-even">Return type</dt>
+<dd class="field-even"><p><a class="reference internal" href="../../../usage/pdarray.html#arkouda.pdarray" title="arkouda.pdarray">pdarray</a></p>
+</dd>
+</dl>
+<div class="admonition seealso">
+<p class="admonition-title">See also</p>
+<p><code class="xref py py-meth docutils literal notranslate"><span class="pre">GroupBy()</span></code>, <a class="reference internal" href="#arkouda.categorical.Categorical.unique" title="arkouda.categorical.Categorical.unique"><code class="xref py py-meth docutils literal notranslate"><span class="pre">unique()</span></code></a></p>
+</div>
+<p class="rubric">Notes</p>
+<p>This method is faster than the corresponding Strings method. If the Categorical
+was created from a Strings object, then this function simply returns the
+cached permutation. Even if the Categorical was created using from_codes(),
+this function will be faster than Strings.group() because it sorts dense
+integer values, rather than 128-bit hash values.</p>
+</dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.argsort">
+<code class="sig-name descname">argsort</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.argsort" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.sort">
+<code class="sig-name descname">sort</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.sort" title="Permalink to this definition">¶</a></dt>
+<dd></dd></dl>
+
+<dl class="py method">
+<dt id="arkouda.categorical.Categorical.merge">
+<code class="sig-name descname">merge</code><span class="sig-paren">(</span><em class="sig-param"><span class="n">self</span></em>, <em class="sig-param"><span class="n">others</span></em><span class="sig-paren">)</span><a class="headerlink" href="#arkouda.categorical.Categorical.merge" title="Permalink to this definition">¶</a></dt>
+<dd><p>Merge this Categorical with other Categoricals, concatenating the arrays and
+synchronizing the categories.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters</dt>
+<dd class="field-odd"><p><strong>others</strong> (<em>list of Categorical</em>) – The Categorical arrays to concatenate and merge with this one</p>
+</dd>
+</dl>
+<p class="rubric">Notes</p>
+<p>This operation can be expensive – slower than concatenating Strings arrays.</p>
+</dd></dl>
+
+</dd></dl>
+
+</div>
+</div>
+</div>
+
+
+          </div>
+          
+        </div>
+      </div>
+      <div class="sphinxsidebar" role="navigation" aria-label="main navigation">
+        <div class="sphinxsidebarwrapper">
+<h1 class="logo"><a href="../../../index.html">arkouda</a></h1>
+
+
+
+
+
+
+
+
+<h3>Navigation</h3>
+<p class="caption"><span class="caption-text">Contents:</span></p>
+<ul>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/prerequisites.html">Prerequisites</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/installation.html">Installation</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/testing.html">Performance Testing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../setup/quickstart.html">Quickstart</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../usage.html">Usage</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../examples.html">Examples</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../contributing.html">Contributing</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../../server/index.html">Chapel Docs</a></li>
+<li class="toctree-l1"><a class="reference internal" href="../../index.html">API Reference</a></li>
+</ul>
+
+<div class="relations">
+<h3>Related Topics</h3>
+<ul>
+  <li><a href="../../../index.html">Documentation overview</a><ul>
+  </ul></li>
+</ul>
+</div>
+<div id="searchbox" style="display: none" role="search">
+  <h3 id="searchlabel">Quick search</h3>
+    <div class="searchformwrapper">
+    <form class="search" action="../../../search.html" method="get">
+      <input type="text" name="q" aria-labelledby="searchlabel" />
+      <input type="submit" value="Go" />
+    </form>
+    </div>
+</div>
+<script>$('#searchbox').show(0);</script>
+
+
+
+
+
+
+
+
+        </div>
+      </div>
+      <div class="clearer"></div>
+    </div>
+    <div class="footer">
+      &copy;2019, Michael Merrill and William Reus.
+      
+      |
+      Powered by <a href="http://sphinx-doc.org/">Sphinx 3.0.4</a>
+      &amp; <a href="https://github.com/bitprophet/alabaster">Alabaster 0.7.12</a>
+      
+      |
+      <a href="../../../_sources/autoapi/arkouda/categorical/index.rst.txt"
+          rel="nofollow">Page source</a>
+    </div>
+
+    
+
+    
+  </body>
+</html>
