@@ -1,0 +1,7 @@
+Python Client Docs
+==================
+
+... automodule:: arkouda
+   :members:
+   :undoc-members:
+   :show-inheritance:

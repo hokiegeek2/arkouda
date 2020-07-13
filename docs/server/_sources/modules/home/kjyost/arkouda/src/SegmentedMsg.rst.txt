@@ -1,0 +1,49 @@
+.. default-domain:: chpl
+
+.. module:: SegmentedMsg
+
+SegmentedMsg
+============
+**Usage**
+
+.. code-block:: chapel
+
+   use SegmentedMsg;
+
+
+or
+
+.. code-block:: chapel
+
+   import SegmentedMsg;
+
+.. function:: proc randomStringsMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segmentLengthsMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segmentedEfuncMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segmentedHashMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segmentedIndexMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segIntIndex(objtype: string, args: [] string, st: borrowed SymTab): string throws
+
+.. function:: proc convertPythonIndexToChapel(pyidx: int, high: int): int
+
+   Allow Python-style negative indices. 
+
+.. function:: proc segSliceIndex(objtype: string, args: [] string, st: borrowed SymTab): string throws
+
+.. function:: proc convertPythonSliceToChapel(start: int, stop: int, stride: int = 1): range(stridable = true)
+
+.. function:: proc segPdarrayIndex(objtype: string, args: [] string, st: borrowed SymTab): string throws
+
+.. function:: proc segBinopvvMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segBinopvsMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segIn1dMsg(reqMsg: string, st: borrowed SymTab): string throws
+
+.. function:: proc segGroupMsg(reqMsg: string, st: borrowed SymTab): string throws
+
