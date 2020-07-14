@@ -244,7 +244,9 @@ $(DOC_COMPONENTS):
 	mkdir -p $@
 
 .PHONY: doc
-doc: doc-server doc-python
+doc: 
+	mkdir ${DOC_DIR}
+	doc-server doc-python
 
 CHPLDOC := chpldoc
 CHPLDOC_FLAGS := --process-used-modules
@@ -253,6 +255,7 @@ doc-server: $(DOC_SERVER_OUTPUT_DIR)/index.html
 $(DOC_SERVER_OUTPUT_DIR)/index.html: $(ARKOUDA_SOURCES) $(ARKOUDA_MAKEFILES) | $(DOC_SERVER_OUTPUT_DIR)
 	@echo "Building documentation for: Server"
 	$(CHPLDOC) $(CHPLDOC_FLAGS) $(ARKOUDA_MAIN_SOURCE) -o $(DOC_SERVER_OUTPUT_DIR)
+	touch $(DOC_SERVER_OUTPUT_DIR)/.nojekyll
 
 DOC_PYTHON_SOURCE_DIR := pydoc
 DOC_PYTHON_SOURCES = $(shell find $(DOC_PYTHON_SOURCE_DIR)/ -type f)
@@ -264,9 +267,8 @@ $(DOC_PYTHON_OUTPUT_DIR)/index.html: $(DOC_PYTHON_SOURCES) $(ARKOUDA_MAKEFILES)
 	@# Build the documentation to a temporary output directory.
 	cd $(DOC_PYTHON_SOURCE_DIR) && $(MAKE) BUILDDIR=$($@_TMP) html
 	@# Delete old output directory and move `html` directory to its place.
-	rm -rf docs/*html docs/*js docs/_static docs/_sources docs/autoapi docs/setup/ docs/usage docs/*inv
-	#$(RM) -r $(DOC_PYTHON_OUTPUT_DIR)
-	mv $($@_TMP)/html/* $(DOC_PYTHON_OUTPUT_DIR)
+	$(RM) -r docs/*html docs/*js docs/_static docs/_sources docs/autoapi docs/setup/ docs/usage docs/*inv
+	mv $($@_TMP)/html/* $($@_TMP)/html/.nojekyll $(DOC_PYTHON_OUTPUT_DIR)
 	$(RM) -r $($@_TMP)
 
 CLEAN_TARGETS += doc-clean
