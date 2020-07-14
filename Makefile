@@ -264,8 +264,9 @@ $(DOC_PYTHON_OUTPUT_DIR)/index.html: $(DOC_PYTHON_SOURCES) $(ARKOUDA_MAKEFILES)
 	@# Build the documentation to a temporary output directory.
 	cd $(DOC_PYTHON_SOURCE_DIR) && $(MAKE) BUILDDIR=$($@_TMP) html
 	@# Delete old output directory and move `html` directory to its place.
-	$(RM) -r $(DOC_PYTHON_OUTPUT_DIR)
-	mv $($@_TMP)/html $(DOC_PYTHON_OUTPUT_DIR)
+	rm -rf docs/*html docs/*js docs/_static docs/_sources docs/autoapi docs/setup/ docs/usage docs/*inv
+	#$(RM) -r $(DOC_PYTHON_OUTPUT_DIR)
+	mv $($@_TMP)/html/* $(DOC_PYTHON_OUTPUT_DIR)
 	$(RM) -r $($@_TMP)
 
 CLEAN_TARGETS += doc-clean
