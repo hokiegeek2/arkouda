@@ -18,7 +18,8 @@ Welcome to arkouda's documentation!
    usage
    examples
    contributing
-   server/index   
+   server/index
+   readme_link
 
 Indices and tables
 ==================
