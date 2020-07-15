@@ -1,0 +1,52 @@
+.. default-domain:: chpl
+
+.. module:: FindSegmentsMsg
+
+FindSegmentsMsg
+===============
+**Usage**
+
+.. code-block:: chapel
+
+   use FindSegmentsMsg;
+
+
+or
+
+.. code-block:: chapel
+
+   import FindSegmentsMsg;
+
+.. function:: proc findSegmentsMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws
+
+   
+   
+   :arg reqMsg: request containing (cmd,kname,pname)
+   :type reqMsg: string 
+   
+   :arg st: SymTab to act on
+   :type st: borrowed SymTab 
+   
+   :returns: (string) 
+   :throws: `UndefinedSymbolError(name)`
+   
+   
+
+.. function:: proc findLocalSegmentsMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws
+
+.. function:: proc perLocFindSegsAndUkeys(perLocSorted: [?D] int, minKey: int, keyRange: int)
+
+.. record:: Segments
+
+   .. attribute:: var n: int
+
+   .. attribute:: var dom = {0..#n}
+
+   .. attribute:: var k: [dom] int
+
+   .. attribute:: var s: [dom] int
+
+   .. method:: proc init()
+
+   .. method:: proc init(keys: [?D] int, segs: [D] int)
+

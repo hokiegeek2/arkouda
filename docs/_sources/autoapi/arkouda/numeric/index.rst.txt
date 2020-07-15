@@ -1,0 +1,161 @@
+:mod:`arkouda.numeric`
+======================
+
+.. py:module:: arkouda.numeric
+
+
+Module Contents
+---------------
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   arkouda.numeric.abs
+   arkouda.numeric.log
+   arkouda.numeric.exp
+   arkouda.numeric.cumsum
+   arkouda.numeric.cumprod
+   arkouda.numeric.sin
+   arkouda.numeric.cos
+   arkouda.numeric.where
+   arkouda.numeric.histogram
+   arkouda.numeric.value_counts
+
+
+.. function:: abs(pda)
+
+   Return the element-wise absolute value of the array.
+
+
+.. function:: log(pda)
+
+   Return the element-wise natural log of the array.
+
+   .. rubric:: Notes
+
+   Logarithms with other bases can be computed as follows:
+
+   >>> A = ak.array([1, 10, 100])
+   # Natural log
+   >>> ak.log(A)
+   array([0, 2.3025850929940459, 4.6051701859880918])
+   # Log base 10
+   >>> ak.log(A) / np.log(10)
+   array([0, 1, 2])
+   # Log base 2
+   >>> ak.log(A) / np.log(2)
+   array([0, 3.3219280948873626, 6.6438561897747253])
+
+
+.. function:: exp(pda)
+
+   Return the element-wise exponential of the array.
+
+
+.. function:: cumsum(pda)
+
+   Return the cumulative sum over the array.
+
+   The sum is inclusive, such that the ``i`` th element of the
+   result is the sum of elements up to and including ``i``.
+
+
+.. function:: cumprod(pda)
+
+   Return the cumulative product over the array.
+
+   The product is inclusive, such that the ``i`` th element of the
+   result is the product of elements up to and including ``i``.
+
+
+.. function:: sin(pda)
+
+   Return the element-wise sine of the array.
+
+
+.. function:: cos(pda)
+
+   Return the element-wise cosine of the array.
+
+
+.. function:: where(condition, A, B)
+
+   Return an array with elements chosen from A and B based on a conditioning array.
+
+   :param condition: Used to choose values from A or B
+   :type condition: pdarray
+   :param A: Value(s) used when condition is True
+   :type A: scalar or pdarray
+   :param B: Value(s) used when condition is False
+   :type B: scalar or pdarray
+
+   :returns: Values chosen from A and B according to condition
+   :rtype: pdarray
+
+   .. rubric:: Notes
+
+   A and B must have the same dtype.
+
+
+.. function:: histogram(pda, bins=10)
+
+   Compute a histogram of evenly spaced bins over the range of an array.
+
+   :param pda: The values to histogram
+   :type pda: pdarray
+   :param bins: The number of equal-size bins to use (default: 10)
+   :type bins: int
+
+   :returns: The number of values present in each bin
+   :rtype: pdarray
+
+   .. seealso:: :func:`value_counts`
+
+   .. rubric:: Notes
+
+   The bins are evenly spaced in the interval [pda.min(), pda.max()]. Currently,
+   the user must re-compute the bin edges, e.g. with np.linspace (see below)
+   in order to plot the histogram.
+
+   .. rubric:: Examples
+
+   >>> A = ak.arange(0, 10, 1)
+   >>> nbins = 3
+   >>> h = ak.histogram(A, bins=nbins)
+   >>> h
+   array([3, 3, 4])
+   # Recreate the bin edges in NumPy
+   >>> binEdges = np.linspace(A.min(), A.max(), nbins+1)
+   >>> binEdges
+   array([0., 3., 6., 9.])
+   # To plot, use only the left edges, and export the histogram to NumPy
+   >>> plt.plot(binEdges[:-1], h.to_ndarray())
+
+
+.. function:: value_counts(pda)
+
+   Count the occurrences of the unique values of an array.
+
+   :param pda: The array of values to count
+   :type pda: pdarray, int64
+
+   :returns: * **unique_values** (*pdarray, int64*) -- The unique values, sorted in ascending order
+             * **counts** (*pdarray, int64*) -- The number of times the corresponding unique value occurs
+
+   .. seealso:: :func:`unique`, :func:`histogram`
+
+   .. rubric:: Notes
+
+   This function differs from ``histogram()`` in that it only returns counts
+   for values that are present, leaving out empty "bins".
+
+   .. rubric:: Examples
+
+   >>> A = ak.array([2, 0, 2, 4, 0, 0])
+   >>> ak.value_counts(A)
+   (array([0, 2, 4]), array([3, 2, 1]))
+
+

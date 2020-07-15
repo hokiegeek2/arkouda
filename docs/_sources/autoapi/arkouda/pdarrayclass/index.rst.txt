@@ -1,0 +1,638 @@
+:mod:`arkouda.pdarrayclass`
+===========================
+
+.. py:module:: arkouda.pdarrayclass
+
+
+Module Contents
+---------------
+
+Classes
+~~~~~~~
+
+.. autoapisummary::
+
+   arkouda.pdarrayclass.pdarray
+
+
+
+Functions
+~~~~~~~~~
+
+.. autoapisummary::
+
+   arkouda.pdarrayclass.info
+   arkouda.pdarrayclass.any
+   arkouda.pdarrayclass.all
+   arkouda.pdarrayclass.is_sorted
+   arkouda.pdarrayclass.sum
+   arkouda.pdarrayclass.prod
+   arkouda.pdarrayclass.min
+   arkouda.pdarrayclass.max
+   arkouda.pdarrayclass.argmin
+   arkouda.pdarrayclass.argmax
+   arkouda.pdarrayclass.mean
+   arkouda.pdarrayclass.var
+   arkouda.pdarrayclass.std
+
+
+.. py:class:: pdarray(name, mydtype, size, ndim, shape, itemsize)
+
+   The basic arkouda array class. This class contains only the
+   attributies of the array; the data resides on the arkouda
+   server. When a server operation results in a new array, arkouda
+   will create a pdarray instance that points to the array data on
+   the server. As such, the user should not initialize pdarray
+   instances directly.
+
+   .. attribute:: name
+
+      The server-side identifier for the array
+
+      :type: str
+
+   .. attribute:: dtype
+
+      The element type of the array
+
+      :type: dtype
+
+   .. attribute:: size
+
+      The number of elements in the array
+
+      :type: int
+
+   .. attribute:: ndim
+
+      The rank of the array (currently only rank 1 arrays supported)
+
+      :type: int
+
+   .. attribute:: shape
+
+      The sizes of each dimension of the array
+
+      :type: tuple
+
+   .. attribute:: itemsize
+
+      The size in bytes of each element
+
+      :type: int
+
+   .. attribute:: BinOps
+      
+
+      
+
+   .. attribute:: OpEqOps
+      
+
+      
+
+   .. attribute:: objtype
+      :annotation: = pdarray
+
+      
+
+   .. attribute:: __array_priority__
+      :annotation: = 1000
+
+      
+
+   .. method:: __del__(self)
+
+
+
+   .. method:: __bool__(self)
+
+
+
+   .. method:: __len__(self)
+
+
+
+   .. method:: __str__(self)
+
+
+      Return str(self).
+
+
+   .. method:: __repr__(self)
+
+
+      Return repr(self).
+
+
+   .. method:: format_other(self, other)
+
+
+      Attempt to cast scalar other to the element dtype of this pdarray,
+      and print the resulting value to a string (e.g. for sending to a
+      server command). The user should not call this function directly.
+
+
+   .. method:: binop(self, other, op)
+
+
+
+   .. method:: r_binop(self, other, op)
+
+
+
+   .. method:: __add__(self, other)
+
+
+
+   .. method:: __radd__(self, other)
+
+
+
+   .. method:: __sub__(self, other)
+
+
+
+   .. method:: __rsub__(self, other)
+
+
+
+   .. method:: __mul__(self, other)
+
+
+
+   .. method:: __rmul__(self, other)
+
+
+
+   .. method:: __truediv__(self, other)
+
+
+
+   .. method:: __rtruediv__(self, other)
+
+
+
+   .. method:: __floordiv__(self, other)
+
+
+
+   .. method:: __rfloordiv__(self, other)
+
+
+
+   .. method:: __mod__(self, other)
+
+
+
+   .. method:: __rmod__(self, other)
+
+
+
+   .. method:: __lshift__(self, other)
+
+
+
+   .. method:: __rlshift__(self, other)
+
+
+
+   .. method:: __rshift__(self, other)
+
+
+
+   .. method:: __rrshift__(self, other)
+
+
+
+   .. method:: __and__(self, other)
+
+
+
+   .. method:: __rand__(self, other)
+
+
+
+   .. method:: __or__(self, other)
+
+
+
+   .. method:: __ror__(self, other)
+
+
+
+   .. method:: __xor__(self, other)
+
+
+
+   .. method:: __rxor__(self, other)
+
+
+
+   .. method:: __pow__(self, other)
+
+
+
+   .. method:: __rpow__(self, other)
+
+
+
+   .. method:: __lt__(self, other)
+
+
+      Return self<value.
+
+
+   .. method:: __gt__(self, other)
+
+
+      Return self>value.
+
+
+   .. method:: __le__(self, other)
+
+
+      Return self<=value.
+
+
+   .. method:: __ge__(self, other)
+
+
+      Return self>=value.
+
+
+   .. method:: __eq__(self, other)
+
+
+      Return self==value.
+
+
+   .. method:: __ne__(self, other)
+
+
+      Return self!=value.
+
+
+   .. method:: __neg__(self)
+
+
+
+   .. method:: __invert__(self)
+
+
+
+   .. method:: opeq(self, other, op)
+
+
+
+   .. method:: __iadd__(self, other)
+
+
+
+   .. method:: __isub__(self, other)
+
+
+
+   .. method:: __imul__(self, other)
+
+
+
+   .. method:: __itruediv__(self, other)
+
+
+
+   .. method:: __ifloordiv__(self, other)
+
+
+
+   .. method:: __ilshift__(self, other)
+
+
+
+   .. method:: __irshift__(self, other)
+
+
+
+   .. method:: __iand__(self, other)
+
+
+
+   .. method:: __ior__(self, other)
+
+
+
+   .. method:: __ixor__(self, other)
+
+
+
+   .. method:: __ipow__(self, other)
+
+
+
+   .. method:: __getitem__(self, key)
+
+
+
+   .. method:: __setitem__(self, key, value)
+
+
+
+   .. method:: fill(self, value)
+
+
+      Fill the array (in place) with a constant value.
+
+
+   .. method:: any(self)
+
+
+      Return True iff any element of the array evaluates to True.
+
+
+   .. method:: all(self)
+
+
+      Return True iff all elements of the array evaluate to True.
+
+
+   .. method:: is_sorted(self)
+
+
+      Return True iff the array is monotonically non-decreasing.
+
+
+   .. method:: sum(self)
+
+
+      Return the sum of all elements in the array.
+
+
+   .. method:: prod(self)
+
+
+      Return the product of all elements in the array. Return value is
+      always a float.
+
+
+   .. method:: min(self)
+
+
+      Return the minimum value of the array.
+
+
+   .. method:: max(self)
+
+
+      Return the maximum value of the array.
+
+
+   .. method:: argmin(self)
+
+
+      Return the index of the first minimum value of the array.
+
+
+   .. method:: argmax(self)
+
+
+      Return the index of the first maximum value of the array.
+
+
+   .. method:: mean(self)
+
+
+      Return the mean of the array.
+
+
+   .. method:: var(self, ddof=0)
+
+
+      Compute the variance. See ``arkouda.var`` for details.
+
+
+   .. method:: std(self, ddof=0)
+
+
+      Compute the standard deviation. See ``arkouda.std`` for details.
+
+
+   .. method:: to_ndarray(self)
+
+
+      Convert the array to a np.ndarray, transferring array data from the
+      arkouda server to Python. If the array exceeds a builtin size limit,
+      a RuntimeError is raised.
+
+      :returns: A numpy ndarray with the same attributes and data as the pdarray
+      :rtype: np.ndarray
+
+      .. rubric:: Notes
+
+      The number of bytes in the array cannot exceed ``arkouda.maxTransferBytes``,
+      otherwise a ``RuntimeError`` will be raised. This is to protect the user
+      from overflowing the memory of the system on which the Python client
+      is running, under the assumption that the server is running on a
+      distributed system with much more memory than the client. The user
+      may override this limit by setting ak.maxTransferBytes to a larger
+      value, but proceed with caution.
+
+      .. seealso:: :meth:`array`
+
+      .. rubric:: Examples
+
+      >>> a = ak.arange(0, 5, 1)
+      >>> a.to_ndarray()
+      array([0, 1, 2, 3, 4])
+
+      >>> type(a.to_ndarray())
+      numpy.ndarray
+
+
+   .. method:: to_cuda(self)
+
+
+      Convert the array to a Numba DeviceND array, transferring array data from the
+      arkouda server to Python via ndarray. If the array exceeds a builtin size limit,
+      a RuntimeError is raised.
+
+      :returns: A Numba ndarray with the same attributes and data as the pdarray; on GPU
+      :rtype: numba.DeviceNDArray
+
+      .. rubric:: Notes
+
+      The number of bytes in the array cannot exceed ``arkouda.maxTransferBytes``,
+      otherwise a ``RuntimeError`` will be raised. This is to protect the user
+      from overflowing the memory of the system on which the Python client
+      is running, under the assumption that the server is running on a
+      distributed system with much more memory than the client. The user
+      may override this limit by setting ak.maxTransferBytes to a larger
+      value, but proceed with caution.
+
+      .. seealso:: :meth:`array`
+
+      .. rubric:: Examples
+
+      >>> a = ak.arange(0, 5, 1)
+      >>> a.to_cuda()
+      array([0, 1, 2, 3, 4])
+
+      >>> type(a.to_cuda())
+      numpy.devicendarray
+
+
+   .. method:: save(self, prefix_path, dataset='array', mode='truncate')
+
+
+      Save the pdarray to HDF5. The result is a collection of HDF5 files,
+      one file per locale of the arkouda server, where each filename starts
+      with prefix_path. Each locale saves its chunk of the array to its
+      corresponding file.
+
+      :param prefix_path: Directory and filename prefix that all output files share
+      :type prefix_path: str
+      :param dataset: Name of the dataset to create in HDF5 files (must not already exist)
+      :type dataset: str
+      :param mode: By default, truncate (overwrite) output files, if they exist.
+                   If 'append', attempt to create new dataset in existing files.
+      :type mode: {'truncate' | 'append'}
+
+      .. seealso:: :meth:`save_all`, :meth:`load`, :meth:`read_hdf`, :meth:`read_all`
+
+      .. rubric:: Notes
+
+      The prefix_path must be visible to the arkouda server and the user must have
+      write permission.
+
+      Output files have names of the form ``<prefix_path>_LOCALE<i>.hdf``, where ``<i>``
+      ranges from 0 to ``numLocales``. If any of the output files already exist and
+      the mode is 'truncate', they will be overwritten. If the mode is 'append'
+      and the number of output files is less than the number of locales or a
+      dataset with the same name already exists, a ``RuntimeError`` will result.
+
+      .. rubric:: Examples
+
+      >>> a = ak.arange(0, 100, 1)
+      >>> a.save('arkouda_range', dataset='array')
+
+      Array is saved in numLocales files with names like ``tmp/arkouda_range_LOCALE0.hdf``
+
+      The array can be read back in as follows
+
+      >>> b = ak.load('arkouda_range', dataset='array')
+      >>> (a == b).all()
+      True
+
+
+
+.. function:: info(pda)
+
+
+.. function:: any(pda)
+
+   Return True iff any element of the array evaluates to True.
+
+
+.. function:: all(pda)
+
+   Return True iff all elements of the array evaluate to True.
+
+
+.. function:: is_sorted(pda)
+
+   Return True iff the array is monotonically non-decreasing.
+
+
+.. function:: sum(pda)
+
+   Return the sum of all elements in the array.
+
+
+.. function:: prod(pda)
+
+   Return the product of all elements in the array. Return value is
+   always a float.
+
+
+.. function:: min(pda)
+
+   Return the minimum value of the array.
+
+
+.. function:: max(pda)
+
+   Return the maximum value of the array.
+
+
+.. function:: argmin(pda)
+
+   Return the index of the first minimum value of the array.
+
+
+.. function:: argmax(pda)
+
+   Return the index of the first maximum value of the array.
+
+
+.. function:: mean(pda)
+
+   Return the mean of the array.
+
+
+.. function:: var(pda, ddof=0)
+
+   Return the variance of values in the array.
+
+   :param pda: Values for which to find the variance
+   :type pda: pdarray
+   :param ddof: "Delta Degrees of Freedom" used in calculating mean
+   :type ddof: int
+
+   :returns: The scalar variance of the array
+   :rtype: float
+
+   .. seealso:: :func:`mean`, :func:`std`
+
+   .. rubric:: Notes
+
+   The variance is the average of the squared deviations from the mean,
+   i.e.,  ``var = mean((x - x.mean())**2)``.
+
+   The mean is normally calculated as ``x.sum() / N``, where ``N = len(x)``.
+   If, however, `ddof` is specified, the divisor ``N - ddof`` is used
+   instead.  In standard statistical practice, ``ddof=1`` provides an
+   unbiased estimator of the variance of a hypothetical infinite population.
+   ``ddof=0`` provides a maximum likelihood estimate of the variance for
+   normally distributed variables.
+
+
+.. function:: std(pda, ddof=0)
+
+   Return the standard deviation of values in the array. The standard
+   deviation is implemented as the square root of the variance.
+
+   :param pda: values for which to find the variance
+   :type pda: pdarray
+   :param ddof: "Delta Degrees of Freedom" used in calculating mean
+   :type ddof: int
+
+   :returns: The scalar standard deviation of the array
+   :rtype: float
+
+   .. seealso:: :func:`mean`, :func:`var`
+
+   .. rubric:: Notes
+
+   The standard deviation is the square root of the average of the squared
+   deviations from the mean, i.e., ``std = sqrt(mean((x - x.mean())**2))``.
+
+   The average squared deviation is normally calculated as
+   ``x.sum() / N``, where ``N = len(x)``.  If, however, `ddof` is specified,
+   the divisor ``N - ddof`` is used instead. In standard statistical
+   practice, ``ddof=1`` provides an unbiased estimator of the variance
+   of the infinite population. ``ddof=0`` provides a maximum likelihood
+   estimate of the variance for normally distributed variables. The
+   standard deviation computed in this function is the square root of
+   the estimated variance, so even with ``ddof=1``, it will not be an
+   unbiased estimate of the standard deviation per se.
+
+

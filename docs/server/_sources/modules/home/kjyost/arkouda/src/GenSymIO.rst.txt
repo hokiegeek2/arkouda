@@ -1,0 +1,91 @@
+.. default-domain:: chpl
+
+.. module:: GenSymIO
+
+GenSymIO
+========
+**Usage**
+
+.. code-block:: chapel
+
+   use GenSymIO;
+
+
+or
+
+.. code-block:: chapel
+
+   import GenSymIO;
+
+.. data:: config const GenSymIO_DEBUG = false
+
+.. data:: config const SEGARRAY_OFFSET_NAME = "segments"
+
+.. data:: config const SEGARRAY_VALUE_NAME = "values"
+
+.. function:: proc arrayMsg(cmd: string, payload: bytes, st: borrowed SymTab): string
+
+.. function:: proc tondarrayMsg(cmd: string, payload: bytes, st: borrowed SymTab): bytes throws
+
+.. class:: DatasetNotFoundError : Error
+
+   .. method:: proc init()
+
+.. class:: NotHDF5FileError : Error
+
+   .. method:: proc init()
+
+.. class:: MismatchedAppendError : Error
+
+   .. method:: proc init()
+
+.. class:: SegArrayError : Error
+
+   .. method:: proc init()
+
+.. function:: proc decode_json(json: string, size: int) throws
+
+.. function:: proc lshdfMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws
+
+.. function:: proc readhdfMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws
+
+   Read dataset from HDF5 files into arkouda symbol table. 
+
+.. function:: proc readAllHdfMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws
+
+   Read datasets from HDF5 files into arkouda symbol table. 
+
+.. function:: proc fixupSegBoundaries(a: [?D] int, segSubdoms: [?fD] domain(1), valSubdoms: [fD] domain(1))
+
+.. function:: proc get_dtype(filename: string, dsetName: string) throws
+
+   Get the class of the HDF5 datatype for the dataset. 
+
+.. function:: proc get_dataset_info(file_id, dsetName) throws
+
+.. class:: HDF5RankError : Error
+
+   .. attribute:: var rank: int
+
+   .. attribute:: var filename: string
+
+   .. attribute:: var dsetName: string
+
+.. function:: proc get_subdoms(filenames: [?FD] string, dsetName: string) throws
+
+   Get the subdomains of the distributed array represented by each file, as well as the total length of the array. 
+
+.. function:: proc read_files_into_distributed_array(A, filedomains: [?FD] domain(1), filenames: [FD] string, dsetName: string)
+
+   This function gets called when A is a BlockDist or DefaultRectangular array. 
+
+.. function:: proc read_files_into_distributed_array(A, filedomains: [?FD] domain(1), filenames: [FD] string, dsetName: string)
+
+   This function is called when A is a CyclicDist array. 
+
+.. function:: proc domain_intersection(d1: domain(1), d2: domain(1))
+
+.. function:: proc tohdfMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws
+
+.. function:: proc write1DDistArray(filename, mode, dsetName, A) throws
+
