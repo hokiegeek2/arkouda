@@ -70,6 +70,10 @@ proc main() {
     }
 
     socket.bind("tcp://*:%t".format(ServerPort));
+    
+    var a_context : ZMQ.Context;
+    var a_socket : ZMQ.Socket = a_context.socket(ZMQ.PUSH);
+    a_socket.bind("tcp://*:%t".format(5566));
 
     const boundary = "**************************************************************************" +
                    "**************************";
@@ -303,7 +307,7 @@ proc main() {
                     } else {
                         repMsg = "connected to arkouda server tcp://*:%t".format(ServerPort);
                     }
-                    
+                    a_socket.send("%s just connected".format(user));
                 }
                 when "disconnect" {
                     repMsg = "disconnected from arkouda server tcp://*:%t".format(ServerPort);

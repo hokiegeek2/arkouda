@@ -1,9 +1,28 @@
-import json, os
+import json, os, asyncio
 from typing import cast, Mapping, Optional, Tuple, Union
 import warnings, pkg_resources
 import zmq # type: ignore
+import zmq.asyncio 
+
 from arkouda import security, io_util
 from arkouda.logger import getArkoudaLogger
+
+a_ctx = zmq.asyncio.Context.instance()
+
+async def task():
+    sock = a_ctx.socket(zmq.SUB)
+    sock.connect("tcp://localhost:5566")
+    sock.setsockopt(zmq.SUBSCRIBE, channel.encode())
+
+    try:
+        while True:
+            msg = await sock.recv_multipart()
+            print(' | '.join(m.decode() for m in msg))
+    finally:
+        sock.setsockopt(zmq.LINGER, 0)
+        sock.close()
+
+asyncio.run(task())
 
 __all__ = ["AllSymbols", "connect", "disconnect", "shutdown", "get_config", 
            "get_mem_used", "__version__", "ruok"]
