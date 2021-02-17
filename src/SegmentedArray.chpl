@@ -494,7 +494,7 @@ module SegmentedArray {
         // Position where substr aligns with end of segment must be a hit
         // -1 for null byte
         hits[oD.interior(-(oD.size-1))] = truth[oa[oD.interior(oD.size-1)] - substr.numBytes - 1];
-        hits[oD.high] = truth[D.high];
+        hits[oD.high] = truth[D.high-1];
       }
       if v {
           t.stop(); 
@@ -706,7 +706,7 @@ module SegmentedArray {
       return (&& reduce (ediff() >= 0));
     }
 
-    proc argsort(checkSorted:bool=true): [offsets.aD] int throws {
+    proc argsort(checkSorted:bool=false): [offsets.aD] int throws {
       const ref D = offsets.aD;
       const ref va = values.a;
       if checkSorted && isSorted() {
