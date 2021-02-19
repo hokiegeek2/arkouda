@@ -2,28 +2,97 @@ import json, os, asyncio
 from typing import cast, Mapping, Optional, Tuple, Union
 import warnings, pkg_resources
 import zmq # type: ignore
-import zmq.asyncio 
-
 from arkouda import security, io_util
 from arkouda.logger import getArkoudaLogger
 from arkouda.message import RequestMessage, MessageFormat, ReplyMessage, \
      MessageType
 
-a_ctx = zmq.asyncio.Context.instance()
+import zmq.asyncio # type: ignore
+import threading
+import atexit
+
+@atexit.register
+def goodbye():
+    print("Clearing unregistered Arkouda arrays, Strings, and Categoricals")
 
 async def task():
+    a_ctx = zmq.asyncio.Context.instance()
     sock = a_ctx.socket(zmq.SUB)
     sock.connect("tcp://localhost:5566")
 
     try:
         while True:
-            msg = await sock.recv_multipart()
-            print(' | '.join(m.decode() for m in msg))
+            msg = sock.recv_string()
+            print("STRING {}".format(msg))
+            yield
+    except KeyboardInterrupt:
+        print('interrupted')
     finally:
-        sock.setsockopt(zmq.LINGER, 0)
         sock.close()
 
-#asyncio.run(task())
+async def recv():
+    a_ctx = zmq.asyncio.Context.instance()
+
+    s = a_ctx.socket(zmq.SUB)
+    s.connect("tcp://localhost:5566")
+    s.subscribe('')
+    while True:
+        msg = await s.recv()
+        print('received', msg)
+    s.close()
+
+
+async def recv_and_process():
+    a_ctx = zmq.asyncio.Context.instance()
+    sock = a_ctx.socket(zmq.PULL)
+    sock.connect("tcp://localhost:5566")
+    msg = await sock.recv_multipart() # waits for msg to be ready
+    print(msg)
+
+#asyncio.loop(recv_and_process())
+
+@asyncio.coroutine
+def listening():
+
+    a_ctx = zmq.asyncio.Context.instance()
+    sock = a_ctx.socket(zmq.SUB)
+    sock.connect("tcp://localhost:5566")
+    sock.subscribe('')
+
+    while True:
+        msg = sock.recv_string()
+        yield from asyncio.sleep(10)
+        print("THE MESSAGE: {}".format(msg))
+        
+#asyncio.Task(listening()).start()
+
+def returntomain():
+    print()
+
+'''
+
+def startLooper():
+    
+    ioloop.IOLoop.instance().start()
+
+thread = threading.Thread(target=startLooper())
+thread.start()
+'''
+
+def make_request():
+    a_ctx = zmq.asyncio.Context.instance()
+    socket = a_ctx.socket(zmq.SUB)
+    socket.connect('tcp://localhost:5566')
+
+    message = socket.recv_string()
+    print('MSG: {}'.format(message))
+
+#thread = threading.Thread(target=make_request)
+#thread.start()
+
+#loop = zmq.asyncio.ZMQEventLoop()
+#asyncio.set_event_loop(loop)
+#loop.run_until_complete(recv())
 
 __all__ = ["AllSymbols", "connect", "disconnect", "shutdown", "get_config", 
            "get_mem_used", "__version__", "ruok"]
@@ -44,6 +113,28 @@ else:
 pspStr = ''
 context = zmq.Context()
 socket = context.socket(zmq.REQ)
+
+############## Alerter Thread Subscribes to ZMQ Topic ##############
+
+class Alerter(threading.Thread):
+    
+    def run(self):
+        sock = context.socket(zmq.SUB)
+        sock.connect("tcp://localhost:5566")
+        sock.subscribe('')  
+        while True:
+            msg = sock.recv_string()
+            print(('******* MESSAGE RECEIVED FROM ARKOUDA {} ' +
+                   'PRESS RETURN TO CONTINUE *******').format(msg))
+            
+
+# Instantiate the Alerter thread and start it      
+alerter = Alerter()
+alerter.daemon = True
+alerter.start()
+
+############## Alerter Thread Subscribes to ZMQ Topic ##############
+
 connected = False
 # username and token for when basic authentication is enabled
 username = ''

@@ -82,8 +82,7 @@ proc main() {
 
     socket.bind("tcp://*:%t".format(ServerPort));
     
-    var a_context : ZMQ.Context;
-    var a_socket : ZMQ.Socket = a_context.socket(ZMQ.PUB);
+    var a_socket : ZMQ.Socket = context.socket(ZMQ.PUB);
     a_socket.bind("tcp://*:%t".format(5566));
 
     const boundary = "**************************************************************************" +
