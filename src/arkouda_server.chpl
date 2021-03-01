@@ -164,6 +164,7 @@ proc main() {
         repCount += 1;
         socket.send(generateJsonReplyMsg(msg="shutdown server (%i req)".format(repCount), 
                          msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));
+        a_socket.send("server shutdown by %s".format(user));
     }
     
     while !shutdownServer {
