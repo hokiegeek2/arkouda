@@ -152,9 +152,9 @@ setup(
     },
     # replace orginal install command with version that also builds
     # chapel and the arkouda server.
-    cmdclass={
-        "build_py": installers.ArkoudaInstall,
-    },
+    #cmdclass={
+    #    "build_py": installers.ArkoudaInstall,
+    #},
 
     # If there are data files included in your packages that need to be
     # installed, specify them here.

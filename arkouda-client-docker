@@ -1,0 +1,14 @@
+FROM python:3.7.7-slim-buster
+
+RUN mkdir /opt/install
+WORKDIR /opt/install
+ADD README.md /opt/install/README.md
+ADD VERSION /opt/install/VERSION
+ADD installers.py /opt/install/installers.py
+ADD setup.py /opt/install/setup.py
+ADD arkouda /opt/install/arkouda
+
+RUN pip install --upgrade pip
+RUN pip install .[dev]
+
+RUN rm -rf /opt/install

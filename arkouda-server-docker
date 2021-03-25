@@ -1,0 +1,16 @@
+FROM chapel/chapel:1.23.0
+
+ADD src/ /opt/src
+ADD Makefile /opt/Makefile
+ADD dep/ /opt/dep
+ADD VERSION /opt/VERSION
+
+WORKDIR /opt
+RUN make install-deps
+RUN make
+
+ENTRYPOINT ./arkouda_server
+
+EXPOSE 5555
+
+

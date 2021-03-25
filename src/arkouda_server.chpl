@@ -95,8 +95,6 @@ proc main() {
                                         serverHostname, ServerPort);
     }
 
-    socket.bind("tcp://*:%t".format(ServerPort));
-    
     const buff = '         ';
     const boundarySize = serverMessage.size + 20;
     
@@ -113,6 +111,9 @@ proc main() {
     writeln(boundary);
     writeln(serverMessage);
     writeln(boundary);
+    stdout.flush();
+
+    socket.bind("tcp://*:%t".format(ServerPort));
     
     createServerConnectionInfo();
 
