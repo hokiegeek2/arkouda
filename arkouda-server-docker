@@ -1,4 +1,4 @@
-FROM chapel/chapel:1.23.0
+FROM chapel/chapel-gasnet-smp:1.23.0
 
 ADD src/ /opt/src
 ADD Makefile /opt/Makefile
@@ -9,7 +9,8 @@ WORKDIR /opt
 RUN make install-deps
 RUN make
 
-ENTRYPOINT ./arkouda_server
+ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
+ENTRYPOINT sh ./start-arkouda-server.sh
 
 EXPOSE 5555
 
