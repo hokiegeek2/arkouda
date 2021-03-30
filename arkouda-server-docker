@@ -1,5 +1,12 @@
 FROM chapel/chapel-gasnet-smp:1.23.0
 
+# hack needed for Kubernetes deploymet
+RUN export CHPL_GASNET_MORE_CFG_OPTIONS=--enable-force-posix-realtime
+WORKDIR $CHPL_HOME
+RUN touch third-party/gasnet/Makefile
+RUN make -j
+
+# Add Arkouda files, install dependencies, and build Arkouda server
 ADD src/ /opt/src
 ADD Makefile /opt/Makefile
 ADD dep/ /opt/dep
@@ -9,6 +16,7 @@ WORKDIR /opt
 RUN make install-deps
 RUN make
 
+# Add startup script and set as entrypoint
 ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
 ENTRYPOINT sh ./start-arkouda-server.sh
 
