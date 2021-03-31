@@ -157,7 +157,7 @@ module IndexingMsg
                 return errorMsg;                
             }
             if ivMax >= e.size {
-                var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMin,e.size-1);
+                var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMax,e.size-1);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);             
                 return errorMsg;
             }
