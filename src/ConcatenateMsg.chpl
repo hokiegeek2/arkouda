@@ -175,7 +175,7 @@ module ConcatenateMsg
                           // Segments must be rebased to start from blockValStart,
                           // which is the current pointer to this locale's chunk of
                           // the values array
-                          if here.id < thisSegs.size {
+                          if here.id < thisSegs.size - 1 {
                               esegs.a[{blockstarts[here.id]..#mynsegs}] = mysegs - mysegs[thisSegs.aD.localSubdomain().low] + blockValStarts[here.id];
                               blockstarts[here.id] += mynsegs;
                               const firstSeg = thisSegs.a[thisSegs.aD.localSubdomain().low];
