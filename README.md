@@ -531,7 +531,7 @@ variables (env vars).  See the [ENVIRONMENT](ENVIRONMENT.md) documentation for m
 
 Deployment of Arkouda in containers via orchestration frameworks such as Kubernetes is currently under investigation. 
 
-Dockerfiles for the Arkouda server and client are arkouda-server-docker and arkouda-client-docker, respectively, both of which are located in the project root directory.
+Dockerfiles for the Arkouda server and client are arkouda-server-docker and arkouda-client-docker, respectively, both of which are located in the $PROJECT_HOME/ directory.
 
 The hokiegeek2 fork [server](https://hub.docker.com/r/hokiegeek2/arkouda-server) and [client](https://hub.docker.com/r/hokiegeek2/arkouda-client) docker images are available on [dockerhub](https://hub.docker.com/).
 
