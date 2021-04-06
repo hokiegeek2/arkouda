@@ -19,6 +19,8 @@
 [Chapel Gitter channel](https://gitter.im/chapel-lang/chapel)
 
 ## Talks on Arkouda
+[Bill Reus' March 2021 talk at the NJIT Data Science Seminar](https://www.youtube.com/watch?v=hzLbJF-fvjQ&t=3s)
+
 Bill Reus' CHIUW 2020 Keynote [video](https://youtu.be/g-G_Z_3pgUE) and [slides](https://chapel-lang.org/CHIUW/2020/Reus.pdf)
 
 [Mike Merrill's CHIUW 2019 talk](https://chapel-lang.org/CHIUW/2019/Merrill.pdf)
@@ -100,7 +102,8 @@ This yielded a >20TB dataframe in Arkouda.
    - [Connecting to Arkouda](#run-ak-connect)
 6. [Logging](#log-ak)
 7. [Type Checking in Arkouda](#typecheck-ak)
-8. [Contributing](#contrib-ak)
+8. [Environment Variables](#env-vars-ak)
+9. [Contributing](#contrib-ak)
 
 
 <a id="prereq-main"></a>
@@ -516,6 +519,10 @@ type checking require type hints. Consequently, to opt-out of type checking, sim
 
 </details>
 
+<a id="env-vars-ak"></a>
+## Environment Variables <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
+The various Arkouda aspects (compilation, run-time, client, tests, etc.) can be configured using a number of environment
+variables (env vars).  See the [ENVIRONMENT](ENVIRONMENT.md) documentation for more details.
 
 <a id="contrib-ak"></a>
 ## Contributing to Arkouda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
