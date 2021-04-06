@@ -103,8 +103,8 @@ This yielded a >20TB dataframe in Arkouda.
 6. [Logging](#log-ak)
 7. [Type Checking in Arkouda](#typecheck-ak)
 8. [Environment Variables](#env-vars-ak)
-9. [Contributing](#contrib-ak)
-
+9. [Deploying Arkouda in Containers](#deploy-ak-containers)
+10. [Contributing](#contrib-ak)
 
 <a id="prereq-main"></a>
 ## Prerequisites <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
@@ -521,8 +521,39 @@ type checking require type hints. Consequently, to opt-out of type checking, sim
 
 <a id="env-vars-ak"></a>
 ## Environment Variables <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
+
 The various Arkouda aspects (compilation, run-time, client, tests, etc.) can be configured using a number of environment
 variables (env vars).  See the [ENVIRONMENT](ENVIRONMENT.md) documentation for more details.
+
+
+<a id="deploy-ak-containers"></a>
+## Containerized Arkouda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
+
+Deployment of Arkouda in containers via orchestration frameworks such as Kubernetes is currently under investigation. 
+
+Dockerfiles for the Arkouda server and client are arkouda-server-docker and arkouda-client-docker, respectively, both of which are located in the project root directory.
+
+The hokiegeek2 fork [server](https://hub.docker.com/r/hokiegeek2/arkouda-server) and [client](https://hub.docker.com/r/hokiegeek2/arkouda-client) docker images are available on [dockerhub](https://hub.docker.com/).
+
+The Arkouda server can be deployed in a container runtime such as [docker](https://www.docker.com/) or [containerd](https://containerd.io/) via the following CLI arguments:
+
+```
+docker run -it --rm -p 5555:5555 -e NUMLOCALES=3 -e MEMTRACK=true -e AUTHENTICATE=false -e VERBOSE=true hokiegeek2/arkouda-server:0.0.5 
+```
+
+Similarly, the Arkouda client docker can also be deployed in a container runtime:
+
+```
+docker run -it --rm hokiegeek2/arkouda-client:0.0.5
+```
+
+The Arkouda server can be deployed to [Kubernetes](https://kubernetes.io/) via the Arkouda server [Helm](https://helm.sh/) chart, which is located in the $PROJECT_HOME/arkouda-server-chart folder. The Arkouda helm chart is installed as follows:
+
+```
+helm install -n arkouda arkouda-server-deployment arkouda-server-chart/
+```
+
+In a Kubernetes environment, the Arkouda client is normally installed via pip within a Jupyter notebook deployed in [Jupyterhub](https://github.com/jupyterhub/helm-chart) or [Dask-Jupyter](https://github.com/dask/helm-chart). 
 
 <a id="contrib-ak"></a>
 ## Contributing to Arkouda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
