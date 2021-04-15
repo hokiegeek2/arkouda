@@ -136,16 +136,6 @@ class CategoricalTest(ArkoudaTest):
         catOne = self._getCategorical('string',51)
         catTwo = self._getCategorical('string-two', 51)
         
-        resultCat = catOne.concatenate([catTwo])
-        self.assertEqual('category', resultCat.objtype)
-        self.assertIsInstance(resultCat, ak.Categorical)
-        self.assertEqual(100,resultCat.size)
-
-        # Since Categorical.concatenate uses Categorical.from_codes method, confirm
-        # that both permutation and segments are None
-        self.assertFalse(resultCat.permutation)
-        self.assertFalse(resultCat.segments)
-        
         resultCat = ak.concatenate([catOne,catOne], ordered=False)
         self.assertEqual('category', resultCat.objtype)
         self.assertIsInstance(resultCat, ak.Categorical)
@@ -155,7 +145,15 @@ class CategoricalTest(ArkoudaTest):
         # that both permutation and segments are None
         self.assertFalse(resultCat.permutation)
         self.assertFalse(resultCat.segments)
+       
+        catOne = self._getCategorical('string',11)
+        catTwo = self._getCategorical('string-two', 6)
         
+        resultCat = ak.concatenate([catOne,catTwo])
+        self.assertEqual('category', resultCat.objtype)
+        self.assertIsInstance(resultCat, ak.Categorical)
+        self.assertEqual(15,resultCat.size)
+
         # Concatenate two Categoricals with different categories, and test result against original strings
         s1 = ak.array(['abc', 'de', 'abc', 'fghi', 'de'])
         s2 = ak.array(['jkl', 'mno', 'fghi', 'abc', 'fghi', 'mno'])
