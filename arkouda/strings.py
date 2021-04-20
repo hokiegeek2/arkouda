@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import cast, Tuple, Union
 from typeguard import typechecked
 from arkouda.client import generic_msg
-from arkouda.pdarrayclass import pdarray, create_pdarray, parse_single_value
+from arkouda.pdarrayclass import pdarray, create_pdarray, parse_single_value, list_registry
 from arkouda.logger import getArkoudaLogger
 import numpy as np # type: ignore
 from arkouda.dtypes import npstr, int_scalars, str_scalars
@@ -96,6 +96,7 @@ class Strings:
             raise ValueError(e)   
 
         self.dtype = npstr
+        self.name:Union[str, None] = None
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
     def __iter__(self):
@@ -827,19 +828,131 @@ class Strings:
         self.bytes.save(prefix_path=prefix_path, 
                                     dataset='{}/values'.format(dataset), mode=mode)
 
-    @classmethod
-    def register_helper(cls, offsets, bytes):
-        return cls(offsets, bytes)
+    def is_registered(self) -> np.bool_:
+        """
+        Return True iff the object is contained in the registry
 
-    def register(self, user_defined_name : str) -> Strings:
-        return self.register_helper(self.offsets.register(user_defined_name+'_offsets'),
-                               self.bytes.register(user_defined_name+'_bytes'))
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bool
+            Indicates if the object is contained in the registry
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there's a server-side error thrown
+        """
+        return np.bool_(self.offsets.is_registered() and self.bytes.is_registered())
+
+    @typechecked
+    def register(self, user_defined_name: str) -> Strings:
+        """
+        Register this Strings object with a user defined name in the arkouda server
+        so it can be attached to later using Strings.attach()
+        This is an in-place operation, registering a Strings object more than once will
+        update the name in the registry and remove the previously registered name.
+        A name can only be registered to one object at a time.
+
+        Parameters
+        ----------
+        user_defined_name : str
+            user defined name which the Strings object is to be registered under
+
+        Returns
+        -------
+        Strings
+            The same Strings object which is now registered with the arkouda server and has an updated name.
+            This is an in-place modification, the original is returned to support a fluid programming style.
+            Please note you cannot register two different objects with the same name.
+
+        Raises
+        ------
+        TypeError
+            Raised if user_defined_name is not a str
+        RegistrationError
+            If the server was unable to register the Strings object with the user_defined_name
+            If the user is attempting to register more than one object with the same name, the former should be
+            unregistered first to free up the registration name.
+
+        See also
+        --------
+        attach, unregister
+
+        Notes
+        -----
+        Registered names/Strings objects in the server are immune to deletion
+        until they are unregistered.
+        """
+        self.offsets.register(user_defined_name+'_offsets')
+        self.bytes.register(user_defined_name+'_bytes')
+        self.name = user_defined_name
+        return self
 
     def unregister(self) -> None:
+        """
+        Unregister a Strings object in the arkouda server which was previously
+        registered using register() and/or attached to using attach()
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the server could not find the internal name/symbol to remove
+
+        See also
+        --------
+        register, unregister
+
+        Notes
+        -----
+        Registered names/Strings objects in the server are immune to deletion until
+        they are unregistered.
+        """
         self.offsets.unregister()
         self.bytes.unregister()
 
     @staticmethod
-    def attach(user_defined_name : str) -> Strings:
-        return Strings(pdarray.attach(user_defined_name+'_offsets'),
+    @typechecked
+    def attach(user_defined_name: str) -> Strings:
+        """
+        class method to return a Strings object attached to the registered name in the arkouda
+        server which was registered using register()
+
+        Parameters
+        ----------
+        user_defined_name : str
+            user defined name which the Strings object was registered under
+
+        Returns
+        -------
+        Strings object
+            the Strings object registered with user_defined_name in the arkouda server
+
+        Raises
+        ------
+        TypeError
+            Raised if user_defined_name is not a str
+
+        See also
+        --------
+        register, unregister
+
+        Notes
+        -----
+        Registered names/Strings objects in the server are immune to deletion
+        until they are unregistered.
+        """
+        s = Strings(pdarray.attach(user_defined_name+'_offsets'),
                        pdarray.attach(user_defined_name+'_bytes'))
+        s.name = user_defined_name
+        return s

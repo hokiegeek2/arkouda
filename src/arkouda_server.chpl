@@ -21,13 +21,8 @@ use SymArrayDmap;
 use ServerErrorStrings;
 use Message;
 
-const asLogger = new Logger();
-
-if v {
-    asLogger.level = LogLevel.DEBUG;
-} else {
-    asLogger.level = LogLevel.INFO;
-}
+private config const logLevel = ServerConfig.logLevel;
+const asLogger = new Logger(logLevel);
 
 proc initArkoudaDirectory() {
     var arkDirectory = '%s%s%s'.format(here.cwd(), pathSep,'.arkouda');
@@ -268,8 +263,7 @@ proc main() {
               try {
                 if (cmd != "array") {
                   asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
-                                                     ">>> %t %t".format(cmd, 
-                                                    payload.decode(decodePolicy.replace)));
+                                                     ">>> %t %t".format(cmd, args));
                 } else {
                   asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
                                                      ">>> %s [binary data]".format(cmd));

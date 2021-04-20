@@ -10,12 +10,8 @@ module MultiTypeSymbolTable
     use MultiTypeSymEntry;
     use Map;
     
-    var mtLogger = new Logger();
-    if v {
-        mtLogger.level = LogLevel.DEBUG;
-    } else {
-        mtLogger.level = LogLevel.INFO;    
-    }
+    private config const logLevel = ServerConfig.logLevel;
+    const mtLogger = new Logger(logLevel);
 
     /* symbol table */
     class SymTab
@@ -53,19 +49,30 @@ module MultiTypeSymbolTable
                                    errorClass="UnknownSymbolError");
             }
 
-            // check to see if userDefinedName is defined
+            // check to see if userDefinedName is already defined, with in-place modification, this will be an error
             if (registry.contains(userDefinedName)) {
-                mtLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                     "regName: redefined symbol: %s ".format(userDefinedName));
+                mtLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+                                     "regName: requested symbol `%s` is already in use".format(userDefinedName));
+                throw getErrorWithContext(
+                                    msg=incompatibleArgumentsError("regName", name),
+                                    lineNumber=getLineNumber(),
+                                    routineName=getRoutineName(),
+                                    moduleName=getModuleName(),
+                                    errorClass="ArgumentError");
             } else {
                 mtLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                      "Registering symbol: %s ".format(userDefinedName));            
             }
             
+            // RE: Issue#729 we no longer support multiple name registration of the same object
+            if (registry.contains(name)) {
+                registry -= name;
+            }
+
             registry += userDefinedName; // add user defined name to registry
 
             // point at same shared table entry
-            tab.addOrSet(userDefinedName, tab.getValue(name));
+            tab.addOrSet(userDefinedName, tab.getAndRemove(name));
         }
 
         proc unregName(name: string) throws {
@@ -305,8 +312,9 @@ module MultiTypeSymbolTable
         /*
         Returns verbose attributes of the sym entry at the given string, if the string maps to an entry.
         Pass __AllSymbols__ to process all sym entries in the sym table.
+        Pass __RegisteredSymbols__ to process all registered sym entries.
 
-        Returns: name, dtype, size, ndim, shape, and item size
+        Returns: name, dtype, size, ndim, shape, item size, and registration status
 
         :arg name: name of entry to be processed
         :type name: string
@@ -315,19 +323,27 @@ module MultiTypeSymbolTable
         */
         proc info(name:string): string throws {
             var s: string;
-            if name == "__AllSymbols__" {
+            if tab.size == 0 {
+                s = "__EMPTY_SYMBOLTABLE__";
+            }
+            else if name == "__AllSymbols__" {
                 for n in tab {
-                    s += "name:%t dtype:%t size:%t ndim:%t shape:%t itemsize:%t\n".format(n, 
-                              dtype2str(tab.getBorrowed(n).dtype), tab.getBorrowed(n).size, 
-                              tab.getBorrowed(n).ndim, tab.getBorrowed(n).shape, 
-                              tab.getBorrowed(n).itemsize);
+                    s += formatEntry(n, tab.getBorrowed(n));
                 }
-            } else {
+            } 
+            else if name == "__RegisteredSymbols__" {
+                if registry.size == 0 {
+                    s = "__EMPTY_REGISTRY__";
+                }
+                else {
+                    for n in registry {
+                        s += formatEntry(n, tab.getBorrowed(n));
+                    }
+                }
+            }
+            else {
                 if (tab.contains(name)) {
-                    s = "name:%t dtype:%t size:%t ndim:%t shape:%t itemsize:%t\n".format(name, 
-                              dtype2str(tab.getBorrowed(name).dtype), tab.getBorrowed(name).size, 
-                              tab.getBorrowed(name).ndim, tab.getBorrowed(name).shape, 
-                              tab.getBorrowed(name).itemsize);
+                    s += formatEntry(name, tab.getBorrowed(name));
                 }
                 else {
                     throw getErrorWithContext(
@@ -339,6 +355,22 @@ module MultiTypeSymbolTable
                 }
             }
             return s;
+        }
+
+        /*
+        Returns formatted string for info call. 
+
+        :arg name: name of entry to be formatted
+        :type name: string
+
+        :arg entry: Generic Sym Entry to be formatted (tab.getBorrowed(name))
+        :type entry: GenSymEntry
+
+        :returns: formatted string
+        */
+        proc formatEntry(name:string, item:borrowed GenSymEntry): string throws {
+            return "name:%t dtype:%t size:%t ndim:%t shape:%t itemsize:%t registered:%t\n".format(name, 
+                              dtype2str(item.dtype), item.size, item.ndim, item.shape, item.itemsize, registry.contains(name));
         }
 
         /*
