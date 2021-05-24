@@ -1,0 +1,40 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arkouda-server
+  namespace: arkouda
+spec:
+  replicas: {{ .Values.numServers }}
+  selector:
+    matchLabels:
+      app: arkouda-server
+  template:
+    metadata:
+      labels:
+        app: arkouda-server
+        name: arkouda-server
+    spec:
+      hostNetwork: true
+      containers:
+        - name: arkouda-server
+          image: hokiegeek2/arkouda-server-no-slurm:{{ .Values.releaseVersion }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          resources:
+            requests:
+              cpu: {{ .Values.server.resources.requests.cpu }}
+              memory: {{ .Values.server.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.server.resources.limits.cpu }}
+              memory: {{ .Values.server.resources.limits.memory }}
+          ports:
+          - containerPort: {{ .Values.server.port }}
+            hostPort: {{ .Values.server.port }}
+          env:
+            - name: NUM_LOCALES
+              value: {{ .Values.server.numLocales | quote}}
+            - name: AUTHENTICATE
+              value: {{ .Values.server.authenticate | quote}} 
+            - name: VERBOSE
+              value: {{ .Values.server.verbose | quote}}   
+            - name: MEMTRACK
+              value: {{ .Values.server.memTrack | quote}}                
