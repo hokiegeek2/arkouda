@@ -22,10 +22,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     pkg-config \
     git \
     openssh-client \
+    procps \
     && rm -rf /var/lib/apt/lists/*
 
-ENV CHPL_VERSION=1.23.0
+ARG CHPL_VERSION=${CHPL_VERSION}
+ENV CHPL_VERSION=${CHPL_VERSION}
 ENV CHPL_HOME=/opt/chapel/$CHPL_VERSION
+
 RUN useradd -m ubuntu
 ADD id_rsa /home/ubuntu/.ssh/
 RUN chown -R ubuntu:ubuntu /home/ubuntu
@@ -68,8 +71,10 @@ USER ubuntu
 
 RUN make
 
+ENV NUM_LOCALES=${NUM_LOCALES}
+
 # Add startup script and set as entrypoint
-ENTRYPOINT ./arkouda_server -nl 2
+ENTRYPOINT ./arkouda_server -nl ${NUM_LOCALES}
 
 EXPOSE 5555
 EXPOSE 5000-65000/udp
