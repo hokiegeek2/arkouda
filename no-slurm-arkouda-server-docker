@@ -23,6 +23,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     openssh-client \
     procps \
+    dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
 ARG CHPL_VERSION=${CHPL_VERSION}
