@@ -1,0 +1,58 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: arkouda-server
+  namespace: arkouda
+spec:
+  replicas: {{ .Values.numServers }}
+  selector:
+    matchLabels:
+      app: arkouda-server
+  template:
+    metadata:
+      labels:
+        app: arkouda-server
+        name: arkouda-server
+        #annotations:
+        #k8s.v1.cni.cncf.io/networks: host-device-conf
+    spec:
+            #hostNetwork: true
+      containers:
+        - name: arkouda-server
+          image: hokiegeek2/udp-dynamic-arkouda-server:{{ .Values.releaseVersion }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          resources:
+            requests:
+              cpu: {{ .Values.server.resources.requests.cpu }}
+              memory: {{ .Values.server.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.server.resources.limits.cpu }}
+              memory: {{ .Values.server.resources.limits.memory }}
+          ports:
+          - containerPort: {{ .Values.server.port }}
+            hostPort: {{ .Values.server.port }}
+          - containerPort: 22
+            hostPort: 22
+          env:
+            - name: MY_IP
+              valueFrom:
+                fieldRef: 
+                  fieldPath: status.podIP
+            - name: GASNET_MASTERIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: SSH_SERVERS
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NUM_LOCALES
+              value: {{ .Values.server.numLocales | quote}}
+              #- name: SSH_SERVERS
+              #value: {{ .Values.server.sshServers | quote}}
+            - name: AUTHENTICATE
+              value: {{ .Values.server.authenticate | quote}} 
+            - name: VERBOSE
+              value: {{ .Values.server.verbose | quote}}   
+            - name: MEMTRACK
+              value: {{ .Values.server.memTrack | quote}}                

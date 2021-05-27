@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: arkouda-locale
+  namespace: arkouda
+spec:
+  replicas: {{ .Values.numLocales }}
+  selector:
+    matchLabels:
+      app: arkouda-locale
+  template:
+    metadata:
+      labels:
+        app: arkouda-locale
+        name: arkouda-locale
+        #annotations:
+        #k8s.v1.cni.cncf.io/networks: host-device-conf
+    spec:
+      containers:
+        - name: arkouda-locale
+          image: hokiegeek2/udp-dynamic-arkouda-locale:{{ .Values.releaseVersion }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [ "/bin/bash", "-c", "--" ]
+          args: [ "while true; do sleep 30; done;" ]
+          resources:
+            requests:
+              cpu: {{ .Values.server.resources.requests.cpu }}
+              memory: {{ .Values.server.resources.requests.memory }}
+            limits:
+              cpu: {{ .Values.server.resources.limits.cpu }}
+              memory: {{ .Values.server.resources.limits.memory }}
+          ports:
+          - containerPort: {{ .Values.server.port }}
+            hostPort: {{ .Values.server.port }}
+          env:
+            - name: MY_IP
+              valueFrom:
+                fieldRef: 
+                  fieldPath: status.podIP
+            - name: NUM_LOCALES
+              value: {{ .Values.server.numLocales | quote}}
+            - name: AUTHENTICATE
+              value: {{ .Values.server.authenticate | quote}} 
+            - name: VERBOSE
+              value: {{ .Values.server.verbose | quote}}   
+            - name: MEMTRACK
+              value: {{ .Values.server.memTrack | quote}}                
