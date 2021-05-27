@@ -1,0 +1,74 @@
+FROM debian:10
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget \
+    ca-certificates \
+    curl \
+    gcc \
+    g++ \
+    perl \
+    python \
+    python-dev \
+    python-setuptools \
+    python3 \
+    python3-pip \
+    libgmp10 \
+    libgmp-dev \
+    locales \
+    bash \
+    make \
+    mawk \
+    file \
+    pkg-config \
+    git \
+    openssh-client \
+    procps \
+    dnsutils \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG CHPL_VERSION=${CHPL_VERSION}
+ENV CHPL_VERSION=${CHPL_VERSION}
+ENV CHPL_HOME=/opt/chapel/$CHPL_VERSION
+
+RUN useradd -m ubuntu
+ADD id_rsa /home/ubuntu/.ssh/
+RUN chown -R ubuntu:ubuntu /home/ubuntu
+RUN chmod -R 777 /opt/
+
+USER ubuntu
+
+ENV CHPL_COMM_SUBSTRATE=udp
+ENV CHPL_COMM=gasnet
+ENV CHPL_LAUNCHER=amudprun
+
+RUN mkdir -p /opt/chapel \
+    && wget -q -O - https://github.com/chapel-lang/chapel/archive/$CHPL_VERSION.tar.gz | tar -xzC /opt/chapel --transform 's/chapel-//' \
+    && make -C $CHPL_HOME \
+    #&& make -C $CHPL_HOME chpldoc test-venv mason \
+    && make -C $CHPL_HOME cleanall
+
+ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
+
+ADD src/ /opt/src
+ADD Makefile /opt/Makefile
+ADD dep/ /opt/dep
+ADD VERSION /opt/VERSION
+WORKDIR /opt
+USER root
+
+ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
+RUN chown -R ubuntu:ubuntu /opt/
+
+USER ubuntu
+
+ARG SSH_SERVERS=${SSH_SERVERS}
+ARG GASNET_MASTERIP=${GASNET_MASTERIP}
+ENV SSH_SERVERS=${SSH_SERVERS}
+ENV GASNET_MASTERIP=${GASNET_MASTERIP}
+
+RUN make install-deps
+RUN make
+
+EXPOSE 5555
+EXPOSE 5000-65000/udp
+

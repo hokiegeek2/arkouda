@@ -13,8 +13,11 @@ spec:
       labels:
         app: arkouda-server
         name: arkouda-server
+        #annotations:
+        #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-      hostNetwork: true
+            #hostNetwork: true
+      nodeName: 10.114.89.224
       containers:
         - name: arkouda-server
           image: hokiegeek2/arkouda-server-no-slurm:{{ .Values.releaseVersion }}
@@ -30,8 +33,18 @@ spec:
           - containerPort: {{ .Values.server.port }}
             hostPort: {{ .Values.server.port }}
           env:
+            - name: MY_IP
+              valueFrom:
+                fieldRef: 
+                  fieldPath: status.podIP
+            - name: GASNET_MASTERIP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: NUM_LOCALES
               value: {{ .Values.server.numLocales | quote}}
+              #- name: SSH_SERVERS
+              #value: {{ .Values.server.sshServers | quote}}
             - name: AUTHENTICATE
               value: {{ .Values.server.authenticate | quote}} 
             - name: VERBOSE

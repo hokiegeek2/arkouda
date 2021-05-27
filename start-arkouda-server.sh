@@ -1,1 +1,1 @@
-./arkouda_server -nl ${NUMLOCALES:-1} --memTrack=${MEMTRACK:-true} --authenticate=${AUTHENTICATE:-false} --v=${VERBOSE:-false}
+./arkouda_server -nl ${NUMLOCALES:-1} --memTrack=${MEMTRACK:-true} --authenticate=${AUTHENTICATE:-false} --logLevel=${LOG_LEVEL:-LogLevel.INFO}
