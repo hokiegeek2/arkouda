@@ -30,7 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN useradd -rm -d /home/ubuntu -s /bin/bash -g root -G sudo -u 1000 ubuntu 
+RUN groupadd ubuntu
+RUN useradd -rm -d /home/ubuntu -s /bin/bash -g root -G sudo,ubuntu -u 1000 ubuntu 
 RUN echo 'ubuntu:ubuntu' | chpasswd
 
 RUN service ssh restart
@@ -59,3 +60,8 @@ RUN mkdir -p /opt/chapel \
 
 ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
 
+USER root
+RUN chown -R ubuntu:ubuntu /home/ubuntu
+RUN chmod -R 777 /opt/chapel/1.23.0/bin
+
+CMD service ssh start
