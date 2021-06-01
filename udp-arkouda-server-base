@@ -49,6 +49,7 @@ USER ubuntu
 
 ADD id_rsa /home/ubuntu/.ssh/
 ADD id_rsa.pub /home/ubuntu/.ssh/
+RUN sudo chown -R ubuntu:ubuntu ~/.ssh
 
 RUN mkdir -p /opt/chapel \
     && wget -q -O - https://github.com/chapel-lang/chapel/archive/$CHPL_VERSION.tar.gz | tar -xzC /opt/chapel --transform 's/chapel-//' \
@@ -62,4 +63,3 @@ RUN chmod -R 777 /opt/chapel/$CHPL_VERSION/bin
 USER ubuntu
 ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
 
-CMD sudo service ssh start && while true; do sleep 3000; done
