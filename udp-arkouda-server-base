@@ -57,7 +57,7 @@ RUN mkdir -p /opt/chapel \
     && make -C $CHPL_HOME cleanall
 
 USER root
-RUN chmod -R 777 /opt/chapel/1.23.0/bin
+RUN chmod -R 777 /opt/chapel/$CHPL_VERSION/bin
 
 USER ubuntu
 ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
