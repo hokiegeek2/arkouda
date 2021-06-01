@@ -21,6 +21,7 @@ spec:
         - name: arkouda-server
           image: hokiegeek2/udp-dynamic-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [ "sh", "/opt/start-arkouda-server.sh" ]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
@@ -32,7 +33,7 @@ spec:
           - containerPort: {{ .Values.server.port }}
             hostPort: {{ .Values.server.port }}
           - containerPort: 22
-            hostPort: 22
+            hostPort: 25
           env:
             - name: MY_IP
               valueFrom:
