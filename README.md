@@ -8,7 +8,7 @@
 
 [Arkouda PDF Documentation](https://arkouda.readthedocs.io/_/downloads/en/latest/pdf/)
 
-[Arkouda docs at Github Pages](https://mhmerrill.github.io/arkouda)
+[Arkouda docs at Github Pages](https://bears-r-us.github.io/arkouda/)
 
 ## Nightly Arkouda Performance Charts
 [Arkouda nightly performance charts](https://chapel-lang.org/perf/arkouda/)
@@ -19,6 +19,9 @@
 [Chapel Gitter channel](https://gitter.im/chapel-lang/chapel)
 
 ## Talks on Arkouda
+
+[Arkouda Hack-a-thon videos](https://www.youtube.com/playlist?list=PLpuVAiniqZRXnOAhfHmxbAcVPtMKb-RHN)
+
 [Bill Reus' March 2021 talk at the NJIT Data Science Seminar](https://www.youtube.com/watch?v=hzLbJF-fvjQ&t=3s)
 
 Bill Reus' CHIUW 2020 Keynote [video](https://youtu.be/g-G_Z_3pgUE) and [slides](https://chapel-lang.org/CHIUW/2020/Reus.pdf)
@@ -112,7 +115,7 @@ This yielded a >20TB dataframe in Arkouda.
 
 <a id="prereq-reqs"></a>
 ### Requirements: <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
- * requires chapel 1.23.0
+ * requires chapel 1.24.1
  * requires zeromq version >= 4.2.5, tested with 4.2.5 and 4.3.1
  * requires hdf5 
  * requires python 3.7 or greater
@@ -151,7 +154,7 @@ Option 2: Build Chapel from source
 
 ```bash
 # build chapel in the user home directory with these settings...
-export CHPL_HOME=~/chapel/chapel-1.23.0
+export CHPL_HOME=~/chapel/chapel-1.24.1
 source $CHPL_HOME/util/setchplenv.bash
 export CHPL_COMM=gasnet
 export CHPL_COMM_SUBSTRATE=smp
@@ -207,9 +210,9 @@ sudo apt-get update
 sudo apt-get install gcc g++ m4 perl python python-dev python-setuptools bash make mawk git pkg-config
 
 # Download latest Chapel release, explode archive, and navigate to source root directory
-wget https://github.com/chapel-lang/chapel/releases/download/1.23.0/chapel-1.23.0.tar.gz
-tar xvf chapel-1.23.0.tar.gz
-cd chapel-1.23.0/
+wget https://github.com/chapel-lang/chapel/releases/download/1.24.1/chapel-1.24.1.tar.gz
+tar xvf chapel-1.24.1.tar.gz
+cd chapel-1.24.1/
 
 # Set CHPL_HOME
 export CHPL_HOME=$PWD
@@ -392,9 +395,9 @@ For more details regarding Arkouda testing, please consult the Python test [READ
 
 <a id="install-ak"></a>
 ## Installing the Arkouda Python Library and Dependencies <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-Now that the arkouda\_server is built and tested, install the Python library.
+Now that the arkouda_server is built and tested, install the Python library.
 
-The Arkouda Python library along with it's dependent libraries are installed with pip. There are four types of 
+The Arkouda Python library along with its dependent libraries are installed with pip. There are four types of 
 Python dependencies for the Arkouda developer to install: requires, dev, test, and doc. The required libraries, 
 which are the runtime dependencies of the Arkouda python library, are installed as follows:
 
@@ -402,11 +405,30 @@ which are the runtime dependencies of the Arkouda python library, are installed 
  pip3 install -e .
 ```
 
-Arkouda and the Python libaries required for development, test, and doc generation activities are installed
+Arkouda and the Python libraries required for development, test, and doc generation activities are installed
 as follows:
 
 ```bash
 pip3 install -e .[dev]
+```
+
+Alternatively you can build a distributable package via
+```bash
+# We'll use a virtual environment to build
+python -m venv build-client-env
+source build-client-env/bin/activate
+python -m pip install --upgrade pip build wheel
+python setup.py clean --all
+python -m build
+
+# Clean up our virtual env
+deactivate
+rm -rf build-client-env
+
+# You should now have 2 files in the dist/ directory which can be installed via pip
+pip install dist/arkouda*.whl
+# or
+pip install dist/arkouda*.tar.gz
 ```
 
 <a id="run-ak"></a>

@@ -76,6 +76,12 @@ class CategoricalTest(ArkoudaTest):
         
         self.assertTrue((cat == catDupe).all())
         self.assertTrue((cat != catNonDupe).all())
+
+        c1 = ak.Categorical(ak.array(['a', 'b', 'c', 'a', 'b']))
+        c2 = ak.Categorical(ak.array(['a', 'x', 'c', 'y', 'b']))
+        res = (c1 == c2)
+        ans = ak.array([True, False, True, False, True])
+        self.assertTrue((res == ans).all())
         
     def testBinop(self):
         cat = self._getCategorical()
@@ -169,3 +175,14 @@ class CategoricalTest(ArkoudaTest):
         s12unord = ak.concatenate([s1, s2], ordered=False)
         c12unord = ak.concatenate([c1, c2], ordered=False)
         self.assertTrue((ak.Categorical(s12unord) == c12unord).all())
+
+        # Tiny concatenation
+        # Used to fail when length of array was less than numLocales
+        # CI uses 2 locales, so try with length-1 arrays
+        a = ak.Categorical(ak.array(['a']))
+        b = ak.Categorical(ak.array(['b']))
+        c = ak.concatenate((a, b), ordered=False)
+        ans = ak.Categorical(ak.array(['a', 'b']))
+        self.assertTrue((c == ans).all())
+        
+        

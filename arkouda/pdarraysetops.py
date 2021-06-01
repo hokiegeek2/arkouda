@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import cast, Optional, Sequence, Tuple, Union, ForwardRef
 from typeguard import typechecked
-from arkouda.client import generic_msg
+from arkouda.client import generic_msg, get_config
 from arkouda.pdarrayclass import pdarray, create_pdarray
 from arkouda.pdarraycreation import zeros_like, array
 from arkouda.sorting import argsort
@@ -206,6 +206,7 @@ def concatenate(arrays : Sequence[Union[pdarray,Strings,'Categorical']], #type: 
     
     >>> ak.concatenate([ak.array(['one','two']),ak.array(['three','four','five'])])
     array(['one', 'two', 'three', 'four', 'five'])
+
     """
     from arkouda.categorical import Categorical as Categorical_
     size = 0
@@ -220,6 +221,7 @@ def concatenate(arrays : Sequence[Union[pdarray,Strings,'Categorical']], #type: 
         raise ValueError("concatenate called on empty iterable")
     if len(arrays) == 1:
         return cast(Union[pdarray,Strings,Categorical_], arrays[0])
+    
     if hasattr(arrays[0], 'concatenate'):
         return cast(Sequence[Categorical_],
                     cast(Categorical_,

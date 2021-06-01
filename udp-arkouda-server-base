@@ -30,11 +30,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     && rm -rf /var/lib/apt/lists/*
 
-RUN groupadd ubuntu
-RUN useradd -rm -d /home/ubuntu -s /bin/bash -g root -G sudo,ubuntu -u 1000 ubuntu 
-RUN echo 'ubuntu:ubuntu' | chpasswd
-
-RUN service ssh restart
+RUN useradd -m ubuntu && echo "ubuntu:ubuntu" | chpasswd && adduser ubuntu sudo
+RUN echo '%sudo ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
            
 EXPOSE 22
 
@@ -51,6 +48,7 @@ RUN chmod 777 /opt
 USER ubuntu
 
 ADD id_rsa /home/ubuntu/.ssh/
+ADD id_rsa.pub /home/ubuntu/.ssh/
 
 RUN mkdir -p /opt/chapel \
     && wget -q -O - https://github.com/chapel-lang/chapel/archive/$CHPL_VERSION.tar.gz | tar -xzC /opt/chapel --transform 's/chapel-//' \
@@ -58,10 +56,10 @@ RUN mkdir -p /opt/chapel \
     #&& make -C $CHPL_HOME chpldoc test-venv mason \
     && make -C $CHPL_HOME cleanall
 
-ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
-
 USER root
-RUN chown -R ubuntu:ubuntu /home/ubuntu
 RUN chmod -R 777 /opt/chapel/1.23.0/bin
 
-CMD service ssh start
+USER ubuntu
+ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
+
+CMD sudo service ssh start && while true; do sleep 3000; done

@@ -1,9 +1,8 @@
+import pytest
+import json
 from context import arkouda as ak
-from typing import Tuple
-import numpy as np
-from collections import Counter
 from base_test import ArkoudaTest
-from arkouda.pdarrayclass import RegistrationError
+from arkouda.pdarrayclass import RegistrationError, unregister_pdarray_by_name
 N = 100
 UNIQUE = N // 4
 
@@ -171,62 +170,89 @@ class RegistrationTest(ArkoudaTest):
         '''
         Tests the following:
 
-        1. info() with an empty symbol table returns ak.EmptySymbolTable regardless of arguments
-        2. info(ak.RegisteredSymbols) when no objects are registered returns ak.EmptyRegistry
+        1. json.loads(info(AllSymbols)) is an empty list when the symbol table is empty
+        2. json.loads(info(RegisteredSymbols)) is an empty list when the registry is empty
         3. The registered field is set to false for objects that have not been registered
         4. The registered field is set to true for objects that have been registered
         5. info(ak.AllSymbols) contains both registered and non-registered objects
         6. info(ak.RegisteredSymbols) only contains registered objects
+        7. info raises RunTimeError when called on objects not found in symbol table
         '''
         # Cleanup symbol table from previous tests
         cleanup()
 
-        self.assertEqual(ak.info(ak.AllSymbols), ak.EmptySymbolTable,
-                         msg='info(AllSymbols) empty symbol table message failed')
-        self.assertEqual(ak.info(ak.RegisteredSymbols), ak.EmptySymbolTable,
-                         msg='info(RegisteredSymbols) empty symbol table message failed')
+        self.assertFalse(json.loads(ak.information(ak.AllSymbols)),
+                         msg='info(AllSymbols) should be empty list')
+        self.assertFalse(json.loads(ak.information(ak.RegisteredSymbols)),
+                         msg='info(RegisteredSymbols) should be empty list')
 
-        my_array = ak.ones(10, dtype=ak.int64)
-        self.assertTrue('registered:false' in ak.info(ak.AllSymbols).split(),
-                        msg='info(AllSymbols) should contain non-registered objects')
-
-        self.assertEqual(ak.info(ak.RegisteredSymbols), ak.EmptyRegistry,
-                         msg='info(RegisteredSymbols) empty registry message failed')
+        my_pdarray = ak.ones(10, dtype=ak.int64)
+        self.assertFalse(json.loads(my_pdarray.info())[0]['registered'],
+                         msg='my_array should be in all symbols but not be registered')
 
         # After register(), the registered field should be set to true for all info calls
-        my_array.register('keep_me')
-        self.assertTrue('registered:true' in ak.info('keep_me').split(),
+        my_pdarray.register('keep_me')
+        self.assertTrue(json.loads(ak.information('keep_me'))[0]['registered'],
                         msg='keep_me array not found or not registered')
-        self.assertTrue('registered:true' in ak.info(ak.AllSymbols).split(),
+        self.assertTrue(any([sym['registered'] for sym in json.loads(ak.information(ak.AllSymbols))]),
                         msg='No registered objects were found in symbol table')
-        self.assertTrue('registered:true' in ak.info(ak.RegisteredSymbols).split(),
+        self.assertTrue(any([sym['registered'] for sym in json.loads(ak.information(ak.RegisteredSymbols))]),
                         msg='No registered objects were found in registry')
 
         not_registered_array = ak.ones(10, dtype=ak.int64)
-        self.assertTrue(len(ak.info(ak.AllSymbols).split('\n')) > len(ak.info(ak.RegisteredSymbols).split('\n')),
+        self.assertTrue(len(json.loads(ak.information(ak.AllSymbols))) > len(json.loads(ak.information(ak.RegisteredSymbols))),
                         msg='info(AllSymbols) should have more objects than info(RegisteredSymbols) before clear()')
         ak.clear()
-        self.assertTrue(len(ak.info(ak.AllSymbols).split('\n')) == len(ak.info(ak.RegisteredSymbols).split('\n')),
+        self.assertTrue(len(json.loads(ak.information(ak.AllSymbols))) == len(json.loads(ak.information(ak.RegisteredSymbols))),
                         msg='info(AllSymbols) and info(RegisteredSymbols) should have same num of objects after clear()')
 
         # After unregister(), the registered field should be set to false for AllSymbol and object name info calls
         # RegisteredSymbols info calls should return ak.EmptyRegistry
-        my_array.unregister()
-        self.assertTrue('registered:false' in ak.info("keep_me").split(),
-                        msg='info(keep_me) registered field should be false after unregister()')
-        self.assertTrue('registered:false' in ak.info(ak.AllSymbols).split(),
+        my_pdarray.unregister()
+        self.assertFalse(any([obj['registered'] for obj in json.loads(my_pdarray.info())]),
+                        msg='info(my_array) registered field should be false after unregister()')
+        self.assertFalse(all([obj['registered'] for obj in json.loads(ak.information(ak.AllSymbols))]),
                         msg='info(AllSymbols) should contain unregistered objects')
-        self.assertEqual(ak.info(ak.RegisteredSymbols), ak.EmptyRegistry,
-                         msg='info(RegisteredSymbols) empty registry message failed after unregister()')
+        self.assertFalse(json.loads(ak.information(ak.RegisteredSymbols)),
+                         msg='info(RegisteredSymbols) empty list failed after unregister()')
 
-        # After clear(), every info call should return ak.EmptySymbolTable
         ak.clear()
-        self.assertEqual(ak.info("keep_me"), ak.EmptySymbolTable,
-                         msg='info(keep_me) empty symbol message failed')
-        self.assertEqual(ak.info(ak.AllSymbols), ak.EmptySymbolTable,
-                         msg='info(AllSymbols) empty symbol table message failed')
-        self.assertEqual(ak.info(ak.RegisteredSymbols), ak.EmptySymbolTable,
-                         msg='info(RegisteredSymbols) empty symbol table message failed')
+        # RuntimeError when calling info on an object not in the symbol table
+        with self.assertRaises(RuntimeError, msg="RuntimeError for info on object not in symbol table"):
+            ak.information('keep_me')
+        self.assertFalse(json.loads(ak.information(ak.AllSymbols)),
+                         msg='info(AllSymbols) should be empty list')
+        self.assertFalse(json.loads(ak.information(ak.RegisteredSymbols)),
+                         msg='info(RegisteredSymbols) should be empty list')
+        cleanup()
+
+    def test_in_place_info(self):
+        """
+        Tests the class level info method for pdarray, String, and Categorical
+        """
+        cleanup()
+        my_pda = ak.ones(10, ak.int64)
+        self.assertFalse(any([sym['registered'] for sym in json.loads(my_pda.info())]),
+                        msg='no components of my_pda should be registered before register call')
+        my_pda.register('my_pda')
+        self.assertTrue(all([sym['registered'] for sym in json.loads(my_pda.info())]),
+                        msg='all components of my_pda should be registered after register call')
+
+        my_str = ak.random_strings_uniform(1, 10, UNIQUE, characters='printable')
+        self.assertFalse(any([sym['registered'] for sym in json.loads(my_str.info())]),
+                        msg='no components of my_str should be registered before register call')
+        my_str.register('my_str')
+        self.assertTrue(all([sym['registered'] for sym in json.loads(my_str.info())]),
+                        msg='all components of my_str should be registered after register call')
+
+        my_cat = ak.Categorical(ak.array([f"my_cat {i}" for i in range(1, 11)]))
+        self.assertFalse(any([sym['registered'] for sym in json.loads(my_cat.info())]),
+                        msg='no components of my_cat should be registered before register call')
+        my_cat.register('my_cat')
+        self.assertTrue(all([sym['registered'] for sym in json.loads(my_cat.info())]),
+                        msg='all components of my_cat should be registered after register call')
+        cleanup()
+
 
     def test_is_registered(self):
         """
@@ -259,38 +285,52 @@ class RegistrationTest(ArkoudaTest):
         self.assertTrue('keep' in ak.list_registry())
         cleanup()
 
-    def test_string_registration(self):
+    def test_string_registration_suite(self):
+        cleanup()
         # Initial registration should set name
         keep = ak.random_strings_uniform(1, 10, UNIQUE, characters='printable')
-        keep.register("keep_me")
-        self.assertTrue(keep.name is "keep_me")
-        self.assertTrue(keep.offsets.name == "keep_me_offsets")
-        self.assertTrue(keep.bytes.name == "keep_me_bytes")
+        self.assertTrue(keep.register("keep_me").name == "keep_me")
+        self.assertTrue(keep.offsets.name == "keep_me.offsets")
+        self.assertTrue(keep.bytes.name == "keep_me.bytes")
+
+        self.assertTrue(keep.is_registered(), "Expected Strings object to be registered")
 
         # Register a second time to confirm name change
-        keep.register("kept")
-        self.assertTrue(keep.name is "kept")
-        self.assertTrue(keep.offsets.name == "kept_offsets")
-        self.assertTrue(keep.bytes.name == "kept_bytes")
+        self.assertTrue(keep.register("kept").name == "kept")
+        self.assertTrue(keep.offsets.name == "kept.offsets")
+        self.assertTrue(keep.bytes.name == "kept.bytes")
+        self.assertTrue(keep.is_registered(), "Object should be registered with updated name")
 
-        # Add an item to discard
+        # Add an item to discard, confirm our registered item remains and discarded item is gone
         discard = ak.random_strings_uniform(1, 10, UNIQUE, characters='printable')
-
         ak.clear()
         self.assertTrue(keep.name == "kept")
-        self.assertTrue(keep.offsets.name == "kept_offsets")
-        self.assertTrue(keep.bytes.name == "kept_bytes")
-
+        self.assertTrue(keep.offsets.name == "kept.offsets")
+        self.assertTrue(keep.bytes.name == "kept.bytes")
         with self.assertRaises(RuntimeError, msg="discard was not registered and should be discarded"):
             str(discard)
 
         # Unregister, should remain usable until we clear
         keep.unregister()
         str(keep) # Should not cause error
-        self.assertTrue(keep.offsets.name == "kept_offsets", msg="name should remain intact even after unregister")
+        self.assertFalse(keep.is_registered(), "This item should no longer be registered")
         ak.clear()
         with self.assertRaises(RuntimeError, msg="keep was unregistered and should be cleared"):
             str(keep) # should cause RuntimeError
+
+        # Test attach functionality
+        s1 = ak.random_strings_uniform(1, 10, UNIQUE, characters='printable')
+        self.assertTrue(s1.register("uut").is_registered(), "uut should be registered")
+        s1 = None
+        self.assertTrue(s1 is None, "Reference should be cleared")
+        s1 = ak.Strings.attach("uut")
+        self.assertTrue(s1.is_registered(), "Should have re-attached to registered object")
+        str(s1)  # This will throw an exception if the object doesn't exist server-side
+
+        # Test the Strings unregister by name using previously registered object
+        ak.Strings.unregister_strings_by_name("uut")
+        self.assertFalse(s1.is_registered(), "Expected object to be unregistered")
+        cleanup()
 
     def test_string_is_registered(self):
         """
@@ -304,13 +344,113 @@ class RegistrationTest(ArkoudaTest):
 
         keep.unregister()
         self.assertFalse(keep.is_registered())
+
+        # Now mess with one of the internal pieces to test is_registered() logic
+        self.assertTrue(keep.register("uut").is_registered(), "Re-register keep as uut")
+        ak.unregister_pdarray_by_name("uut.bytes")
+        with self.assertRaises(RegistrationError, msg="Expected RegistrationError on mis-matched pieces"):
+            keep.is_registered()
+
         ak.clear()
 
+    def test_delete_registered(self):
+        """
+        Tests the following:
+
+        1. delete cmd doesn't delete registered objects and returns appropriate message
+        2. delete cmd does delete non-registered objects and returns appropriate message
+        3. delete cmd raises RuntimeError for unknown symbols
+        """
+        cleanup()
+        a = ak.ones(3, dtype=ak.int64)
+        b = ak.ones(3, dtype=ak.int64)
+
+        # registered objects are not deleted from symbol table
+        a.register('keep')
+        self.assertEqual(ak.client.generic_msg(cmd='delete', args=a.name),
+                         f'registered symbol, {a.name}, not deleted')
+        self.assertTrue(a.name in ak.list_symbol_table())
+
+        # non-registered objects are deleted from symbol table
+        self.assertEqual(ak.client.generic_msg(cmd='delete', args=b.name),
+                         'deleted ' + b.name)
+        self.assertTrue(b.name not in ak.list_symbol_table())
+
+        # RuntimeError when calling delete on an object not in the symbol table
+        with self.assertRaises(RuntimeError):
+            ak.client.generic_msg(cmd='delete', args='not_in_table')
+
+    def test_categorical_registration_suite(self):
+        """
+        Test register, is_registered, attach, unregister, unregister_categorical_by_name
+        """
+        cleanup()  # Make sure we start with a clean registry
+        c = ak.Categorical(ak.array([f"my_cat {i}" for i in range(1, 11)]))
+        self.assertFalse(c.is_registered(), "test_me should be unregistered")
+        self.assertTrue(c.register("test_me").is_registered(), "test_me categorical should be registered")
+        c = None  # Should trigger destructor, but survive server deletion because it is registered
+        self.assertTrue(c is None, "The reference to `c` should be None")
+        c = ak.Categorical.attach("test_me")
+        self.assertTrue(c.is_registered(), "test_me categorical should be registered after attach")
+        c.unregister()
+        self.assertFalse(c.is_registered(), "test_me should be unregistered")
+        self.assertTrue(c.register("another_name").name == "another_name" and c.is_registered())
+
+        # Test static unregister_by_name
+        ak.Categorical.unregister_categorical_by_name("another_name")
+        self.assertFalse(c.is_registered(), "another_name should be unregistered")
+
+        # now mess with the subcomponents directly to test is_registered mis-match logic
+        c.register("another_name")
+        unregister_pdarray_by_name("another_name.codes")
+        with pytest.raises(RegistrationError):
+            c.is_registered()
+
+    def test_categorical_from_codes_registration_suite(self):
+        """
+        Test register, is_registered, attach, unregister, unregister_categorical_by_name
+        for Categorical made using .from_codes
+        """
+        cleanup()  # Make sure we start with a clean registry
+        categories = ak.array(['a', 'b', 'c'])
+        codes = ak.array([0, 1, 0, 2, 1])
+        cat = ak.Categorical.from_codes(codes, categories)
+        self.assertFalse(cat.is_registered(), "test_me should be unregistered")
+        self.assertTrue(cat.register("test_me").is_registered(), "test_me categorical should be registered")
+        cat = None  # Should trigger destructor, but survive server deletion because it is registered
+        self.assertTrue(cat is None, "The reference to `c` should be None")
+        cat = ak.Categorical.attach("test_me")
+        self.assertTrue(cat.is_registered(), "test_me categorical should be registered after attach")
+        cat.unregister()
+        self.assertFalse(cat.is_registered(), "test_me should be unregistered")
+        self.assertTrue(cat.register("another_name").name == "another_name" and cat.is_registered())
+
+        # Test static unregister_by_name
+        ak.Categorical.unregister_categorical_by_name("another_name")
+        self.assertFalse(cat.is_registered(), "another_name should be unregistered")
+
+        # now mess with the subcomponents directly to test is_registered mis-match logic
+        cat.register("another_name")
+        unregister_pdarray_by_name("another_name.codes")
+        with pytest.raises(RegistrationError):
+            cat.is_registered()
+
+    def test_attach_weak_binding(self):
+        """
+        Ultimately pdarrayclass issues delete calls to the server when a bound object goes out of scope, if you bind
+        to a server object more than once and one of those goes out of scope it affects all other references to it.
+        """
+        cleanup()
+        a = ak.ones(3, dtype=ak.int64).register("a_reg")
+        self.assertTrue(str(a), "Expected to pass")
+        b = ak.attach_pdarray("a_reg")
+        b.unregister()
+        b = None  # Force out of scope
+        with self.assertRaises(RuntimeError):
+            str(a)
 
 def cleanup():
     ak.clear()
-    if ak.info(ak.AllSymbols) != ak.EmptySymbolTable:
-        for registered_object in filter(None, ak.info(ak.AllSymbols).split('\n')):
-            name = registered_object.split()[0].split(':')[1].replace('"', '')
-            ak.unregister_pdarray(name)
-        ak.clear()
+    for registered_name in ak.list_registry():
+        ak.unregister_pdarray_by_name(registered_name)
+    ak.clear()
