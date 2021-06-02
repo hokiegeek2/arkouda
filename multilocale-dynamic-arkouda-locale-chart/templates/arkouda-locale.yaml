@@ -31,7 +31,7 @@ spec:
               memory: {{ .Values.server.resources.limits.memory }}
           ports:
           - containerPort: 22
-            hostPort: 25
+            hostPort: 22
           env:
             - name: MY_IP
               valueFrom:

@@ -43,14 +43,10 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
-            - name: SSH_SERVERS
-              valueFrom:
-                fieldRef:
-                  fieldPath: status.podIP
-            - name: NUM_LOCALES
+            - name: NUMLOCALES
               value: {{ .Values.server.numLocales | quote}}
-              #- name: SSH_SERVERS
-              #value: {{ .Values.server.sshServers | quote}}
+            - name: SSH_SERVERS
+              value: {{ .Values.server.sshServers | quote}}
             - name: AUTHENTICATE
               value: {{ .Values.server.authenticate | quote}} 
             - name: VERBOSE

@@ -71,7 +71,6 @@ affinity: {}
 releaseVersion: 0.0.1
 imagePullPolicy: IfNotPresent
 numServers: 1
-sshServers: '0.0.0.0 172.17.0.20'
 
 ################ Arkouda Server Configuration ################
 
@@ -79,6 +78,7 @@ server:
   host: 0.0.0.0
   port: 5555
   numLocales: 1
+  sshServers: '0.0.0.0'
   authenticate: false
   verbose: false
   memTrack: true
