@@ -1,16 +1,16 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ include "arkouda-server-chart.fullname" . }}
+  name: {{ include "arkouda-locale-chart.fullname" . }}
   labels:
-    {{- include "arkouda-server-chart.labels" . | nindent 4 }}
+    {{- include "arkouda-locale-chart.labels" . | nindent 4 }}
 spec:
 {{- if not .Values.autoscaling.enabled }}
   replicas: {{ .Values.replicaCount }}
 {{- end }}
   selector:
     matchLabels:
-      {{- include "arkouda-server-chart.selectorLabels" . | nindent 6 }}
+      {{- include "arkouda-locale-chart.selectorLabels" . | nindent 6 }}
   template:
     metadata:
     {{- with .Values.podAnnotations }}
@@ -18,13 +18,13 @@ spec:
         {{- toYaml . | nindent 8 }}
     {{- end }}
       labels:
-        {{- include "arkouda-server-chart.selectorLabels" . | nindent 8 }}
+        {{- include "arkouda-locale-chart.selectorLabels" . | nindent 8 }}
     spec:
       {{- with .Values.imagePullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "arkouda-server-chart.serviceAccountName" . }}
+      serviceAccountName: {{ include "arkouda-locale-chart.serviceAccountName" . }}
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:

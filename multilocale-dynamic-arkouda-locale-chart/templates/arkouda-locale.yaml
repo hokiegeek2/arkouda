@@ -30,8 +30,8 @@ spec:
               cpu: {{ .Values.server.resources.limits.cpu }}
               memory: {{ .Values.server.resources.limits.memory }}
           ports:
-          - containerPort: {{ .Values.server.port }}
-            hostPort: {{ .Values.server.port }}
+          - containerPort: 22
+            hostPort: 25
           env:
             - name: MY_IP
               valueFrom:
