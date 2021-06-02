@@ -21,7 +21,9 @@ spec:
         - name: arkouda-server
           image: hokiegeek2/udp-dynamic-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: [ "sh", "/opt/start-arkouda-server.sh" ]
+          #command: [ "sh", "/opt/start-arkouda-server.sh" ]
+          command: [ "/bin/bash", "-c", "--" ]
+          args: [ "while true; do sleep 600; done;" ]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}

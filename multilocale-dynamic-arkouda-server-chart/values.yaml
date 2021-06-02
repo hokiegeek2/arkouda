@@ -78,7 +78,8 @@ server:
   host: 0.0.0.0
   port: 5555
   numLocales: 1
-  sshServers: '0.0.0.0'
+  #sshServers: '0.0.0.0 10.43.202.160'
+  sshServers: '127.0.0.1'
   authenticate: false
   verbose: false
   memTrack: true
