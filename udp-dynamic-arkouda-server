@@ -1,4 +1,4 @@
-FROM hokiegeek2/udp-arkouda-server-base:0.0.1
+FROM hokiegeek2/udp-arkouda-server-base:0.0.2
 
 ADD src/ /opt/src
 ADD Makefile /opt/Makefile
