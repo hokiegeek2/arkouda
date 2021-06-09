@@ -68,7 +68,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.0.2
+releaseVersion: 0.0.3
 imagePullPolicy: IfNotPresent
 numServers: 1
 
@@ -78,7 +78,6 @@ server:
   host: 0.0.0.0
   port: 5555
   numLocales: 1
-  #sshServers: '0.0.0.0 10.43.202.160'
   sshServers: '127.0.0.1'
   authenticate: false
   verbose: false

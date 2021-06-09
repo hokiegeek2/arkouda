@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: ReplicaSet
 metadata:
   name: arkouda-server
   namespace: arkouda
@@ -16,7 +16,6 @@ spec:
         #annotations:
         #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-            #hostNetwork: true
       containers:
         - name: arkouda-server
           image: hokiegeek2/udp-dynamic-arkouda-server:{{ .Values.releaseVersion }}
@@ -36,6 +35,9 @@ spec:
             hostPort: {{ .Values.server.port }}
           - containerPort: 22
             hostPort: 25
+          volumeMounts:
+          - name: ssl
+            mountPath: "/etc/ssl/arkouda"    
           env:
             - name: MY_IP
               valueFrom:
@@ -54,4 +56,9 @@ spec:
             - name: VERBOSE
               value: {{ .Values.server.verbose | quote}}   
             - name: MEMTRACK
-              value: {{ .Values.server.memTrack | quote}}                
+              value: {{ .Values.server.memTrack | quote}}   
+      volumes:              
+        - name: ssl
+          secret:
+            secretName: arkouda
+    

@@ -138,7 +138,8 @@ setup(
         'pandas>=1.1.0',
         'pyzmq>=20.0.0',
         'typeguard==2.10.0',
-        'pyfiglet'
+        'pyfiglet',
+        'kubernetes'
     ],
 
     # List additional groups of dependencies here (e.g. development
