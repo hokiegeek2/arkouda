@@ -1,9 +1,8 @@
 import os
 from typing import List
-from kubernetes import client
-from kubernetes.client.rest import ApiException
-from kubernetes.client import Configuration, ApiClient, CoreV1Api, \
-     AppsV1Api, V1PodList, V1Pod
+from kubernetes import client # type: ignore
+from kubernetes.client.rest import ApiException # type: ignore
+from kubernetes.client import V1PodList, V1Pod # type: ignore
 
 
 class DaoError(Exception):
@@ -13,11 +12,11 @@ class KubernetesDao():
     
     __slots__ = ('core_client', 'apps_client')
     
-    core_client: CoreV1Api
-    apps_client: AppsV1Api
+    core_client: client.CoreV1Api
+    apps_client: client.AppsV1Api
     
     def __init__(self):
-        config = Configuration()
+        config = client.Configuration()
 
         try:
             config.cert_file =  os.environ['CERT_FILE']
@@ -28,7 +27,7 @@ class KubernetesDao():
                                    'env variables must be set'))
         config.verify_ssl = False
 
-        api_client = ApiClient(configuration=config)
+        api_client = client.ApiClient(configuration=config)
         self.core_client = client.CoreV1Api(api_client=api_client)
         self.apps_client = AppsV1Api(api_client)
     
@@ -44,7 +43,7 @@ class KubernetesDao():
                     pods = filteredPods
                 return pods
             else:
-                return self.core.list_pod_for_all_namespaces()
+                return self.core_client.list_pod_for_all_namespaces()
         except ApiException as e:
             raise DaoError(e)
     
