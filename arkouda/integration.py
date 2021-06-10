@@ -26,6 +26,9 @@ class KubernetesDao():
             raise EnvironmentError(('The CERT_FILE, KEY_FILE, and K8S_HOST ' +
                                    'env variables must be set'))
         config.verify_ssl = False
+        # used to disable non-verified cert warnings
+        import urllib3
+        urllib3.disable_warnings()
 
         api_client = client.ApiClient(configuration=config)
         self.core_client = client.CoreV1Api(api_client=api_client)
@@ -50,5 +53,16 @@ class KubernetesDao():
     def _is_named_pod(self, pod : V1Pod, app_name : str) -> V1Pod:
         return pod.metadata.labels.get('app') == app_name
      
-    def get_pod_ips(self, namespace : str, app_name : str=None) -> List[str]:
-        return [pod.status.pod_ip for pod in self.get_pods(namespace, app_name)]
+    def get_pod_ips(self, namespace : str, app_name : str=None, pretty_print=False) -> List[str]:
+        ips = [pod.status.pod_ip for pod in self.get_pods(namespace, app_name)]
+        if pretty_print:
+            return str(ips).strip('[]').replace(',','')
+        else:
+            return ips
+
+def main():
+    dao = KubernetesDao()
+    print(dao.get_pod_ips(namespace='arkouda',app_name='arkouda-server',pretty_print=True))
+
+if __name__ == "__main__":
+    main()

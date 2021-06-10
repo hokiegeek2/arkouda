@@ -18,10 +18,8 @@ spec:
     spec:
       containers:
         - name: arkouda-locale
-          image: hokiegeek2/udp-dynamic-arkouda-server:{{ .Values.releaseVersion }}
+          image: hokiegeek2/udp-dynamic-arkouda-locale:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: [ "/bin/bash", "-c", "--" ]
-          args: [ "while true; do sleep 600; done;" ]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}

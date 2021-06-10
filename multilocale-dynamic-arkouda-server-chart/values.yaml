@@ -84,7 +84,7 @@ server:
   memTrack: true
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
-  k8sHost:
+  k8sHost: https://192.168.99.254:8443
   resources:
     limits:
       cpu: 500m
