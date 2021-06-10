@@ -57,6 +57,12 @@ spec:
               value: {{ .Values.server.verbose | quote}}   
             - name: MEMTRACK
               value: {{ .Values.server.memTrack | quote}}   
+            - name: CERT_FILE
+              value: {{ .Values.server.certFile | quote}}
+            - name: KEY_FILE
+              value: {{ .Values.server.keyFile | quote}}   
+            - name: K8S_HOST
+              value: {{ .Values.server.k8sHost | quote}}              
       volumes:              
         - name: ssl
           secret:

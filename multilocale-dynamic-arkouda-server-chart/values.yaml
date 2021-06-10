@@ -82,6 +82,9 @@ server:
   authenticate: false
   verbose: false
   memTrack: true
+  certFile: /etc/ssl/arkouda/tls.crt
+  keyFile: /etc/ssl/arkouda/tls.key
+  k8sHost:
   resources:
     limits:
       cpu: 500m
