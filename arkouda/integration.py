@@ -29,7 +29,7 @@ class KubernetesDao():
 
         api_client = client.ApiClient(configuration=config)
         self.core_client = client.CoreV1Api(api_client=api_client)
-        self.apps_client = AppsV1Api(api_client)
+        self.apps_client = client.AppsV1Api(api_client)
     
     def get_pods(self, namespace : str, app_name : str=None) -> V1PodList:
         try:
