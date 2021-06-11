@@ -31,6 +31,7 @@ RUN pip install --upgrade pip
 
 RUN mkdir /opt/install
 WORKDIR /opt/install
+
 ADD VERSION /opt/install/VERSION
 ADD README.md /opt/install/README.md
 ADD installers.py /opt/install/installers.py
@@ -40,4 +41,5 @@ ADD arkouda /opt/install/arkouda
 RUN pip3 install -e .
 
 WORKDIR /opt
+
 ENTRYPOINT sh /opt/start-arkouda-server.sh

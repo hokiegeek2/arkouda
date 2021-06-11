@@ -20,8 +20,6 @@ spec:
         - name: arkouda-locale
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: [ "/bin/bash", "-c", "--" ]
-          args: [ "while true; do sleep 600; done;" ]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}

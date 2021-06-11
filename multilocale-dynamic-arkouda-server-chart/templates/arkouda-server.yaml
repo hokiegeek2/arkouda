@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: Deployment
+kind: ReplicaSet
 metadata:
   name: arkouda-server
   namespace: arkouda
@@ -16,7 +16,6 @@ spec:
         #annotations:
         #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-            #hostNetwork: true
       containers:
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
@@ -60,7 +59,7 @@ spec:
             - name: VERBOSE
               value: {{ .Values.server.verbose | quote}}   
             - name: MEMTRACK
-              value: {{ .Values.server.memTrack | quote}}
+              value: {{ .Values.server.memTrack | quote}}   
             - name: CERT_FILE
               value: {{ .Values.server.certFile | quote}}
             - name: KEY_FILE

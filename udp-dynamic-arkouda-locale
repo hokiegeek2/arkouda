@@ -1,26 +1,28 @@
-FROM hokiegeek2/udp-arkouda-server-base:0.0.1
+FROM hokiegeek2/udp-arkouda-server-base:0.0.2
 
 ADD src/ /opt/src
 ADD Makefile /opt/Makefile
 ADD dep/ /opt/dep
 ADD VERSION /opt/VERSION
 WORKDIR /opt
-USER root
 
 ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
-RUN chown -R ubuntu:ubuntu /opt/
-
-USER ubuntu
 
 ARG SSH_SERVERS=${SSH_SERVERS}
 ARG GASNET_MASTERIP=${GASNET_MASTERIP}
 ENV SSH_SERVERS=${SSH_SERVERS}
 ENV GASNET_MASTERIP=${GASNET_MASTERIP}
 
-RUN make install-deps
-RUN make
+RUN sudo chmod 777 -R /opt
 
-EXPOSE 5555
+RUN make install-deps
+ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
+RUN sudo chown -R ubuntu:ubuntu /home/ubuntu
+RUN sudo chmod 777 -R /opt
+
+ENV SSH_SERVERS=
+ENV GASNET_MASTERIP=
+
 EXPOSE 5000-65000/udp
 
 CMD sudo service ssh start && while true; do sleep 3000; done
