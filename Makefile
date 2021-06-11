@@ -93,7 +93,7 @@ endif
 
 .PHONY: check-deps
 ifndef ARKOUDA_SKIP_CHECK_DEPS
-CHECK_DEPS = check-chpl check-zmq check-hdf5
+CHECK_DEPS = check-chpl
 endif
 check-deps: $(CHECK_DEPS)
 
