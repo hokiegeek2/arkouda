@@ -19,9 +19,9 @@ spec:
             #hostNetwork: true
       containers:
         - name: arkouda-server
-          image: hokiegeek2/udp-dynamic-arkouda-server:{{ .Values.releaseVersion }}
+          image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          #command: [ "sh", "/opt/start-arkouda-server.sh" ]
+          #command: [ "sh", "/opt/start-arkouda.sh" ]
           command: [ "/bin/bash", "-c", "--" ]
           args: [ "while true; do sleep 600; done;" ]
           resources:
@@ -33,9 +33,12 @@ spec:
               memory: {{ .Values.server.resources.limits.memory }}
           ports:
           - containerPort: {{ .Values.server.port }}
-            hostPort: {{ .Values.server.port }}
+            hostPort: 5555
           - containerPort: 22
             hostPort: 25
+          volumeMounts:
+          - name: ssl
+            mountPath: "/etc/ssl/arkouda"    
           env:
             - name: MY_IP
               valueFrom:
@@ -48,10 +51,23 @@ spec:
             - name: NUMLOCALES
               value: {{ .Values.server.numLocales | quote}}
             - name: SSH_SERVERS
-              value: {{ .Values.server.sshServers | quote}}
+              #value: {{ .Values.server.sshServers | quote}}
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
             - name: AUTHENTICATE
               value: {{ .Values.server.authenticate | quote}} 
             - name: VERBOSE
               value: {{ .Values.server.verbose | quote}}   
             - name: MEMTRACK
-              value: {{ .Values.server.memTrack | quote}}                
+              value: {{ .Values.server.memTrack | quote}}
+            - name: CERT_FILE
+              value: {{ .Values.server.certFile | quote}}
+            - name: KEY_FILE
+              value: {{ .Values.server.keyFile | quote}}   
+            - name: K8S_HOST
+              value: {{ .Values.server.k8sHost | quote}}              
+      volumes:              
+        - name: ssl
+          secret:
+            secretName: arkouda              

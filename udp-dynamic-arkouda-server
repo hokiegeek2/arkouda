@@ -19,7 +19,7 @@ RUN make install-deps
 ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
 RUN sudo chown -R ubuntu:ubuntu /home/ubuntu
 RUN sudo chmod 777 -R /opt
-#RUN make
+RUN make
 
 ENV SSH_SERVERS=
 ENV GASNET_MASTERIP=
@@ -27,4 +27,17 @@ ENV GASNET_MASTERIP=
 EXPOSE 5555
 EXPOSE 5000-65000/udp
 
+RUN pip install --upgrade pip
+
+RUN mkdir /opt/install
+WORKDIR /opt/install
+ADD VERSION /opt/install/VERSION
+ADD README.md /opt/install/README.md
+ADD installers.py /opt/install/installers.py
+ADD setup.py /opt/install/setup.py
+ADD arkouda /opt/install/arkouda
+
+RUN pip3 install -e .
+
+WORKDIR /opt
 ENTRYPOINT sh /opt/start-arkouda-server.sh
