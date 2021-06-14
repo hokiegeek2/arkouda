@@ -68,18 +68,15 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.0.2
+releaseVersion: 0.1.0
 imagePullPolicy: IfNotPresent
 numServers: 1
 
 ################ Arkouda Server Configuration ################
 
 server: 
-  host: 0.0.0.0
   port: 5555
   numLocales: 2
-  #sshServers: '0.0.0.0 10.43.202.160'
-  sshServers: '127.0.0.1'
   authenticate: false
   verbose: false
   memTrack: true

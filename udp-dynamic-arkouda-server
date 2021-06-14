@@ -7,6 +7,7 @@ ADD VERSION /opt/VERSION
 WORKDIR /opt
 
 ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
+ADD start-arkouda-locale.sh /opt/start-arkouda-locale.sh
 
 ARG SSH_SERVERS=${SSH_SERVERS}
 ARG GASNET_MASTERIP=${GASNET_MASTERIP}
@@ -29,17 +30,19 @@ EXPOSE 5000-65000/udp
 
 RUN pip install --upgrade pip
 
-RUN mkdir /opt/install
-WORKDIR /opt/install
+RUN mkdir /opt/client
+WORKDIR /opt/client
 
-ADD VERSION /opt/install/VERSION
-ADD README.md /opt/install/README.md
-ADD installers.py /opt/install/installers.py
-ADD setup.py /opt/install/setup.py
-ADD arkouda /opt/install/arkouda
+ADD VERSION /opt/client/VERSION
+ADD README.md /opt/client/README.md
+ADD installers.py /opt/client/installers.py
+ADD setup.py /opt/client/setup.py
+ADD arkouda /opt/client/arkouda
 
 RUN pip3 install -e .
 
 WORKDIR /opt
+
+RUN rm -rf ~/.ssh/
 
 ENTRYPOINT sh /opt/start-arkouda-server.sh

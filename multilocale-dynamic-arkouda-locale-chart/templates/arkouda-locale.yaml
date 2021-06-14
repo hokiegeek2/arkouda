@@ -27,8 +27,7 @@ spec:
             limits:
               cpu: {{ .Values.server.resources.limits.cpu }}
               memory: {{ .Values.server.resources.limits.memory }}
-          command: [ "/bin/bash", "-c", "--" ]
-          args: [ "while true; do sleep 600; done;" ]
+          command: [ "sh", "/opt/start-arkouda-locale.sh" ]
           ports:
           - containerPort: 22
             hostPort: 25
