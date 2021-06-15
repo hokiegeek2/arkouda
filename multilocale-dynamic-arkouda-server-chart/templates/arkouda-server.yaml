@@ -16,14 +16,11 @@ spec:
         #annotations:
         #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-            #hostNetwork: true
       containers:
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          #command: [ "sh", "/opt/start-arkouda.sh" ]
-          command: [ "/bin/bash", "-c", "--" ]
-          args: [ "while true; do sleep 600; done;" ]
+          command: [ "sh", "/opt/start-arkouda.sh" ]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
@@ -51,7 +48,6 @@ spec:
             - name: NUMLOCALES
               value: {{ .Values.server.numLocales | quote}}
             - name: SSH_SERVERS
-              #value: {{ .Values.server.sshServers | quote}}
               valueFrom:
                 fieldRef:
                   fieldPath: status.podIP
