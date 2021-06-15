@@ -1,5 +1,5 @@
 import os
-from typing import List
+from typing import List, Union
 from kubernetes import client # type: ignore
 from kubernetes.client.rest import ApiException # type: ignore
 from kubernetes.client import V1PodList, V1Pod # type: ignore
@@ -27,7 +27,7 @@ class KubernetesDao():
                                    'env variables must be set'))
         config.verify_ssl = False
         # used to disable non-verified cert warnings
-        import urllib3
+        import urllib3 # type: ignore
         urllib3.disable_warnings()
 
         api_client = client.ApiClient(configuration=config)
@@ -53,7 +53,7 @@ class KubernetesDao():
     def _is_named_pod(self, pod : V1Pod, app_name : str) -> V1Pod:
         return pod.metadata.labels.get('app') == app_name
      
-    def get_pod_ips(self, namespace : str, app_name : str=None, pretty_print=False) -> List[str]:
+    def get_pod_ips(self, namespace : str, app_name : str=None, pretty_print=False) -> Union[List[str],str]:
         ips = [pod.status.pod_ip for pod in self.get_pods(namespace, app_name)]
         if pretty_print:
             return str(ips).strip('[]').replace(',','')
