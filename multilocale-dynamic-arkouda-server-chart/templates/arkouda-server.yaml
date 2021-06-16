@@ -20,7 +20,9 @@ spec:
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: [ "sh", "/opt/start-arkouda.sh" ]
+          #command: [ "sh", "/opt/start-arkouda-server.sh" ]
+          command: [ "/bin/bash", "-c", "--" ]
+          args: [ "while true; do sleep 600; done;" ]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
@@ -35,7 +37,9 @@ spec:
             hostPort: 25
           volumeMounts:
           - name: ssl
-            mountPath: "/etc/ssl/arkouda"    
+            mountPath: "/etc/ssl/arkouda"
+          - name: ssh
+            mountPath: "/home/ubuntu/ssh-keys"
           env:
             - name: MY_IP
               valueFrom:
@@ -66,4 +70,7 @@ spec:
       volumes:              
         - name: ssl
           secret:
-            secretName: arkouda              
+            secretName: arkouda  
+        - name: ssh
+          secret:
+            secretName: arkouda-ssh          
