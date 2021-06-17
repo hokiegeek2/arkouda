@@ -31,6 +31,9 @@ spec:
           ports:
           - containerPort: 22
             hostPort: 25
+          volumeMounts:
+          - name: ssh
+            mountPath: "/home/ubuntu/ssh-keys"
           env:
             - name: MY_IP
               valueFrom:
@@ -43,4 +46,9 @@ spec:
             - name: VERBOSE
               value: {{ .Values.server.verbose | quote}}   
             - name: MEMTRACK
-              value: {{ .Values.server.memTrack | quote}}                
+              value: {{ .Values.server.memTrack | quote}}         
+      volumes:
+        - name: ssh
+          secret:
+            secretName: arkouda-ssh
+       
