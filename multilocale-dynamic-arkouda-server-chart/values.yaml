@@ -85,8 +85,8 @@ server:
       cpu: 4000m
       memory: 4096Mi
     requests:
-      cpu: 1000m
-      memory: 2048Mi
+      cpu: 4000m
+      memory: 4096Mi
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
   k8sHost:

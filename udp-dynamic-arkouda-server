@@ -16,6 +16,7 @@ ENV GASNET_MASTERIP=${GASNET_MASTERIP}
 
 RUN sudo chmod 777 -R /opt
 
+RUN sudo apt-get update && sudo apt install hdf5-tools -y
 RUN make install-deps
 ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
 RUN sudo chown -R ubuntu:ubuntu /home/ubuntu

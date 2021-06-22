@@ -68,22 +68,23 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.1.0
+releaseVersion: 0.1.1
 imagePullPolicy: IfNotPresent
-numLocales: 1
 
 ################ Arkouda Server Configuration ################
 
 server: 
   port: 5555
-  numLocales: 1
+  numLocales: 2
   authenticate: false
   verbose: false
   memTrack: true
   resources:
     limits:
-      cpu: 500m
-      memory: 512Mi
+      cpu: 4000m
+      memory: 4096Mi
     requests:
-      cpu: 250m
-      memory: 256Mi
+      cpu: 4000m
+      memory: 4096Mi
+  threadsPerLocale: 4
+  
