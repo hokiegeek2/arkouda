@@ -4,7 +4,7 @@ metadata:
   name: arkouda-locale
   namespace: arkouda
 spec:
-  replicas: {{ .Values.numLocales }}
+  replicas: {{ .Values.server.numLocales }}
   selector:
     matchLabels:
       app: arkouda-locale
@@ -42,13 +42,15 @@ spec:
                 fieldRef: 
                   fieldPath: status.podIP
             - name: NUM_LOCALES
-              value: {{ .Values.server.numLocales | quote}}
+              value: {{ .Values.server.numLocales | quote }}
             - name: AUTHENTICATE
-              value: {{ .Values.server.authenticate | quote}} 
+              value: {{ .Values.server.authenticate | quote }} 
             - name: VERBOSE
-              value: {{ .Values.server.verbose | quote}}   
+              value: {{ .Values.server.verbose | quote }}   
             - name: MEMTRACK
-              value: {{ .Values.server.memTrack | quote}}         
+              value: {{ .Values.server.memTrack | quote }}
+            - name: CHPL_RT_NUM_THREADS_PER_LOCALE
+              value: {{ .Values.server.threadsPerLocale | quote }}         
       volumes:
         - name: ssh
           secret:
