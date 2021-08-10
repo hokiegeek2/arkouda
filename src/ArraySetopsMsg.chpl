@@ -21,15 +21,12 @@ module ArraySetopsMsg
     use Indexing;
     use RadixSortLSD;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
-    
-    var asLogger = new Logger();
-    if v {
-        asLogger.level = LogLevel.DEBUG;
-    } else {
-        asLogger.level = LogLevel.INFO;    
-    }
+    use Message;
+
+    private config const logLevel = ServerConfig.logLevel;
+    const asLogger = new Logger(logLevel);
     
     /*
     Parse, execute, and respond to a intersect1d message
@@ -37,9 +34,9 @@ module ArraySetopsMsg
     :type reqMsg: string
     :arg st: SymTab to act on
     :type st: borrowed SymTab
-    :returns: (string) response message
+    :returns: (MsgTuple) response message
     */
-    proc intersect1dMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc intersect1dMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -61,7 +58,7 @@ module ArraySetopsMsg
              if (gEnt.dtype != gEnt2.dtype) {
                  var errorMsg = notImplementedError("newIntersect1d",gEnt2.dtype);
                  asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                             
-                 return errorMsg;
+                 return new MsgTuple(errorMsg, MsgType.ERROR);
              }
              var e = toSymEntry(gEnt,int);
              var f = toSymEntry(gEnt2, int);
@@ -69,14 +66,14 @@ module ArraySetopsMsg
              var aV = intersect1d(e.a, f.a, isUnique);
              st.addEntry(vname, new shared SymEntry(aV));
 
-             var s = "created " + st.attrib(vname);
-             asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),s);
-             return s;
+             repMsg = "created " + st.attrib(vname);
+             asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+             return new MsgTuple(repMsg, MsgType.NORMAL);
            }
            otherwise {
                var errorMsg = notImplementedError("newIntersect1d",gEnt.dtype);
                asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);           
-               return errorMsg;
+               return new MsgTuple(errorMsg, MsgType.ERROR);
            }
         }
     }
@@ -87,9 +84,9 @@ module ArraySetopsMsg
     :type reqMsg: string
     :arg st: SymTab to act on
     :type st: borrowed SymTab
-    :returns: (string) response message
+    :returns: (MsgTuple) response message
     */
-    proc setxor1dMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc setxor1dMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -111,7 +108,7 @@ module ArraySetopsMsg
              if(gEnt.dtype != gEnt2.dtype) {
                  var errorMsg = notImplementedError("setxor1d",gEnt2.dtype);
                  asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                 
-                 return errorMsg;
+                 return new MsgTuple(errorMsg, MsgType.ERROR);
              }
              var e = toSymEntry(gEnt,int);
              var f = toSymEntry(gEnt2, int);
@@ -119,14 +116,14 @@ module ArraySetopsMsg
              var aV = setxor1d(e.a, f.a, isUnique);
              st.addEntry(vname, new shared SymEntry(aV));
 
-             var s = "created " + st.attrib(vname);
-             asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),s);
-             return s;
+             repMsg = "created " + st.attrib(vname);
+             asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+             return new MsgTuple(repMsg, MsgType.NORMAL);
            }
            otherwise {
                var errorMsg = notImplementedError("setxor1d",gEnt.dtype);
                asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                  
-               return errorMsg;
+               return new MsgTuple(errorMsg, MsgType.ERROR);
            }
         }
     }
@@ -137,9 +134,9 @@ module ArraySetopsMsg
     :type reqMsg: string
     :arg st: SymTab to act on
     :type st: borrowed SymTab
-    :returns: (string) response message
+    :returns: (MsgTuple) response message
     */
-    proc setdiff1dMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc setdiff1dMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -161,7 +158,7 @@ module ArraySetopsMsg
              if (gEnt.dtype != gEnt2.dtype) {
                  var errorMsg = notImplementedError("setdiff1d",gEnt2.dtype);
                  asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                
-                 return errorMsg;             
+                 return new MsgTuple(errorMsg, MsgType.ERROR);             
              }
              var e = toSymEntry(gEnt,int);
              var f = toSymEntry(gEnt2, int);
@@ -169,14 +166,14 @@ module ArraySetopsMsg
              var aV = setdiff1d(e.a, f.a, isUnique);
              st.addEntry(vname, new shared SymEntry(aV));
 
-             var s = "created " + st.attrib(vname);
-             asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),s);
-             return s;
+             var repMsg = "created " + st.attrib(vname);
+             asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+             return new MsgTuple(repMsg, MsgType.NORMAL);
            }
            otherwise {
                var errorMsg = notImplementedError("setdiff1d",gEnt.dtype);
                asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                 
-               return errorMsg;             
+               return new MsgTuple(errorMsg, MsgType.ERROR);           
            }
         }
     }
@@ -187,9 +184,9 @@ module ArraySetopsMsg
     :type reqMsg: string
     :arg st: SymTab to act on
     :type st: borrowed SymTab
-    :returns: (string) response message
+    :returns: (MsgTuple) response message
     */
-    proc union1dMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc union1dMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       param pn = Reflection.getRoutineName();
       var repMsg: string; // response message
         // split request into fields
@@ -210,7 +207,7 @@ module ArraySetopsMsg
            if (gEnt.dtype != gEnt2.dtype) {
                var errorMsg = notImplementedError("newUnion1d",gEnt2.dtype);
                asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                   
-               return errorMsg;              
+               return new MsgTuple(errorMsg, MsgType.ERROR);              
            }
            var e = toSymEntry(gEnt,int);
            var f = toSymEntry(gEnt2, int);
@@ -218,14 +215,14 @@ module ArraySetopsMsg
            var aV = union1d(e.a, f.a);
            st.addEntry(vname, new shared SymEntry(aV));
 
-           var s = "created " + st.attrib(vname);
-           asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),s);
-           return s;
+           var repMsg = "created " + st.attrib(vname);
+           asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+           return new MsgTuple(repMsg, MsgType.NORMAL);
          }
          otherwise {
              var errorMsg = notImplementedError("newUnion1d",gEnt.dtype);
              asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                   
-             return errorMsg;              
+             return new MsgTuple(errorMsg, MsgType.ERROR);              
          }
       }
     }

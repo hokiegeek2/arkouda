@@ -3,6 +3,7 @@ import pandas as pd
 from context import arkouda as ak
 from arkouda.dtypes import float64, int64
 from base_test import ArkoudaTest
+from arkouda.groupbyclass import GroupByReductionType
 
 SIZE = 100
 GROUPS = 8
@@ -95,7 +96,7 @@ def run_test(levels, verbose=False):
             try:
                 akkeys, akvals = akg.aggregate(akdf[vname], op)
                 akvals = akvals.to_ndarray()
-            except RuntimeError as E:
+            except Exception as E:
                 if verbose: print("Arkouda error: ", E)
                 not_impl += 1
                 do_check = False
@@ -147,6 +148,12 @@ class GroupByTest(ArkoudaTest):
         '''
         self.assertEqual(0, run_test(2, verbose))
 
+    def test_bitwise_aggregations(self):
+        revs = ak.arange(self.igb.size) % 2
+        self.assertTrue((self.igb.OR(revs)[1] == self.igb.max(revs)[1]).all())
+        self.assertTrue((self.igb.AND(revs)[1] == self.igb.min(revs)[1]).all())
+        self.assertTrue((self.igb.XOR(revs)[1] == (self.igb.sum(revs)[1] % 2)).all())
+        
     def test_standalone_broadcast(self):
         segs = ak.arange(10)**2
         vals = ak.arange(10)
@@ -194,6 +201,19 @@ class GroupByTest(ArkoudaTest):
         self.assertTrue((np.array([1,2,3,4,5]) == keys.to_ndarray()).all())
         self.assertTrue((np.array([1,4,2,1,2]) == counts.to_ndarray()).all())
         
+        
+    def test_groupby_reduction_type(self):
+        self.assertEqual('any', str(GroupByReductionType.ANY)) 
+        self.assertEqual('all', str(GroupByReductionType.ALL))         
+        self.assertEqual(GroupByReductionType.ANY, GroupByReductionType('any'))
+        
+        with self.assertRaises(ValueError):
+            GroupByReductionType('an')
+        
+        self.assertIsInstance(ak.GROUPBY_REDUCTION_TYPES, frozenset)
+        self.assertTrue('any' in ak.GROUPBY_REDUCTION_TYPES)
+        
+        
     def test_error_handling(self):
         d = make_arrays()
         akdf = {k:ak.array(v) for k, v in d.items()}        
@@ -216,12 +236,12 @@ class GroupByTest(ArkoudaTest):
         
         with self.assertRaises(TypeError) as cm:
             self.igb.nunique(ak.randint(0,1,10,dtype=bool))
-        self.assertEqual('the pdarray dtype must be int64', 
+        self.assertEqual('nunique unsupported for this dtype', 
                          cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:
             self.igb.nunique(ak.randint(0,1,10,dtype=float64))
-        self.assertEqual('the pdarray dtype must be int64', 
+        self.assertEqual('nunique unsupported for this dtype', 
                          cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:
@@ -262,4 +282,66 @@ class GroupByTest(ArkoudaTest):
         with self.assertRaises(TypeError) as cm:
             self.igb.argmax(ak.randint(0,1,10,dtype=bool))
         self.assertEqual('argmax is only supported for pdarrays of dtype float64 and int64', 
-                         cm.exception.args[0])  
+                         cm.exception.args[0])
+
+    def test_aggregate_strings(self):
+        s = ak.array(['a', 'b', 'a', 'b', 'c'])
+        i = ak.arange(s.size)
+        grouping = ak.GroupBy(s)
+        labels, values = grouping.nunique(i)
+
+        expected = {'a': 2, 'b': 2, 'c': 1}
+        actual = {label: value for (label, value) in zip(labels.to_ndarray(), values.to_ndarray())}
+
+        self.assertDictEqual(expected, actual)
+
+    def test_multi_level_categorical(self):
+        string = ak.array(['a', 'b', 'a', 'b', 'c'])
+        cat = ak.Categorical(string)
+        cat_from_codes = ak.Categorical.from_codes(codes=ak.array([0, 1, 0, 1, 2]),
+                                                   categories=ak.array(['a', 'b', 'c']))
+        i = ak.arange(string.size)
+        expected = {('a', 'a'): 2, ('b', 'b'): 2, ('c', 'c'): 1}
+
+        # list of 2 strings
+        str_grouping = ak.GroupBy([string, string])
+        str_labels, str_values = str_grouping.nunique(i)
+        str_dict = to_tuple_dict(str_labels, str_values)
+        self.assertDictEqual(expected, str_dict)
+
+        # list of 2 cats (one from_codes)
+        cat_grouping = ak.GroupBy([cat, cat_from_codes])
+        cat_labels, cat_values = cat_grouping.nunique(i)
+        cat_dict = to_tuple_dict(cat_labels, cat_values)
+        self.assertDictEqual(expected, cat_dict)
+
+        # One cat (from_codes) and one string
+        mixed_grouping = ak.GroupBy([cat_from_codes, string])
+        mixed_labels, mixed_values = mixed_grouping.nunique(i)
+        mixed_dict = to_tuple_dict(mixed_labels, mixed_values)
+        self.assertDictEqual(expected, mixed_dict)
+
+    def test_nunique_types(self):
+        string = ak.array(['a', 'b', 'a', 'b', 'c'])
+        cat = ak.Categorical(string)
+        i = ak.array([5, 3, 5, 3, 1])
+        expected = ak.array([1, 1, 1])
+        # Try GroupBy.nunique with every combination of types, including mixed
+        keys = (string, cat, i, (string, cat, i))
+        for key in keys:
+            g = ak.GroupBy(key)
+            for val in keys:
+                k, n = g.nunique(val)
+                self.assertTrue((n == expected).all())
+
+    def test_type_failure_multilevel_groupby_aggregate(self):
+        # just checking no error occurs with hotfix for Issue 858
+        keys = [ak.randint(0, 10, 100), ak.randint(0, 10, 100)]
+        g = ak.GroupBy(keys)
+        g.min(ak.randint(0, 10, 100))
+
+def to_tuple_dict(labels, values):
+    # transforms labels from list of arrays into a list of tuples by index and builds a dictionary
+    # labels: [array(['b', 'a', 'c']), array(['b', 'a', 'c'])] -> [('b', 'b'), ('a', 'a'), ('c', 'c')]
+    return {label: value for (label, value) in
+            zip([index_tuple for index_tuple in zip(*[pda.to_ndarray() for pda in labels])], values.to_ndarray())}

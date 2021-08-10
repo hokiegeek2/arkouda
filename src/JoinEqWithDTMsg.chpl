@@ -6,8 +6,9 @@ module JoinEqWithDTMsg
     use Math only;
     use Sort only;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
+    use Message;
     use PrivateDist;
     use MultiTypeSymbolTable;
     use MultiTypeSymEntry;
@@ -17,20 +18,15 @@ module JoinEqWithDTMsg
     param TRUE_DT = 0;
     param ABS_DT = 1;
     param POS_DT = 2;
-    
-    const jeLogger = new Logger();
-  
-    if v {
-        jeLogger.level = LogLevel.DEBUG;
-    } else {
-        jeLogger.level = LogLevel.INFO;
-    }
-    
+
+    private config const logLevel = ServerConfig.logLevel;
+    const jeLogger = new Logger(logLevel);
+
     // operator overloads so + reduce and + scan can work on atomic int arrays
-    proc +(x: atomic int, y: atomic int) {
+    operator +(x: atomic int, y: atomic int) {
         return x.read() + y.read();
     }
-    proc +=(X: [?D] int, Y: [D] atomic int) {
+    operator +=(X: [?D] int, Y: [D] atomic int) {
         [i in D] {X[i] += Y[i].read();}
     }
 
@@ -225,7 +221,7 @@ module JoinEqWithDTMsg
        pred: is the dt-predicate ("absDT","posDT","trueDT")
        resLimit: is how many answers can you tolerate ;-)
     */
-    proc joinEqWithDTMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc joinEqWithDTMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         var (a1_name, g2Seg_name, g2Ukeys_name, g2Perm_name, t1_name,
@@ -367,7 +363,9 @@ module JoinEqWithDTMsg
         st.addEntry(resI_name, new shared SymEntry(resI));
         st.addEntry(resJ_name, new shared SymEntry(resJ));
         
-        return try! "created " + st.attrib(resI_name) + " +created " + st.attrib(resJ_name);
+        repMsg = "created " + st.attrib(resI_name) + " +created " + st.attrib(resJ_name);
+        jeLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+        return new MsgTuple(repMsg, MsgType.NORMAL);
     }// end joinEqWithDTMsg()
     
 }// end module JoinEqWithDTMsg

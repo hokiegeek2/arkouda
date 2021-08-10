@@ -6,22 +6,18 @@ module SortMsg
     use Math only;
     use Sort only;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use MultiTypeSymbolTable;
     use MultiTypeSymEntry;
     use ServerErrorStrings;
     use RadixSortLSD;
     use AryUtil;
     use Logging;
-    
-    const sortLogger = new Logger();
-  
-    if v {
-        sortLogger.level = LogLevel.DEBUG;
-    } else {
-        sortLogger.level = LogLevel.INFO;
-    }
-  
+    use Message;
+
+    private config const logLevel = ServerConfig.logLevel;
+    const sortLogger = new Logger(logLevel);
+
     /* Sort the given pdarray using Radix Sort and
        return sorted keys as a block distributed array */
     proc sort(a: [?aD] ?t): [aD] t {
@@ -30,7 +26,7 @@ module SortMsg
     }
 
     /* sort takes pdarray and returns a sorted copy of the array */
-    proc sortMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc sortMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
       param pn = Reflection.getRoutineName();
       var repMsg: string; // response message
       var (name) = payload.splitMsgToTuple(1);
@@ -65,12 +61,12 @@ module SortMsg
               var errorMsg = notImplementedError(pn,gEnt.dtype);
               sortLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
                                                      errorMsg);
-              return errorMsg;
+              return new MsgTuple(errorMsg, MsgType.ERROR);
           }            
       }// end select(gEnt.dtype)
-      repMsg = "created " + st.attrib(sortedName);
 
+      repMsg = "created " + st.attrib(sortedName);
       sortLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);      
-      return repMsg;
+      return new MsgTuple(repMsg, MsgType.NORMAL);
     }// end sortMsg()
 }// end module SortMsg

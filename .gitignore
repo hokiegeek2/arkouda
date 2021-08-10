@@ -2,6 +2,7 @@ arkouda_server
 arkouda_server_real
 arkouda_server_llvm
 arkouda_server_llvm_real
+.arkouda/
 *.log
 *_real
 #*#
@@ -12,6 +13,7 @@ __pycache__/
 .ipynb_checkpoints/
 .vscode/
 .local/
+.idea/
 doc/
 docs/
 test-bin/
@@ -19,9 +21,16 @@ Makefile.paths
 SysInfo.chpl
 Untitled.ipynb
 dist/
+env/
+build-client-env/
 arkouda.egg-info/
 build/
 dep/*-install/
 dep/build/
 *.pyc
 ak-server-info
+test/IOSpeedTest.good
+test/IOSpeedTestMsg.good
+test/NanSpeedTest.good
+test/StringArgsortSpeedTest.good
+test/file_LOCALE0000

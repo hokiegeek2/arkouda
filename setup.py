@@ -1,17 +1,12 @@
-from setuptools import setup, find_packages
+from setuptools import setup
 from os import path
-from subprocess import PIPE, Popen
-import installers
+import versioneer
 
 
 here = path.abspath(path.dirname(__file__))
 # Get the long description from the README file
 with open(path.join(here, 'README.md'), encoding='utf-8') as f:
     long_description = f.read()
-
-with open(path.join(here, 'VERSION'), 'r') as f:
-    version = f.read().strip()
-
 
 
 # Arguments marked as "Required" below must be included for upload to PyPI.
@@ -37,7 +32,7 @@ setup(
     # For a discussion on single-sourcing the version across setup.py and the
     # project code, see
     # https://packaging.python.org/en/latest/single_source_version.html
-    version=version,  # Required
+    version=versioneer.get_version(),  # Required
 
     # This is a one-line description or tagline of what your project does. This
     # corresponds to the "Summary" metadata field:
@@ -135,7 +130,14 @@ setup(
     #
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
-    install_requires=['numpy>=1.16.5,<=1.19.5', 'pandas>=1.1.0', 'zmq', 'typeguard==2.10.0'],  # Optional
+    install_requires=[
+        'numpy>=1.16.5,<=1.19.5',
+        'pandas>=1.1.0',
+        'pyzmq>=20.0.0',
+        'typeguard==2.10.0',
+        'pyfiglet',
+        'versioneer'
+    ],
 
     # List additional groups of dependencies here (e.g. development
     # dependencies). Users will be able to install these using the "extras"
@@ -150,11 +152,12 @@ setup(
                 'pytest-env','Sphinx', 'sphinx-argparse', 
                 'sphinx-autoapi', 'mypy'],
     },
-    # replace orginal install command with version that also builds
+    # replace original install command with version that also builds
     # chapel and the arkouda server.
-    cmdclass={
-        "build_py": installers.ArkoudaInstall,
-    },
+    # cmdclass={
+    #     "build_py": installers.ArkoudaInstall,
+    # },
+    cmdclass=versioneer.get_cmdclass(),
 
     # If there are data files included in your packages that need to be
     # installed, specify them here.

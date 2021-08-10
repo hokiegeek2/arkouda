@@ -1,15 +1,23 @@
-from typing import Tuple
+from typing import List, Tuple
 import numpy as np
+import pandas as pd
 from collections import Counter
 from context import arkouda as ak
 from base_test import ArkoudaTest
+from collections import namedtuple
+
 ak.verbose = False
 N = 100
 UNIQUE = N//4
 
 def compare_strings(a, b):
     return all(x == y for x, y in zip(a, b))
-  
+
+
+def convert_to_ord(s:List[str]) -> List[int]:
+    return [ord(i) for i in "\x00".join(s)] + [ord("\x00")]
+
+
 errors = False
 
 def run_test_argsort(strings, test_strings, cat):
@@ -114,16 +122,22 @@ def run_test_groupby(strings, cat, akset):
 
 
 def run_test_contains(strings, test_strings, delim):
+    if isinstance(delim,bytes):
+        delim = delim.decode()
     found = strings.contains(delim).to_ndarray()
     npfound = np.array([s.count(delim) > 0 for s in test_strings])
     assert((found == npfound).all())
 
-def run_test_starts_with(strings, test_strings, delim):
+def run_test_starts_with(strings, test_strings, delim):    
+    if isinstance(delim,bytes):
+        delim = delim.decode()
     found = strings.startswith(delim).to_ndarray()
     npfound = np.array([s.startswith(delim) for s in test_strings])
     assert((found == npfound).all())
 
 def run_test_ends_with(strings, test_strings, delim):
+    if isinstance(delim,bytes):
+        delim = delim.decode()
     found = strings.endswith(delim).to_ndarray()
     npfound = np.array([s.endswith(delim) for s in test_strings])
     if len(found) != len(npfound):
@@ -131,6 +145,8 @@ def run_test_ends_with(strings, test_strings, delim):
     assert((found == npfound).all())
 
 def run_test_peel(strings, test_strings, delim):
+    if isinstance(delim,bytes):
+        delim = delim.decode()
     import itertools as it
     tf = (True, False)
     def munge(triple, inc, part):
@@ -188,6 +204,8 @@ def run_test_peel(strings, test_strings, delim):
         assert((ltest == ls.to_ndarray()).all() and (rtest == rs.to_ndarray()).all())
 
 def run_test_stick(strings, test_strings, base_words, delim, N):
+    if isinstance(delim,bytes):
+        delim = delim.decode()
     test_strings2 = np.random.choice(base_words.to_ndarray(), N, replace=True)
     strings2 = ak.array(test_strings2)
     stuck = strings.stick(strings2, delimiter=delim).to_ndarray()
@@ -208,6 +226,7 @@ if __name__ == '__main__':
     else:
         ak.connect()
 
+    print("Running test from string_test.__main__")
     # with open(__file__, 'r') as f:
     #     base_words = np.array(f.read().split())
     # test_strings = np.random.choice(base_words, N, replace=True)
@@ -284,11 +303,14 @@ if __name__ == '__main__':
     print("peel passed")
 
     # stick
-    run_test_stick(strings, test_strings, base_words, delim)
+    run_test_stick(strings, test_strings, base_words, delim, 100)
     print("stick passed")
 
+
 class StringTest(ArkoudaTest):
-  
+
+    Gremlins = namedtuple('Gremlins', 'gremlins_base_words gremlins_strings gremlins_test_strings gremlins_cat')
+
     def setUp(self):
         self.maxDiff = None
         ArkoudaTest.setUp(self)
@@ -298,66 +320,83 @@ class StringTest(ArkoudaTest):
         self.gremlins = ak.array(gremlins)
         self.base_words = ak.concatenate((base_words1, base_words2))
         self.np_base_words = np.hstack((base_words1.to_ndarray(), base_words2.to_ndarray()))
-        choices = ak.randint(0, self.base_words.size, N)
-        self.strings = self.base_words[choices]
+        self.choices = ak.randint(0, self.base_words.size, N)
+        self.strings = self.base_words[self.choices]
         self.test_strings = self.strings.to_ndarray()
-        self.cat = ak.Categorical(self.strings)
+
         x, w = tuple(zip(*Counter(''.join(self.base_words.to_ndarray())).items()))
         self.delim = self._get_delimiter(x,w,gremlins)
-        self.akset = set(ak.unique(self.strings).to_ndarray())
-        self.gremlins_base_words = ak.concatenate((self.base_words, self.gremlins))
-        self.gremlins_strings = ak.concatenate((self.base_words[choices], self.gremlins))
-        self.gremlins_test_strings = self.gremlins_strings.to_ndarray()
-        self.gremlins_cat = ak.Categorical(self.gremlins_strings)
 
-    def _get_delimiter(self,x : Tuple, w : Tuple, gremlins : np.ndarray) -> str:
+    def _get_strings(self, prefix : str='string', size : int=11) -> ak.Strings:
+        return ak.array(['{} {}'.format(prefix,i) for i in range(1,size)])
+
+    def _get_delimiter(self, x : Tuple, w : Tuple, gremlins : np.ndarray) -> str:
         delim = np.random.choice(x, p=(np.array(w)/sum(w)))
         if delim in gremlins:
             self._get_delimiter(x,w,gremlins)
         return delim
-              
+
+    def _get_ak_gremlins(self):
+        gremlins_base_words = ak.concatenate((self.base_words, self.gremlins))
+        gremlins_strings = ak.concatenate((self.base_words[self.choices], self.gremlins))
+        gremlins_test_strings = gremlins_strings.to_ndarray()
+        gremlins_cat = ak.Categorical(gremlins_strings)
+        return self.Gremlins(gremlins_base_words, gremlins_strings, gremlins_test_strings, gremlins_cat)
+
+    def _get_categorical(self):
+        return ak.Categorical(self.strings)
+
     def test_compare_strings(self):
         assert compare_strings(self.base_words.to_ndarray(), self.np_base_words)
 
     def test_argsort(self):
-        run_test_argsort(self.strings, self.test_strings, self.cat)
+        run_test_argsort(self.strings, self.test_strings, self._get_categorical())
 
     def test_in1d(self):
-        run_test_in1d(self.strings, self.cat, self.base_words)
+        run_test_in1d(self.strings, self._get_categorical(), self.base_words)
                       
     def test_unique(self):
-        run_test_unique(self.strings, self.test_strings, self.cat)
+        run_test_unique(self.strings, self.test_strings, self._get_categorical())
 
     def test_groupby(self):
-        run_test_groupby(self.strings, self.cat, self.akset)
+        akset = set(ak.unique(self.strings).to_ndarray())
+        run_test_groupby(self.strings, self._get_categorical(), akset)
 
     def test_index(self):
-        run_test_index(self.strings, self.test_strings, self.cat, 
+        run_test_index(self.strings, self.test_strings, self._get_categorical(),
                        range(-len(self.gremlins), 0))
-        run_test_index(self.gremlins_strings, self.gremlins_test_strings, 
-                       self.gremlins_cat, range(-len(self.gremlins), 0))
+        g = self._get_ak_gremlins()
+        run_test_index(g.gremlins_strings, g.gremlins_test_strings,
+                       g.gremlins_cat, range(-len(self.gremlins), 0))
         
     def test_slice(self):
-        run_test_slice(self.strings, self.test_strings, self.cat)
+        run_test_slice(self.strings, self.test_strings, self._get_categorical())
         
     def test_pdarray_index(self):
-        run_test_pdarray_index(self.strings, self.test_strings, self.cat)
+        run_test_pdarray_index(self.strings, self.test_strings, self._get_categorical())
 
     def test_contains(self):
         run_test_contains(self.strings, self.test_strings, self.delim)
+        run_test_contains(self.strings, self.test_strings, np.str_(self.delim))
+        run_test_contains(self.strings, self.test_strings, str.encode(str(self.delim)))
         
     def test_starts_with(self):
         run_test_starts_with(self.strings, self.test_strings, self.delim)
+        run_test_starts_with(self.strings, self.test_strings, np.str_(self.delim))
+        run_test_starts_with(self.strings, self.test_strings, str.encode(str(self.delim)))
 
     def test_ends_with(self):
         run_test_ends_with(self.strings, self.test_strings, self.delim)
+        run_test_ends_with(self.strings, self.test_strings, np.str_(self.delim))
+        run_test_ends_with(self.strings, self.test_strings, str.encode(str(self.delim)))
 
         # Test gremlins delimiters
-        run_test_ends_with(self.gremlins_strings, self.gremlins_test_strings, ' ')        
-        run_test_ends_with(self.gremlins_strings, self.gremlins_test_strings, '"')
+        g = self._get_ak_gremlins()
+        run_test_ends_with(g.gremlins_strings, g.gremlins_test_strings, ' ')
+        run_test_ends_with(g.gremlins_strings, g.gremlins_test_strings, '"')
         with self.assertRaises(AssertionError):
-            self.assertFalse(run_test_ends_with(self.gremlins_strings, 
-                                            self.gremlins_test_strings, ''))
+            self.assertFalse(run_test_ends_with(g.gremlins_strings,
+                                            g.gremlins_test_strings, ''))
     
     def test_ends_with_delimiter_match(self):
         strings = ak.array(['string{} '.format(i) for i in range(0,5)])
@@ -380,7 +419,7 @@ class StringTest(ArkoudaTest):
 
         with self.assertRaises(TypeError) as cm:
             stringsOne.lstick(stringsTwo, delimiter=1)
-        self.assertEqual('type of argument "delimiter" must be str; got int instead', 
+        self.assertEqual('type of argument "delimiter" must be one of (bytes, str, str_); got int instead', 
                          cm.exception.args[0])
         
         with self.assertRaises(TypeError) as cm:
@@ -390,22 +429,22 @@ class StringTest(ArkoudaTest):
         
         with self.assertRaises(TypeError) as cm:
             stringsOne.startswith(1)
-        self.assertEqual('type of argument "substr" must be one of (str, bytes); got int instead', 
+        self.assertEqual('type of argument "substr" must be one of (bytes, str, str_); got int instead', 
                          cm.exception.args[0])    
         
         with self.assertRaises(TypeError) as cm:
             stringsOne.endswith(1)
-        self.assertEqual('type of argument "substr" must be one of (str, bytes); got int instead', 
+        self.assertEqual('type of argument "substr" must be one of (bytes, str, str_); got int instead', 
                          cm.exception.args[0])   
         
         with self.assertRaises(TypeError) as cm:
             stringsOne.contains(1)
-        self.assertEqual('type of argument "substr" must be one of (str, bytes); got int instead', 
+        self.assertEqual('type of argument "substr" must be one of (bytes, str, str_); got int instead', 
                          cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:
             stringsOne.peel(1)
-        self.assertEqual('type of argument "delimiter" must be str; got int instead', 
+        self.assertEqual('type of argument "delimiter" must be one of (bytes, str, str_); got int instead', 
                          cm.exception.args[0])  
 
         with self.assertRaises(ValueError) as cm:
@@ -415,23 +454,69 @@ class StringTest(ArkoudaTest):
 
     def test_peel(self):
         run_test_peel(self.strings, self.test_strings, self.delim)
+        run_test_peel(self.strings, self.test_strings, np.str_(self.delim))
+        run_test_peel(self.strings, self.test_strings, str.encode(str(self.delim)))
         
-        # Test gremlins delimiters 
+        # Test gremlins delimiters
+        g = self._get_ak_gremlins()
         with self.assertRaises(ValueError):
-            run_test_peel(self.gremlins_strings, self.gremlins_test_strings, '')  
-        run_test_peel(self.gremlins_strings, self.gremlins_test_strings, '"')  
-        run_test_peel(self.gremlins_strings, self.gremlins_test_strings, ' ') 
+            run_test_peel(g.gremlins_strings, g.gremlins_test_strings, '')
+        run_test_peel(g.gremlins_strings, g.gremlins_test_strings, '"')
+        run_test_peel(g.gremlins_strings, g.gremlins_test_strings, ' ')
+
+        # Run a test with a specific set of strings to verify strings.bytes matches expected output
+        series = pd.Series(["k1:v1", "k2:v2", "k3:v3", "no_colon"])
+        pda = ak.from_series(series, "string")
+
+        # Convert Pandas series of strings into a byte array where each string is terminated by a null byte.
+        # This mimics what should be stored server-side in the strings.bytes pdarray
+        expected_series_dec = convert_to_ord(series.to_list())
+        actual_dec = pda.bytes.to_ndarray().tolist()
+        self.assertListEqual(expected_series_dec, actual_dec)
+
+        # Now perform the peel and verify
+        a, b = pda.peel(":")
+        expected_a = convert_to_ord(["k1", "k2", "k3", ""])
+        expected_b = convert_to_ord(["v1", "v2", "v3", "no_colon"])
+        self.assertListEqual(expected_a, a.bytes.to_ndarray().tolist())
+        self.assertListEqual(expected_b, b.bytes.to_ndarray().tolist())
+
+    def test_peel_delimiter_length_issue(self):
+        # See Issue 838
+        d = "-" * 25 # 25 dashes as delimiter
+        series = pd.Series([f"abc{d}xyz", f"small{d}dog", f"blue{d}hat", "last"])
+        pda = ak.from_series(series)
+        a, b = pda.peel(d)
+        aa = a.to_ndarray().tolist()
+        bb = b.to_ndarray().tolist()
+        self.assertListEqual(["abc", "small", "blue", ""], aa)
+        self.assertListEqual(["xyz", "dog", "hat", "last"], bb)
+
+        # Try a slight permutation since we were able to get both versions to fail at one point
+        series = pd.Series([f"abc{d}xyz", f"small{d}dog", "last"])
+        pda = ak.from_series(series)
+        a, b = pda.peel(d)
+        aa = a.to_ndarray().tolist()
+        bb = b.to_ndarray().tolist()
+        self.assertListEqual(["abc", "small", ""], aa)
+        self.assertListEqual(["xyz", "dog", "last"], bb)
 
     def test_stick(self):
-        run_test_stick(self.strings, self.test_strings, self.base_words, self.delim, 100)
+        run_test_stick(self.strings, self.test_strings, self.base_words, 
+                       self.delim, 100)
+        run_test_stick(self.strings, self.test_strings, self.base_words, 
+                       np.str_(self.delim), 100)
+        run_test_stick(self.strings, self.test_strings, self.base_words, 
+                       str.encode(str(self.delim)), 100)
         
-        # Test gremlins delimiters 
-        run_test_stick(self.gremlins_strings, self.gremlins_test_strings, 
-                       self.gremlins_base_words, ' ', 103) 
-        run_test_stick(self.gremlins_strings, self.gremlins_test_strings, 
-                       self.gremlins_base_words, '', 103)  
-        run_test_stick(self.gremlins_strings, self.gremlins_test_strings, 
-                       self.gremlins_base_words, '"', 103)
+        # Test gremlins delimiters
+        g = self._get_ak_gremlins()
+        run_test_stick(g.gremlins_strings, g.gremlins_test_strings,
+                       g.gremlins_base_words, ' ', 103)
+        run_test_stick(g.gremlins_strings, g.gremlins_test_strings,
+                       g.gremlins_base_words, '', 103)
+        run_test_stick(g.gremlins_strings, g.gremlins_test_strings,
+                       g.gremlins_base_words, '"', 103)
         
     def test_str_output(self):
         strings = ak.array(['string {}'.format(i) for i in range (0,101)])
@@ -449,3 +534,34 @@ class StringTest(ArkoudaTest):
         thickrange = thirds[0].stick(thirds[1], delimiter=', ').stick(thirds[2], delimiter=', ')
         flatrange = thickrange.flatten(', ')
         self.assertTrue((ak.cast(flatrange, 'int64') == ak.arange(99)).all())
+        
+    def test_get_lengths(self):
+        s1 = ak.array(['one', 'two', 'three', 'four', 'five'])
+        lengths = s1.get_lengths()
+        self.assertTrue((ak.array([3,3,5,4,4]) == lengths).all())
+
+    def test_concatenate(self):
+        s1 = self._get_strings('string',51)
+        s2 = self._get_strings('string-two', 51)
+        
+        resultStrings = ak.concatenate([s1,s2])
+        self.assertIsInstance(resultStrings, ak.Strings)
+        self.assertEqual(100,resultStrings.size)
+        
+        resultStrings = ak.concatenate([s1,s1], ordered=False)
+        self.assertIsInstance(resultStrings, ak.Strings)
+        self.assertEqual(100,resultStrings.size)
+
+
+        s1 = self._get_strings('string',6)
+        s2 = self._get_strings('string-two', 6)
+        expectedResult = ak.array(['string 1', 'string 2', 'string 3', 'string 4', 'string 5', 
+                                   'string-two 1', 'string-two 2', 'string-two 3', 'string-two 4', 
+                                   'string-two 5'])
+
+        # Ordered concatenation
+        s12ord = ak.concatenate([s1, s2], ordered=True)
+        self.assertTrue((expectedResult == s12ord).all())
+        # Unordered (but still deterministic) concatenation
+        # TODO: the unordered concatenation test is disabled per #710 #721
+        #s12unord = ak.concatenate([s1, s2], ordered=False)

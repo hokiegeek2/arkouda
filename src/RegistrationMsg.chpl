@@ -5,19 +5,16 @@ module RegistrationMsg
     use Time only;
     use Math only;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
+    use Message;
 
     use MultiTypeSymbolTable;
     use MultiTypeSymEntry;
     use ServerErrorStrings;
 
-    const regLogger = new Logger();
-    if v {
-        regLogger.level = LogLevel.DEBUG;
-    } else {
-        regLogger.level = LogLevel.INFO;    
-    }
+    private config const logLevel = ServerConfig.logLevel;
+    const regLogger = new Logger(logLevel);
 
     /* 
     Parse, execute, and respond to a register message 
@@ -28,22 +25,32 @@ module RegistrationMsg
     :arg st: SymTab to act on
     :type st: borrowed SymTab 
 
-    :returns: (string) response message
+    :returns: MsgTuple response message
     */
-    proc registerMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc registerMsg(cmd: string, payload: string,  
+                                        st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
         // split request into fields
         var (name, userDefinedName) = payload.splitMsgToTuple(2);
 
         // if verbose print action
         regLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                  "cmd: %s name: %s userDefinedName: %s".format(cmd,name,userDefinedName));
+               "cmd: %s name: %s userDefinedName: %s".format(cmd,name,userDefinedName));
 
         // register new user_defined_name for name
-        st.regName(name, userDefinedName);
-        
-        // response message
-        return try! "created " + st.attrib(userDefinedName);
+        var msgTuple:MsgTuple;
+        try {
+            st.regName(name, userDefinedName);
+            repMsg = "success";
+            regLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            msgTuple = new MsgTuple(repMsg, MsgType.NORMAL);
+        } catch e: ArgumentError {
+            repMsg = "Error: requested name '%s' was already in use.".format(userDefinedName);
+            regLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            msgTuple = new MsgTuple(repMsg, MsgType.ERROR);
+        }
+
+        return msgTuple;
     }
 
     /* 
@@ -55,9 +62,10 @@ module RegistrationMsg
     :arg st: SymTab to act on
     :type st: borrowed SymTab 
 
-    :returns: (string) response message
+    :returns: MsgTuple response message
     */
-    proc attachMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc attachMsg(cmd: string, payload: string, 
+                                          st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
         // split request into fields
         var (name) = payload.splitMsgToTuple(1);
@@ -68,9 +76,19 @@ module RegistrationMsg
 
         // lookup name in symbol table to get attributes
         var attrib = st.attrib(name);
+        
+        regLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                                                          "requested attrib: %s".format(attrib));
         // response message
-        if (attrib.startsWith("Error:")) { return (attrib); }
-        else { return ("created " + attrib); }
+        if (attrib.startsWith("Error:")) { 
+            var errorMsg = attrib;
+            regLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR); 
+        } else {
+            repMsg = "created %s".format(attrib);
+            regLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL); 
+        }
     }
 
     /* 
@@ -82,9 +100,10 @@ module RegistrationMsg
     :arg st: SymTab to act on
     :type st: borrowed SymTab 
 
-    :returns: (string) response message
+    :returns: MsgTuple response message
     */
-    proc unregisterMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc unregisterMsg(cmd: string, payload: string, 
+                                      st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
         // split request into fields
         var (name) = payload.splitMsgToTuple(1);
@@ -93,9 +112,11 @@ module RegistrationMsg
         regLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                                           "%s %s".format(cmd,name));
 
-        // take name out of the registry and delete entry in symbol table
+        // take name out of the registry
         st.unregName(name);
         
-        return "success";
+        repMsg = "success";
+        regLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+        return new MsgTuple(repMsg, MsgType.NORMAL);
     }
 }

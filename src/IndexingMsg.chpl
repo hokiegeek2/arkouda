@@ -4,24 +4,20 @@ module IndexingMsg
     use ServerErrorStrings;
 
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
+    use Message;
 
     use MultiTypeSymEntry;
     use MultiTypeSymbolTable;
 
     use CommAggregation;
-    
-    const imLogger = new Logger();
 
-    if v {
-        imLogger.level = LogLevel.DEBUG;
-    } else {
-        imLogger.level = LogLevel.INFO;
-    }
+    private config const logLevel = ServerConfig.logLevel;
+    const imLogger = new Logger(logLevel);
 
     /* intIndex "a[int]" response to __getitem__(int) */
-    proc intIndexMsg(cmd: string, payload: string, st: borrowed SymTab):string throws {
+    proc intIndexMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -37,34 +33,34 @@ module IndexingMsg
                  repMsg = "item %s %t".format(dtype2str(e.dtype),e.a[idx]);
 
                  imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-                 return repMsg;
+                 return new MsgTuple(repMsg, MsgType.NORMAL);  
              }
              when (DType.Float64) {
                  var e = toSymEntry(gEnt,real);
                  repMsg = "item %s %.17r".format(dtype2str(e.dtype),e.a[idx]);
 
                  imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-                 return repMsg;
+                 return new MsgTuple(repMsg, MsgType.NORMAL); 
              }
              when (DType.Bool) {
                  var e = toSymEntry(gEnt,bool);
-                 var s = try! "item %s %t".format(dtype2str(e.dtype),e.a[idx]);
-                 s = s.replace("true","True"); // chapel to python bool
-                 s = s.replace("false","False"); // chapel to python bool
+                 repMsg = "item %s %t".format(dtype2str(e.dtype),e.a[idx]);
+                 repMsg = repMsg.replace("true","True"); // chapel to python bool
+                 repMsg = repMsg.replace("false","False"); // chapel to python bool
 
-                 imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),s);
-                 return s;
+                 imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+                 return new MsgTuple(repMsg, MsgType.NORMAL); 
              }
              otherwise {
                  var errorMsg = notImplementedError(pn,dtype2str(gEnt.dtype));
                  imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                 return errorMsg;               
+                 return new MsgTuple(errorMsg, MsgType.ERROR);                
              }
          }
     }
 
     /* sliceIndex "a[slice]" response to __getitem__(slice) */
-    proc sliceIndexMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc sliceIndexMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         var (name, startStr, stopStr, strideStr)
@@ -98,9 +94,9 @@ module IndexingMsg
             forall (elt,j) in zip(aa, slice) with (var agg = newSrcAggregator(t)) {
               agg.copy(elt,ea[j]);
             }
-            repMsg = "created " + st.attrib(rname);
+            var repMsg = "created " + st.attrib(rname);
             imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-            return repMsg;
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
         
         select(gEnt.dtype) {
@@ -116,13 +112,13 @@ module IndexingMsg
             otherwise {
                 var errorMsg = notImplementedError(pn,dtype2str(gEnt.dtype));
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;              
+                return new MsgTuple(errorMsg,MsgType.ERROR);              
             }
         }
     }
 
     /* pdarrayIndex "a[pdarray]" response to __getitem__(pdarray) */
-    proc pdarrayIndexMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc pdarrayIndexMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -139,24 +135,26 @@ module IndexingMsg
                                            cmd, name, st.attrib(name), st.attrib(iname)));       
 
         // gather indexing by integer index vector
-        proc ivInt64Helper(type XType) throws {
+        proc ivInt64Helper(type XType): MsgTuple throws {
             var e = toSymEntry(gX,XType);
             var iv = toSymEntry(gIV,int);
             if (e.size == 0) && (iv.size == 0) {
                 var a = st.addEntry(rname, 0, XType);
-                return try! "created " + st.attrib(rname);
+                var repMsg = "created " + st.attrib(rname);
+                imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             var ivMin = min reduce iv.a;
             var ivMax = max reduce iv.a;
             if ivMin < 0 {
                 var errorMsg = "Error: %s: OOBindex %i < 0".format(pn,ivMin);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                
+                return new MsgTuple(errorMsg,MsgType.ERROR);               
             }
             if ivMax >= e.size {
                 var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMin,e.size-1);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);             
-                return errorMsg;
+                return new MsgTuple(errorMsg,MsgType.ERROR);
             }
             var a = st.addEntry(rname, iv.size, XType);
             //[i in iv.aD] a.a[i] = e.a[iv.a[i]]; // bounds check iv[i] against e.aD?
@@ -167,16 +165,20 @@ module IndexingMsg
               agg.copy(a1,a2[idx]);
             }
             
-            return try! "created " + st.attrib(rname);
+            var repMsg =  "created " + st.attrib(rname);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
         // compression boolean indexing by bool index vector
-        proc ivBoolHelper(type XType) throws {
+        proc ivBoolHelper(type XType): MsgTuple throws {
             var e = toSymEntry(gX,XType);
             var truth = toSymEntry(gIV,bool);
             if (e.size == 0) && (truth.size == 0) {
                 var a = st.addEntry(rname, 0, XType);
-                return try! "created " + st.attrib(rname);
+                var repMsg = "created " + st.attrib(rname);
+                imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             var iv: [truth.aD] int = (+ scan truth.a);
             var pop = iv[iv.size-1];
@@ -194,7 +196,10 @@ module IndexingMsg
                 agg.copy(aa[iv[i]-1], eai);
               }
             }
-            return try! "created " + st.attrib(rname);
+
+            var repMsg = "created " + st.attrib(rname);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
         
         select(gX.dtype, gIV.dtype) {
@@ -212,7 +217,7 @@ module IndexingMsg
             }
             when (DType.Bool, DType.Int64) {
                 return ivInt64Helper(bool);
-           }
+            }
             when (DType.Bool, DType.Bool) {
                 return ivBoolHelper(bool);
             }
@@ -220,13 +225,13 @@ module IndexingMsg
                 var errorMsg = notImplementedError(pn,
                                        "("+dtype2str(gX.dtype)+","+dtype2str(gIV.dtype)+")");
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;
+                return new MsgTuple(errorMsg, MsgType.ERROR); 
             }
         }
     }
 
     /* setIntIndexToValue "a[int] = value" response to __setitem__(int, value) */
-    proc setIntIndexToValueMsg(cmd: string, payload: string, st: borrowed SymTab):string throws {
+    proc setIntIndexToValueMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -234,7 +239,7 @@ module IndexingMsg
         var idx = try! idxStr:int;
         var dtype = str2dtype(dtypeStr);
         
-        imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+        imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                "%s %s %i %s %s".format(cmd, name, idx, dtype2str(dtype), value));
 
         var gEnt: borrowed GenSymEntry = st.lookup(name);
@@ -297,17 +302,17 @@ module IndexingMsg
                  var errorMsg = notImplementedError(pn,
                                         "("+dtype2str(gEnt.dtype)+","+dtype2str(dtype)+")");
                  imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                 return errorMsg;                                                   
+                 return new MsgTuple(errorMsg, MsgType.ERROR);                                                    
              }
         }
-        repMsg = "%s success".format(pn);
 
-        imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-        return repMsg;
+        repMsg = "%s success".format(pn);
+        imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+        return new MsgTuple(repMsg, MsgType.NORMAL); 
     }
 
     /* setPdarrayIndexToValue "a[pdarray] = value" response to __setitem__(pdarray, value) */
-    proc setPdarrayIndexToValueMsg(cmd: string, payload: string, st: borrowed SymTab):string throws {
+    proc setPdarrayIndexToValueMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -318,10 +323,11 @@ module IndexingMsg
         var gIV: borrowed GenSymEntry = st.lookup(iname);
         
         imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                              "cmd: %s gX: %s gIV: %s value: %s".format(cmd,st.attrib(name),st.attrib(iname),value));
+                              "cmd: %s gX: %s gIV: %s value: %s".format(cmd,st.attrib(name),
+                                        st.attrib(iname),value));
 
         // scatter indexing by integer index vector
-        proc ivInt64Helper(type Xtype, type dtype): string throws {
+        proc ivInt64Helper(type Xtype, type dtype): MsgTuple throws {
             var e = toSymEntry(gX,Xtype);
             var iv = toSymEntry(gIV,int);
             var ivMin = min reduce iv.a;
@@ -329,12 +335,12 @@ module IndexingMsg
             if ivMin < 0 {
                 var errorMsg = "Error: %s: OOBindex %i < 0".format(pn,ivMin);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;
+                return new MsgTuple(errorMsg,MsgType.ERROR);;
             }
             if ivMax >= e.size {
                 var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMax,e.size-1);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;   
+                return new MsgTuple(errorMsg,MsgType.ERROR);;   
             }
             if isBool(dtype) {
                 value = value.replace("True","true"); // chapel to python bool
@@ -347,18 +353,20 @@ module IndexingMsg
             forall i in iva with (var agg = newDstAggregator(dtype)) {
               agg.copy(ea[i],val);
             }
-            return try! "%s success".format(pn);
+            var repMsg = "%s success".format(pn);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
         // expansion boolean indexing by bool index vector
-        proc ivBoolHelper(type Xtype, type dtype): string throws {
+        proc ivBoolHelper(type Xtype, type dtype): MsgTuple throws {
             var e = toSymEntry(gX,Xtype);
             var truth = toSymEntry(gIV,bool);
             if (e.size != truth.size) {
                 var errorMsg = "Error: %s: bool iv must be same size %i != %i".format(pn,e.size,
                                                                                     truth.size);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                                                                
+                return new MsgTuple(errorMsg,MsgType.ERROR);;                                                                
             }
             if isBool(dtype) {
                 value = value.replace("True","true"); // chapel to python bool
@@ -373,10 +381,10 @@ module IndexingMsg
                 agg.copy(ea[i],val);
               }
             }
-            var repMsg = "%s success".format(pn);
 
-            imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-            return repMsg;
+            var repMsg = "%s success".format(pn);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
         
         select(gX.dtype, gIV.dtype, dtype) {
@@ -402,13 +410,13 @@ module IndexingMsg
                 var errorMsg = notImplementedError(pn,
                       "("+dtype2str(gX.dtype)+","+dtype2str(gIV.dtype)+","+dtype2str(dtype)+")");
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                      
+                return new MsgTuple(errorMsg, MsgType.ERROR);                       
             }
         }
     }
 
     /* setPdarrayIndexToPdarray "a[pdarray] = pdarray" response to __setitem__(pdarray, pdarray) */
-    proc setPdarrayIndexToPdarrayMsg(cmd: string, payload: string, st: borrowed SymTab):string throws {
+    proc setPdarrayIndexToPdarrayMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         // split request into fields
@@ -418,7 +426,7 @@ module IndexingMsg
         var gIV: borrowed GenSymEntry = st.lookup(iname);
         var gY: borrowed GenSymEntry = st.lookup(yname);
         
-        if v {
+        if logLevel == LogLevel.DEBUG {
             imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                              "cmd: %s gX: %t gIV: %t gY: %t".format(
                                               cmd, st.attrib(name), st.attrib(iname),
@@ -428,12 +436,12 @@ module IndexingMsg
         // add check for IV to be dtype of int64 or bool
 
         // scatter indexing by an integer index vector
-        proc ivInt64Helper(type t) throws {
+        proc ivInt64Helper(type t): MsgTuple throws {
             // add check to make syre IV and Y are same size
             if (gIV.size != gY.size) {
                 var errorMsg = "Error: %s: size mismatch %i %i".format(pn,gIV.size,gY.size);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;     
+                return new MsgTuple(errorMsg,MsgType.ERROR);;     
             }
             var e = toSymEntry(gX,t);
             var iv = toSymEntry(gIV,int);
@@ -443,12 +451,12 @@ module IndexingMsg
             if ivMin < 0 {
                 var errorMsg = "Error: %s: OOBindex %i < 0".format(pn,ivMin);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg); 
-                return errorMsg;  
+                return new MsgTuple(errorMsg,MsgType.ERROR);;  
             }
             if ivMax >= e.size {
                 var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMax,e.size-1);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);           
-                return errorMsg;
+                return new MsgTuple(errorMsg,MsgType.ERROR);;
             }
             //[(i,v) in zip(iv.a,y.a)] e.a[i] = v;
             ref iva = iv.a;
@@ -457,16 +465,18 @@ module IndexingMsg
             forall (i,v) in zip(iva,ya) with (var agg = newDstAggregator(t)) {
               agg.copy(ea[i],v);
             }
-            return try! "%s success".format(pn);
+            var repMsg = "%s success".format(pn);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
         // expansion indexing by a bool index vector
-        proc ivBoolHelper(type t) throws {
+        proc ivBoolHelper(type t): MsgTuple throws {
             // add check to make syre IV and Y are same size
             if (gIV.size != gX.size) {
                 var errorMsg = "Error: %s: size mismatch %i %i".format(pn,gIV.size,gX.size);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                
+                return new MsgTuple(errorMsg,MsgType.ERROR);;                
             }
             var e = toSymEntry(gX,t);
             var truth = toSymEntry(gIV,bool);
@@ -478,7 +488,7 @@ module IndexingMsg
             if (y.size != pop) {
                 var errorMsg = "Error: %s: pop size mismatch %i %i".format(pn,pop,y.size);
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                
+                return new MsgTuple(errorMsg,MsgType.ERROR);;                
             }
             ref ya = y.a;
             ref ead = e.aD;
@@ -489,10 +499,10 @@ module IndexingMsg
                 agg.copy(eai,ya[iv[i]-1]);
               }
             }
-            var repMsg = "%s success".format(pn);
 
-            imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-            return repMsg;
+            var repMsg = "%s success".format(pn);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
         select(gX.dtype, gIV.dtype, gY.dtype) {
@@ -506,7 +516,7 @@ module IndexingMsg
                 return ivInt64Helper(real);
             }
             when (DType.Float64, DType.Bool, DType.Float64) {
-                return ivBoolHelper(real);
+                return  ivBoolHelper(real);
             }
             when (DType.Bool, DType.Int64, DType.Bool) {
                 return ivInt64Helper(bool);
@@ -518,13 +528,13 @@ module IndexingMsg
                 var errorMsg = notImplementedError(pn,
                      "("+dtype2str(gX.dtype)+","+dtype2str(gIV.dtype)+","+dtype2str(gY.dtype)+")");
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                    
+                return new MsgTuple(errorMsg, MsgType.ERROR);                     
             }
         }
     }
 
     /* setSliceIndexToValue "a[slice] = value" response to __setitem__(slice, value) */
-    proc setSliceIndexToValueMsg(cmd: string, payload: string, st: borrowed SymTab):string throws {
+    proc setSliceIndexToValueMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         var (name, startStr, stopStr, strideStr, dtypeStr, value)
@@ -607,17 +617,17 @@ module IndexingMsg
                 var errorMsg = notImplementedError(pn,
                                         "("+dtype2str(gEnt.dtype)+","+dtype2str(dtype)+")");
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                                        
+                return new MsgTuple(errorMsg, MsgType.ERROR);                                         
             }
         }
-        repMsg = "%s success".format(pn);
 
-        imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-        return repMsg;
+        repMsg = "%s success".format(pn);
+        imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+        return new MsgTuple(repMsg, MsgType.NORMAL); 
     }
     
     /* setSliceIndexToPdarray "a[slice] = pdarray" response to __setitem__(slice, pdarray) */
-    proc setSliceIndexToPdarrayMsg(cmd: string, payload: string, st: borrowed SymTab):string throws {
+    proc setSliceIndexToPdarrayMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
         var (name, startStr, stopStr, strideStr, yname)
@@ -643,9 +653,9 @@ module IndexingMsg
 
         // add check to make syre IV and Y are same size
         if (slice.size != gY.size) {      
-            var errorMsg = "Error: %s: size mismatch %i %i".format(pn,slice.size, gY.size);
+            var errorMsg = "%s: size mismatch %i %i".format(pn,slice.size, gY.size);
             imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);        
-            return errorMsg;
+            return new MsgTuple(errorMsg, MsgType.ERROR); 
         }
 
         select (gX.dtype, gY.dtype) {
@@ -698,13 +708,12 @@ module IndexingMsg
                 var errorMsg = notImplementedError(pn,
                                      "("+dtype2str(gX.dtype)+","+dtype2str(gY.dtype)+")");
                 imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;                                          
+                return new MsgTuple(errorMsg, MsgType.ERROR);                                           
             }
         }
-        repMsg = "%s success".format(pn);
 
-        imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-        return repMsg;
-    }
-    
+        repMsg = "%s success".format(pn);
+        imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+        return new MsgTuple(repMsg, MsgType.NORMAL); 
+    } 
 }

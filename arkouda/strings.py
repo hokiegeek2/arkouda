@@ -1,14 +1,18 @@
 from __future__ import annotations
-from typing import cast, Tuple, Union
+
+import itertools
+from typing import cast, Tuple, List, Optional, Union
 from typeguard import typechecked
 from arkouda.client import generic_msg
-from arkouda.pdarrayclass import pdarray, create_pdarray, parse_single_value
+from arkouda.pdarrayclass import pdarray, create_pdarray, parse_single_value, \
+     unregister_pdarray_by_name, RegistrationError
 from arkouda.logger import getArkoudaLogger
 import numpy as np # type: ignore
-from arkouda.dtypes import str as akstr
+from arkouda.dtypes import npstr, int_scalars, str_scalars
 from arkouda.dtypes import NUMBER_FORMAT_STRINGS, resolve_scalar_dtype, \
      translate_np_dtype
 import json
+from arkouda.infoclass import information
 
 __all__ = ['Strings']
 
@@ -24,11 +28,11 @@ class Strings:
         The starting indices for each string
     bytes : pdarray
         The raw bytes of all strings, joined by nulls
-    size : Union[int,np.int64]
+    size : int_scalars
         The number of strings in the array
-    nbytes : Union[int,np.int64]
+    nbytes : int_scalars
         The total number of bytes in all strings
-    ndim : Union[int,np.int64]
+    ndim : int_scalars
         The rank of the array (currently only rank 1 arrays supported)
     shape : tuple
         The sizes of each dimension of the array
@@ -95,11 +99,12 @@ class Strings:
         except Exception as e:
             raise ValueError(e)   
 
-        self.dtype = akstr
+        self.dtype = npstr
+        self.name:Optional[str] = None
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
     def __iter__(self):
-        raise NotImplementedError('Strings does not support iteration')
+        raise NotImplementedError('Strings does not support iteration. To force data transfer from server, use to_ndarray')
 
     def __len__(self) -> int:
         return self.shape[0]
@@ -118,7 +123,7 @@ class Strings:
         return "array({})".format(self.__str__())
 
     @typechecked
-    def _binop(self, other : Union[Strings,np.str_], op : str) -> pdarray:
+    def _binop(self, other : Union[Strings,str_scalars], op : str) -> pdarray:
         """
         Executes the requested binop on this Strings instance and the
         parameter Strings object and returns the results within
@@ -126,7 +131,7 @@ class Strings:
 
         Parameters
         ----------
-        other : Strings or np.str_
+        other : Strings, str_scalars
             the other object is a Strings object
         op : str
             name of the binary operation to be performed 
@@ -224,7 +229,7 @@ class Strings:
                                                          self.offsets.name,
                                                          self.bytes.name,
                                                          key.name)
-            repMsg = generic_msg(cmd,args)
+            repMsg = generic_msg(cmd=cmd,args=args)
             offsets, values = repMsg.split('+')
             return Strings(offsets, values)
         else:
@@ -244,18 +249,19 @@ class Strings:
         RuntimeError
             Raised if there is a server-side error thrown
         """
-        msg = "segmentLengths {} {} {}".\
+        cmd = "segmentLengths"
+        args = "{} {} {}".\
                         format(self.objtype, self.offsets.name, self.bytes.name)
-        return create_pdarray(generic_msg(msg))
+        return create_pdarray(generic_msg(cmd=cmd,args=args))
 
     @typechecked
-    def contains(self, substr : Union[str, bytes]) -> pdarray:
+    def contains(self, substr : Union[bytes,str_scalars]) -> pdarray:
         """
         Check whether each element contains the given substring.
 
         Parameters
         ----------
-        substr : Union[str, bytes]
+        substr : str_scalars
             The substring in the form of string or byte array to search for
 
         Returns
@@ -266,7 +272,7 @@ class Strings:
         Raises
         ------
         TypeError
-            Raised if the substr parameter is neither bytes nor a str
+            Raised if the substr parameter is not bytes or str_scalars
         RuntimeError
             Raised if there is a server-side error thrown
 
@@ -294,13 +300,13 @@ class Strings:
         return create_pdarray(generic_msg(cmd=cmd,args=args))
 
     @typechecked
-    def startswith(self, substr : Union[str, bytes]) -> pdarray:
+    def startswith(self, substr : Union[bytes,str_scalars]) -> pdarray:
         """
         Check whether each element starts with the given substring.
 
         Parameters
         ----------
-        substr : str
+        substr : Union[bytes,str_scalars]
             The prefix to search for
 
         Returns
@@ -311,7 +317,7 @@ class Strings:
         Raises
         ------
         TypeError
-            Raised if the substr parameter is neither bytes nor a str
+            Raised if the substr parameter is not a bytes ior str_scalars
         RuntimeError
             Raised if there is a server-side error thrown
 
@@ -339,13 +345,13 @@ class Strings:
         return create_pdarray(generic_msg(cmd=cmd,args=args))
 
     @typechecked
-    def endswith(self, substr : Union[str,bytes]) -> pdarray:
+    def endswith(self, substr : Union[bytes,str_scalars]) -> pdarray:
         """
         Check whether each element ends with the given substring.
 
         Parameters
         ----------
-        substr : str or bytes
+        substr : Union[bytes,str_scalars]
             The suffix to search for
 
         Returns
@@ -356,7 +362,7 @@ class Strings:
         Raises
         ------
         TypeError
-            Raised if the substr parameter is not a str
+            Raised if the substr parameter is not bytes or str_scalars
         RuntimeError
             Raised if there is a server-side error thrown
 
@@ -430,8 +436,9 @@ class Strings:
             return Strings(arrays[0], arrays[1])
     
     @typechecked
-    def peel(self, delimiter : str, times : Union[int,np.int64]=1, includeDelimiter : bool=False, 
-             keepPartial : bool=False, fromRight : bool=False) -> Tuple:
+    def peel(self, delimiter : Union[bytes,str_scalars], times : int_scalars=1, 
+             includeDelimiter : bool=False, keepPartial : bool=False, 
+                                                 fromRight : bool=False) -> Tuple:
         """
         Peel off one or more delimited fields from each string (similar 
         to string.partition), returning two new arrays of strings.
@@ -439,7 +446,7 @@ class Strings:
 
         Parameters
         ----------
-        delimiter : str
+        delimiter :  Union[bytes,str_scalars]
             The separator where the split will occur
         times : Union[int,np.int64]
             The number of times the delimiter is sought, i.e. skip over 
@@ -468,7 +475,7 @@ class Strings:
         Raises
         ------
         TypeError
-            Raised if the delmiter parameter is neither bytes nor a str, if
+            Raised if the delimiter parameter is not byte or str_scalars, if
             times is not int64, or if includeDelimiter, keepPartial, or 
             fromRight is not bool
         ValueError
@@ -513,8 +520,8 @@ class Strings:
         rightStr = Strings(arrays[2], arrays[3])
         return leftStr, rightStr
 
-    def rpeel(self, delimiter : str, times : Union[int,np.int64]=1, includeDelimiter : bool=False, 
-                                      keepPartial : bool=False):
+    def rpeel(self, delimiter : Union[bytes,str_scalars], times : int_scalars=1, 
+              includeDelimiter : bool=False, keepPartial : bool=False):
         """
         Peel off one or more delimited fields from the end of each string 
         (similar to string.rpartition), returning two new arrays of strings.
@@ -522,7 +529,7 @@ class Strings:
 
         Parameters
         ----------
-        delimiter : str
+        delimiter :  Union[bytes,str_scalars]
             The separator where the split will occur
         times : Union[int,np.int64]
             The number of times the delimiter is sought, i.e. skip over 
@@ -546,7 +553,7 @@ class Strings:
         Raises
         ------
         TypeError
-            Raised if the delmiter parameter is neither bytes nor a str or
+            Raised if the delimiter parameter is not bytes or str_scalars or
             if times is not int64
         ValueError
             Raised if times is < 1
@@ -570,7 +577,7 @@ class Strings:
                          keepPartial=keepPartial, fromRight=True)
 
     @typechecked
-    def stick(self, other : Strings, delimiter : str="", 
+    def stick(self, other : Strings, delimiter : Union[bytes,str_scalars] ="", 
                                         toLeft : bool=False) -> Strings:
         """
         Join the strings from another array onto one end of the strings 
@@ -595,8 +602,8 @@ class Strings:
         Raises
         ------
         TypeError
-            Raised if the delmiter parameter is neither bytes nor a str or if
-            the other parameter is not a Strings instance
+            Raised if the delimiter parameter is not bytes or str_scalars
+            or if the other parameter is not a Strings instance
         ValueError
             Raised if times is < 1
         RuntimeError
@@ -626,13 +633,13 @@ class Strings:
                             other.bytes.name,
                             NUMBER_FORMAT_STRINGS['bool'].format(toLeft),
                             json.dumps([delimiter]))
-        repMsg = generic_msg(cmd,args)
+        repMsg = generic_msg(cmd=cmd,args=args)
         return Strings(*cast(str,repMsg).split('+'))
 
     def __add__(self, other : Strings) -> Strings:
         return self.stick(other)
 
-    def lstick(self, other : Strings, delimiter : str="") -> Strings:
+    def lstick(self, other : Strings, delimiter : Union[bytes,str_scalars] ="") -> Strings:
         """
         Join the strings from another array onto the left of the strings 
         of this array, optionally inserting a delimiter.
@@ -642,7 +649,7 @@ class Strings:
         ----------
         other : Strings
             The strings to join onto self's strings
-        delimiter : str
+        delimiter : Union[bytes,str_scalars]
             String inserted between self and other
 
         Returns
@@ -732,7 +739,7 @@ class Strings:
         cmd = "segmentedGroup"
         args = "{} {} {}".\
                            format(self.objtype, self.offsets.name, self.bytes.name)
-        return create_pdarray(generic_msg(cmd,args))
+        return create_pdarray(generic_msg(cmd=cmd,args=args))
 
     def to_ndarray(self) -> np.ndarray:
         """
@@ -783,11 +790,11 @@ class Strings:
 
     @typechecked
     def save(self, prefix_path : str, dataset : str='strings_array', 
-             mode : str='truncate') -> None:
+             mode : str='truncate') -> str:
         """
         Save the Strings object to HDF5. The result is a collection of HDF5 files,
         one file per locale of the arkouda server, where each filename starts
-        with prefix_path. Each locale saves its chunk of the array to its
+        with prefix_path. Each locale saves its chunk of the Strings array to its
         corresponding file.
 
         Parameters
@@ -819,26 +826,220 @@ class Strings:
         Notes
         -----
         Important implementation notes: (1) Strings state is saved as two datasets
-        within an hdf5 group, (2) the hdf5 group is named via the dataset parameter, 
-        (3) the hdf5 group encompasses the two pdarrays composing a Strings object:
-        segments and values and (4) save logic is delegated to pdarray.save
+        within an hdf5 group: one for the string characters and one for the
+        segments corresponding to the start of each string, (2) the hdf5 group is named 
+        via the dataset parameter. 
         """       
-        self.bytes.save(prefix_path=prefix_path, 
-                                    dataset='{}/values'.format(dataset), mode=mode)
+        if mode.lower() in 'append':
+            m = 1
+        elif mode.lower() in 'truncate':
+            m = 0
+        else:
+            raise ValueError("Allowed modes are 'truncate' and 'append'")
 
-    @classmethod
-    def register_helper(cls, offsets, bytes):
-        return cls(offsets, bytes)
+        try:
+            json_array = json.dumps([prefix_path])
+        except Exception as e:
+            raise ValueError(e)
+        
+        return cast(str, generic_msg(cmd="tohdf", args="{} {} {} {} {} {}".\
+                           format(self.bytes.name, dataset, m, json_array, 
+                                  self.dtype, self.offsets.name)))
+        
 
-    def register(self, user_defined_name : str) -> Strings:
-        return self.register_helper(self.offsets.register(user_defined_name+'_offsets'),
-                               self.bytes.register(user_defined_name+'_bytes'))
+    def is_registered(self) -> np.bool_:
+        """
+        Return True iff the object is contained in the registry
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        bool
+            Indicates if the object is contained in the registry
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there's a server-side error thrown
+        """
+        parts_registered = [np.bool_(self.offsets.is_registered()), self.bytes.is_registered()]
+        if np.any(parts_registered) and not np.all(parts_registered):  # test for error
+            raise RegistrationError(f"Not all registerable components of Strings {self.name} are registered.")
+
+        return np.bool_(np.any(parts_registered))
+
+    def _list_component_names(self) -> List[str]:
+        """
+        Internal Function that returns a list of all component names
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        List[str]
+            List of all component names
+        """
+        return list(itertools.chain.from_iterable([self.offsets._list_component_names(), self.bytes._list_component_names()]))
+
+    def info(self) -> str:
+        """
+        Returns a JSON formatted string containing information about all components of self
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        str
+            JSON string containing information about all components of self
+        """
+        return information(self._list_component_names())
+
+    def pretty_print_info(self) -> None:
+        """
+        Prints information about all components of self in a human readable format
+
+        Parameters
+        ----------
+        None
+
+        Returns
+        -------
+        None
+        """
+        self.offsets.pretty_print_info()
+        self.bytes.pretty_print_info()
+
+    @typechecked
+    def register(self, user_defined_name: str) -> Strings:
+        """
+        Register this Strings object with a user defined name in the arkouda server
+        so it can be attached to later using Strings.attach()
+        This is an in-place operation, registering a Strings object more than once will
+        update the name in the registry and remove the previously registered name.
+        A name can only be registered to one object at a time.
+
+        Parameters
+        ----------
+        user_defined_name : str
+            user defined name which the Strings object is to be registered under
+
+        Returns
+        -------
+        Strings
+            The same Strings object which is now registered with the arkouda server and has an updated name.
+            This is an in-place modification, the original is returned to support a fluid programming style.
+            Please note you cannot register two different objects with the same name.
+
+        Raises
+        ------
+        TypeError
+            Raised if user_defined_name is not a str
+        RegistrationError
+            If the server was unable to register the Strings object with the user_defined_name
+            If the user is attempting to register more than one object with the same name, the former should be
+            unregistered first to free up the registration name.
+
+        See also
+        --------
+        attach, unregister
+
+        Notes
+        -----
+        Registered names/Strings objects in the server are immune to deletion
+        until they are unregistered.
+        """
+        self.offsets.register(f"{user_defined_name}.offsets")
+        self.bytes.register(f"{user_defined_name}.bytes")
+        self.name = user_defined_name
+        return self
 
     def unregister(self) -> None:
+        """
+        Unregister a Strings object in the arkouda server which was previously
+        registered using register() and/or attached to using attach()
+
+        Parameters
+        ----------
+
+        Returns
+        -------
+        None
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the server could not find the internal name/symbol to remove
+
+        See also
+        --------
+        register, attach
+
+        Notes
+        -----
+        Registered names/Strings objects in the server are immune to deletion until
+        they are unregistered.
+        """
         self.offsets.unregister()
         self.bytes.unregister()
+        self.name = None
 
     @staticmethod
-    def attach(user_defined_name : str) -> Strings:
-        return Strings(pdarray.attach(user_defined_name+'_offsets'),
-                       pdarray.attach(user_defined_name+'_bytes'))
+    @typechecked
+    def attach(user_defined_name: str) -> Strings:
+        """
+        class method to return a Strings object attached to the registered name in the arkouda
+        server which was registered using register()
+
+        Parameters
+        ----------
+        user_defined_name : str
+            user defined name which the Strings object was registered under
+
+        Returns
+        -------
+        Strings object
+            the Strings object registered with user_defined_name in the arkouda server
+
+        Raises
+        ------
+        TypeError
+            Raised if user_defined_name is not a str
+
+        See also
+        --------
+        register, unregister
+
+        Notes
+        -----
+        Registered names/Strings objects in the server are immune to deletion
+        until they are unregistered.
+        """
+        s = Strings(pdarray.attach(f"{user_defined_name}.offsets"),
+                    pdarray.attach(f"{user_defined_name}.bytes"))
+        s.name = user_defined_name
+        return s
+
+    @staticmethod
+    @typechecked
+    def unregister_strings_by_name(user_defined_name : str) -> None:
+        """
+        Unregister a Strings object in the arkouda server previously registered via register()
+
+        Parameters
+        ----------
+        user_defined_name : str
+            The registered name of the Strings object
+
+        See also
+        --------
+        register, unregister, attach, is_registered
+        """
+        unregister_pdarray_by_name(f"{user_defined_name}.bytes")
+        unregister_pdarray_by_name(f"{user_defined_name}.offsets")

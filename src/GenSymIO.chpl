@@ -1,5 +1,6 @@
 module GenSymIO {
     use HDF5;
+    use Time only;
     use IO;
     use CPtr;
     use Path;
@@ -14,17 +15,15 @@ module GenSymIO {
     use Map;
     use PrivateDist;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
+    use Message;
     use ServerConfig;
+    use Search;
+    use IndexingMsg;
     
-    const gsLogger = new Logger();
-  
-    if v {
-        gsLogger.level = LogLevel.DEBUG;
-    } else {
-        gsLogger.level = LogLevel.INFO;
-    } 
+    private config const logLevel = ServerConfig.logLevel;
+    const gsLogger = new Logger(logLevel);
 
     config const GenSymIO_DEBUG = false;
     config const SEGARRAY_OFFSET_NAME = "segments";
@@ -37,82 +36,72 @@ module GenSymIO {
      * Creates a pdarray server-side and returns the SymTab name used to
      * retrieve the pdarray from the SymTab.
      */
-    proc arrayMsg(cmd: string, payload: bytes, st: borrowed SymTab): string throws {
-        var repMsg: string;
-        var (dtypeBytes, sizeBytes, data) = payload.splitMsgToTuple(b" ", 3);
-        var dtype = str2dtype(try! dtypeBytes.decode());
-        var size = try! sizeBytes:int;
-        var tmpf:file;
-        overMemLimit(2*8*size);
+    proc arrayMsg(cmd: string, args: string, ref data: bytes, st: borrowed SymTab): MsgTuple throws {
+        // Set up our return items
+        var msgType = MsgType.NORMAL;
+        var msg:string = "";
+        var rname:string = "";
+
+        var (dtypeBytes, sizeBytes) = args.splitMsgToTuple(" ", 2);
+        var dtype = DType.UNDEF;
+        var size:int;
+        try {
+            dtype = str2dtype(dtypeBytes);
+            size = sizeBytes:int;
+        } catch {
+            var errorMsg = "Error parsing/decoding either dtypeBytes or size";
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
+        }
+
+        overMemLimit(2*size);
 
         gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                           "dtype: %t size: %i".format(dtype,size));
 
-        // Write the data payload composing the pdarray to a memory buffer
-        try {
-            tmpf = openmem();
-            var tmpw = tmpf.writer(kind=iobig);
-            tmpw.write(data);
-            try! tmpw.close();
-        } catch {
-            var errorMsg = "Error: Could not write to memory buffer";
-            
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-            return errorMsg;
+        proc bytesToSymEntry(size:int, type t, st: borrowed SymTab, ref data:bytes): string throws {
+            var entry = new shared SymEntry(size, t);
+            var localA = makeArrayFromPtr(data.c_str():c_void_ptr:c_ptr(t), size:uint);
+            entry.a = localA;
+            var name = st.nextName();
+            st.addEntry(name, entry);
+            return name;
         }
 
-        // Get the next name from the SymTab cache
-        var rname = st.nextName();
+        if dtype == DType.Int64 {
+            rname = bytesToSymEntry(size, int, st, data);
+        } else if dtype == DType.Float64 {
+            rname = bytesToSymEntry(size, real, st, data);
+        } else if dtype == DType.Bool {
+            rname = bytesToSymEntry(size, bool, st, data);
+        } else if dtype == DType.UInt8 {
+            rname = bytesToSymEntry(size, uint(8), st, data);
+        } else {
+            msg = "Unhandled data type %s".format(dtypeBytes);
+            msgType = MsgType.ERROR;
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),msg);
+        }
 
-        /*
-         * Read the data payload from the memory buffer, encapsulate
-         * within a SymEntry, and write to the SymTab cache  
-         */
+        if (MsgType.ERROR != msgType) {  // success condition
+            // Set up return message indicating SymTab name corresponding to new pdarray
+            msg = "created " + st.attrib(rname);
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),msg);
+        }
+        return new MsgTuple(msg, msgType);
+    }
+
+
+    /*
+     * Ensure the file is closed, disregard errors
+     */
+    private proc ensureClose(tmpf:file): bool {
+        var success = true;
         try {
-            var tmpr = tmpf.reader(kind=iobig, start=0);
-            if dtype == DType.Int64 {
-                var entryInt = new shared SymEntry(size, int);
-                tmpr.read(entryInt.a);
-                tmpr.close(); tmpf.close();
-                st.addEntry(rname, entryInt);
-            } else if dtype == DType.Float64 {
-                var entryReal = new shared SymEntry(size, real);
-                tmpr.read(entryReal.a);
-                tmpr.close(); tmpf.close();
-                st.addEntry(rname, entryReal);
-            } else if dtype == DType.Bool {
-                var entryBool = new shared SymEntry(size, bool);
-                tmpr.read(entryBool.a);
-                tmpr.close(); tmpf.close();
-                st.addEntry(rname, entryBool);
-            } else if dtype == DType.UInt8 {
-                var entryUInt = new shared SymEntry(size, uint(8));
-                tmpr.read(entryUInt.a);
-                tmpr.close(); tmpf.close();
-                st.addEntry(rname, entryUInt);
-            } else {
-                tmpr.close();
-                tmpf.close();
-
-                var errorMsg = "Error: Unhandled data type %s".format(dtypeBytes);
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-                return errorMsg;
-            }
-            tmpr.close();
             tmpf.close();
         } catch {
-            var errorMsg = "Error: Could not read from memory buffer into SymEntry";
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-            return errorMsg;
+            success = false;
         }
-        /*
-         * Return message indicating the SymTab name corresponding to the
-         * newly-created pdarray
-         */
-        var returnMsg = try! "created " + st.attrib(rname);
-
-        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),returnMsg);         
-        return returnMsg;
+        return success;
     }
 
     /*
@@ -124,45 +113,29 @@ module GenSymIO {
         var arrayBytes: bytes;
         var entry = st.lookup(payload);
         overMemLimit(2*entry.size*entry.itemsize);
-        var tmpf: file;
-        try {
-            tmpf = openmem();
-            var tmpw = tmpf.writer(kind=iobig);
-            if entry.dtype == DType.Int64 {
-                tmpw.write(toSymEntry(entry, int).a);
-            } else if entry.dtype == DType.Float64 {
-                tmpw.write(toSymEntry(entry, real).a);
-            } else if entry.dtype == DType.Bool {
-                tmpw.write(toSymEntry(entry, bool).a);
-            } else if entry.dtype == DType.UInt8 {
-                tmpw.write(toSymEntry(entry, uint(8)).a);
-            } else {
-                var errorMsg = "Error: Unhandled dtype %s".format(entry.dtype);                
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-                return try! b"Error: Unhandled dtype %s".format(entry.dtype);
-            }
-            tmpw.close();
-        } catch {
-            try! tmpf.close();
-            return b"Error: Unable to write SymEntry to memory buffer";
+
+        proc distArrToBytes(A: [?D] ?eltType) {
+            var ptr = c_malloc(eltType, D.size);
+            var localA = makeArrayFromPtr(ptr, D.size:uint);
+            localA = A;
+            const size = D.size*c_sizeof(eltType):int;
+            return createBytesWithOwnedBuffer(ptr:c_ptr(uint(8)), size, size);
         }
 
-        try {
-            var tmpr = tmpf.reader(kind=iobig, start=0);
-            tmpr.readbytes(arrayBytes);
-            tmpr.close();
-            tmpf.close();
-        } catch {
-            return b"Error: Unable to copy array from memory buffer to string";
+        if entry.dtype == DType.Int64 {
+            arrayBytes = distArrToBytes(toSymEntry(entry, int).a);
+        } else if entry.dtype == DType.Float64 {
+            arrayBytes = distArrToBytes(toSymEntry(entry, real).a);
+        } else if entry.dtype == DType.Bool {
+            arrayBytes = distArrToBytes(toSymEntry(entry, bool).a);
+        } else if entry.dtype == DType.UInt8 {
+            arrayBytes = distArrToBytes(toSymEntry(entry, uint(8)).a);
+        } else {
+            var errorMsg = "Error: Unhandled dtype %s".format(entry.dtype);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return errorMsg.encode(); // return as bytes
         }
-        //var repMsg = try! "Array: %i".format(arraystr.length) + arraystr;
-        /*
-         Engin: fwiw, if you want to achieve the above, you can:
 
-         return b"Array: %i %|t".format(arrayBytes.length, arrayBytes);
-
-         But I think the main problem is how to separate the length from the data
-         */
        return arrayBytes;
     }
 
@@ -170,7 +143,7 @@ module GenSymIO {
      * Converts the JSON array to a pdarray
      */
     proc jsonToPdArray(json: string, size: int) throws {
-        var f = opentmp();
+        var f = opentmp(); defer { ensureClose(f); }
         var w = f.writer();
         w.write(json);
         w.close();
@@ -178,8 +151,15 @@ module GenSymIO {
         var array: [0..#size] string;
         r.readf("%jt", array);
         r.close();
-        f.close();
         return array;
+    }
+
+    /*
+     * Indicates whether the filename represents a glob expression as opposed to
+     * an specific filename
+     */
+    proc isGlobPattern(filename: string): bool throws {
+        return filename.endsWith("*");
     }
 
     /*
@@ -187,44 +167,58 @@ module GenSymIO {
      * result of the h5ls command
      */
     proc lshdfMsg(cmd: string, payload: string,
-                                st: borrowed SymTab): string throws {
+                                st: borrowed SymTab): MsgTuple throws {
         // reqMsg: "lshdf [<json_filename>]"
         use Spawn;
         const tmpfile = "/tmp/arkouda.lshdf.output";
         var repMsg: string;
         var (jsonfile) = payload.splitMsgToTuple(1);
 
+        // Retrieve filename from payload
         var filename: string;
         try {
             filename = jsonToPdArray(jsonfile, 1)[0];
+            if filename.isEmpty() {
+                throw new IllegalArgumentError("filename was empty");  // will be caught by catch block
+            }
         } catch {
-            var errorMsg = "Error: could not decode json filenames via tempfile (%i files: %s)".format(
-                                     1, jsonfile);
-                                     
+            var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(
+                                     1, jsonfile);                                     
             gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return errorMsg;                                    
+            return new MsgTuple(errorMsg, MsgType.ERROR);                                    
         }
 
-        // Attempt to interpret filename as a glob expression and ls the first result
-        var tmp = glob(filename);
+        // If the filename represents a glob pattern, retrieve the locale 0 filename
+        if isGlobPattern(filename) {
+            // Attempt to interpret filename as a glob expression and ls the first result
+            var tmp = glob(filename);
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "glob-expanded filename: %s to size: %i files".format(filename, tmp.size));
 
-        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                          "glob expanded filename: %s to size: %i files".format(filename, tmp.size));
-
-        if tmp.size <= 0 {
-            var errorMsg = "Error: no files matching %s".format(filename);
+            if tmp.size <= 0 {
+                var errorMsg = "Cannot retrieve filename from glob expression %s, check file name or format".format(filename);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
             
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return errorMsg;
+            // Set filename to globbed filename corresponding to locale 0
+            filename = tmp[tmp.domain.first];
         }
-        filename = tmp[tmp.domain.first];
+        
+        // Check to see if the file exists. If not, return an error message
+        if !exists(filename) {
+            var errorMsg = "File %s does not exist in a location accessible to Arkouda".format(filename);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg,MsgType.ERROR);
+        } 
+        
         var exitCode: int;
-        var errMsg: string;
 
         try {
             if exists(tmpfile) {
                 remove(tmpfile);
             }
+
             var cmd = try! "h5ls \"%s\" > \"%s\"".format(filename, tmpfile);
             var sub = spawnshell(cmd);
 
@@ -233,27 +227,31 @@ module GenSymIO {
             exitCode = sub.exit_status;
             
             var f = open(tmpfile, iomode.r);
+            defer {  // This will ensure we try to close f when we exit the proc scope.
+                ensureClose(f);
+                try { remove(tmpfile); } catch {}
+            }
             var r = f.reader(start=0);
             r.readstring(repMsg);
             r.close();
-            f.close();
-            remove(tmpfile);
         } catch e : Error {
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-            return "Error: failed to spawn process and read output %t".format(e);
+            var errorMsg = "failed to spawn process and execute ls: %t".format(e.message());
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
         if exitCode != 0 {
-            var errMsg = "error opening %s, check file permissions".format(filename);
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errMsg);
-            return try! "Error: %s".format(errMsg);
+            var errorMsg = "could not execute ls on %s, check file permissions or format".format(filename);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
         } else {
-            return repMsg;
+            return new MsgTuple(repMsg, MsgType.NORMAL);
         }
     }
 
+    // DEPRECATED - All client paths redirect to the readAllHdfMsg version
     /* Read dataset from HDF5 files into arkouda symbol table. */
-    proc readhdfMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc readhdfMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string;
         // reqMsg = "readhdf <dsetName> <nfiles> [<json_filenames>]"
         var (dsetName, strictFlag, nfilesStr, jsonfiles) = payload.splitMsgToTuple(4);
@@ -261,25 +259,33 @@ module GenSymIO {
         if (strictFlag.toLower() == "false") {
           strictTypes = false;
         }
+
         var nfiles = try! nfilesStr:int;
         var filelist: [0..#nfiles] string;
+
         try {
             filelist = jsonToPdArray(jsonfiles, nfiles);
         } catch {
-            return try! "Error: could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
+            var errorMsg = "Error: could not decode json filenames via tempfile (%i files: %s)".format(
+                                                                 nfiles, jsonfiles);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);                                                           
         }
+
         var filedom = filelist.domain;
         var filenames: [filedom] string;
+
         if filelist.size == 1 {
             var tmp = glob(filelist[0]);
 
             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                "glob expanded %s to %i files".format(filelist[0], tmp.size));
             if tmp.size == 0 {
-                var errMsg = "Error: no files matching %s".format(filelist[0]);
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errMsg);
-                return try! errMsg;
+                var errorMsg = "File %s does not exist in a location accessible to Arkouda".format(filelist[0]);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);  
             }
+
             // Glob returns filenames in weird order. Sort for consistency
             sort(tmp);
             filedom = tmp.domain;
@@ -296,27 +302,33 @@ module GenSymIO {
             try {
                 (segArrayFlags[i], dclasses[i], bytesizes[i], signFlags[i]) = get_dtype(fname, dsetName);
             } catch e: FileNotFoundError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return try! "Error: file named %s not found".format(fname);
+                var errorMsg = "File %s not found".format(fname);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             } catch e: PermissionError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return try! "Error: permission error opening %s".format(fname);
+                var errorMsg = "Permission error opening %s: %s".format(fname,e.message());
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             } catch e: DatasetNotFoundError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return e.publish();
+                var errorMsg = "Dataset %s not found in file %s".format(dsetName,fname);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             } catch e: NotHDF5FileError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return e.publish();
+                var errorMsg = "The file %s is not an HDF5 file: %s".format(fname,e.message());
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             } catch e: HDF5FileFormatError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return e.publish();             
+                var errorMsg = "HDF5 format error %s for file %s".format(e.message(),fname);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);           
             } catch e: SegArrayError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return e.publish();
+                var errorMsg = "SegmentedArray error: %s".format(e.message());
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             } catch e: Error {
-                // Need a catch-all for non-throwing function
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return try! "Error: unknown cause %t".format(e);
+                var errorMsg = "Other error %s".format(e.message());
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
         }
         const isSegArray = segArrayFlags[filedom.first];
@@ -325,9 +337,13 @@ module GenSymIO {
         const isSigned = signFlags[filedom.first];
         for (name, sa, dc, bs, sf) in zip(filenames, segArrayFlags, dclasses, bytesizes, signFlags) {
             if ((sa != isSegArray) || (dc != dataclass)) {
-                return "Error: inconsistent dtype in dataset %s of file %s".format(dsetName, name);
+                var errorMsg = "inconsistent dtype in dataset %s of file %s".format(dsetName, name);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);              
             } else if (strictTypes && ((bs != bytesize) || (sf != isSigned))) {
-                return "Error: inconsistent precision or sign in dataset %s of file %s\nWith strictTypes, mixing of precision and signedness not allowed (set strictTypes=False to suppress)".format(dsetName, name);
+                var errorMsg = "inconsistent precision or sign in dataset %s of file %s\nWith strictTypes, mixing of precision and signedness not allowed (set strictTypes=False to suppress)".format(dsetName, name);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);                            
             }
         }
         gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
@@ -345,21 +361,24 @@ module GenSymIO {
                 (subdoms, len) = get_subdoms(filenames, dsetName);
             }
         } catch e: HDF5RankError {
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-            return notImplementedError("readhdf", try! "Rank %i arrays".format(e.rank));
+            var errorMsg = notImplementedError("readhdf", try! "Rank %i arrays".format(e.rank));
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR); 
         } catch e: Error {
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-            return try! "Error: unknown cause: %t".format(e);
+            var errorMsg = "Other error: %s".format(e.message());
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR); 
         }
-        gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
-                                                            "Got subdomains and total length");
 
         select (isSegArray, dataclass) {
             when (true, C_HDF5.H5T_INTEGER) {
                 if (bytesize != 1) || isSigned {
-                    return try! "Error: detected unhandled datatype: segmented? %t, class %i, size %i, signed? %t".
+                    var errorMsg = "Detected unhandled datatype: segmented? %t, class %i, size %i, signed? %t".
                                             format(isSegArray, dataclass, bytesize, isSigned);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                    return new MsgTuple(errorMsg, MsgType.ERROR);                                             
                 }
+
                 var entrySeg = new shared SymEntry(nSeg, int);
                 read_files_into_distributed_array(entrySeg.a, segSubdoms, filenames, dsetName + "/" + SEGARRAY_OFFSET_NAME);
                 fixupSegBoundaries(entrySeg.a, segSubdoms, subdoms);
@@ -371,7 +390,10 @@ module GenSymIO {
                 st.addEntry(segName, entrySeg);
                 var valName = st.nextName();
                 st.addEntry(valName, entryVal);
-                return try! "created " + st.attrib(segName) + " +created " + st.attrib(valName);
+                
+                var repMsg = "created " + st.attrib(segName) + " +created " + st.attrib(valName);
+                gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             when (false, C_HDF5.H5T_INTEGER) {
                 var entryInt = new shared SymEntry(len, int);
@@ -380,7 +402,10 @@ module GenSymIO {
                 read_files_into_distributed_array(entryInt.a, subdoms, filenames, dsetName);
                 var rname = st.nextName();
                 st.addEntry(rname, entryInt);
-                return try! "created " + st.attrib(rname);
+
+                var repMsg = "created " + st.attrib(rname);
+                gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             when (false, C_HDF5.H5T_FLOAT) {
                 var entryReal = new shared SymEntry(len, real);
@@ -389,48 +414,93 @@ module GenSymIO {
                 read_files_into_distributed_array(entryReal.a, subdoms, filenames, dsetName);
                 var rname = st.nextName();
                 st.addEntry(rname, entryReal);
-                return try! "created " + st.attrib(rname);
+
+                var repMsg = "created " + st.attrib(rname);
+                gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             otherwise {
-                var errorMsg = "Error: detected unhandled datatype: segmented? " +
+                var errorMsg = "Detected unhandled datatype: segmented? " +
                                "%t, class %i, size %i, signed? %t".format(isSegArray, 
                                dataclass, bytesize, isSigned);
                 gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return "Error: %s".format(errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
+        }
+    }
+
+    /*
+     * Utility proc to test casting a string to a specified type
+     * :arg c: String to cast
+     * :type c: string
+     * 
+     * :arg toType: the type to cast into
+     * :type toType: type
+     *
+     * :returns: bool true if the cast was successful, false otherwise
+     */
+    proc checkCast(c:string, type toType): bool {
+        try {
+            var x:toType = c:toType;
+            return true;
+        } catch {
+            return false;
         }
     }
 
     /* 
      * Reads all datasets from 1..n HDF5 files into an Arkouda symbol table. 
      */
-    proc readAllHdfMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
+    proc readAllHdfMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         // reqMsg = "readAllHdf <ndsets> <nfiles> [<json_dsetname>] | [<json_filenames>]"
         var repMsg: string;
         // May need a more robust delimiter then " | "
-        var (strictFlag, ndsetsStr, nfilesStr, arraysStr) = payload.splitMsgToTuple(4);
+        var (strictFlag, ndsetsStr, nfilesStr, allowErrorsFlag, arraysStr) = payload.splitMsgToTuple(5);
         var strictTypes: bool = true;
-        if (strictFlag.toLower() == "false") {
+        if (strictFlag.toLower().strip() == "false") {
           strictTypes = false;
         }
+
+        var allowErrors: bool = "true" == allowErrorsFlag.toLower(); // default is false
+        if allowErrors {
+            gsLogger.warn(getModuleName(), getRoutineName(), getLineNumber(), "Allowing file read errors");            
+        }
+
+        // Test arg casting so we can send error message instead of failing
+        if (!checkCast(ndsetsStr, int)) {
+            var errMsg = "Number of datasets:`%s` could not be cast to an integer".format(ndsetsStr);
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errMsg);
+            return new MsgTuple(errMsg, MsgType.ERROR);
+        }
+        if (!checkCast(nfilesStr, int)) {
+            var errMsg = "Number of files:`%s` could not be cast to an integer".format(nfilesStr);
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errMsg);
+            return new MsgTuple(errMsg, MsgType.ERROR);
+        }
+
         var (jsondsets, jsonfiles) = arraysStr.splitMsgToTuple(" | ",2);
-        var ndsets = try! ndsetsStr:int;
-        var nfiles = try! nfilesStr:int;
+        var ndsets = ndsetsStr:int; // Error checked above
+        var nfiles = nfilesStr:int; // Error checked above
         var dsetlist: [0..#ndsets] string;
         var filelist: [0..#nfiles] string;
+
         try {
             dsetlist = jsonToPdArray(jsondsets, ndsets);
         } catch {
-            var errorMsg = "Error: could not decode json dataset names via tempfile (%i files: %s)".format(
+            var errorMsg = "Could not decode json dataset names via tempfile (%i files: %s)".format(
                                                ndsets, jsondsets);
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-            return errorMsg;
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
         }
+
         try {
             filelist = jsonToPdArray(jsonfiles, nfiles);
         } catch {
-            return "Error: could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
+            var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
         }
+
         var dsetdom = dsetlist.domain;
         var filedom = filelist.domain;
         var dsetnames: [dsetdom] string;
@@ -438,13 +508,18 @@ module GenSymIO {
         dsetnames = dsetlist;
 
         if filelist.size == 1 {
+            if filelist[0].strip().size == 0 {
+                var errorMsg = "filelist was empty.";
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
             var tmp = glob(filelist[0]);
             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                   "glob expanded %s to %i files".format(filelist[0], tmp.size));
             if tmp.size == 0 {
-                var errorMsg = "Error: no files matching %s".format(filelist[0]);
+                var errorMsg = "The wildcarded filename %s either corresponds to files inaccessible to Arkouda or files of an invalid format".format(filelist[0]);
                 gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
             // Glob returns filenames in weird order. Sort for consistency
             sort(tmp);
@@ -457,30 +532,53 @@ module GenSymIO {
         var dclasses: [filedom] C_HDF5.hid_t;
         var bytesizes: [filedom] int;
         var signFlags: [filedom] bool;
-        var rnames: string;
+        var rnames: list((string, string, string)); // tuple (dsetName, item type, id)
+        var fileErrors: list(string);
+        var fileErrorCount:int = 0;
+        var fileErrorMsg:string = "";
         for dsetName in dsetnames do {
             for (i, fname) in zip(filedom, filenames) {
+                var hadError = false;
                 try {
                     (segArrayFlags[i], dclasses[i], bytesizes[i], signFlags[i]) = get_dtype(fname, dsetName);
                 } catch e: FileNotFoundError {
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                    return try! "Error: file named %s not found".format(fname);
+                    fileErrorMsg = "File %s not found".format(fname);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: PermissionError {
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                    return try! "Error: permission error opening %s".format(fname);
+                    fileErrorMsg = "Permission error %s opening %s".format(e.message(),fname);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: DatasetNotFoundError {
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                    return try! e.publish();
+                    fileErrorMsg = "Dataset %s not found in file %s".format(dsetName,fname);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: NotHDF5FileError {
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                    return e.publish();
+                    fileErrorMsg = "The file %s is not an HDF5 file: %s".format(fname,e.message());
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: SegArrayError {
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                    return e.publish();
+                    fileErrorMsg = "SegmentedArray error: %s".format(e.message());
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e : Error {
-                    // Need a catch-all for non-throwing function
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                    return try! "Error: unknown cause";
+                    fileErrorMsg = "Other error in accessing file %s: %s".format(fname,e.message());
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                }
+
+                if hadError {
+                    // Keep running total, but we'll only report back the first 10
+                    if fileErrorCount < 10 {
+                        fileErrors.append(fileErrorMsg.replace("\n", " ").replace("\r", " ").replace("\t", " ").strip());
+                    }
+                    fileErrorCount += 1;
                 }
             }
             const isSegArray = segArrayFlags[filedom.first];
@@ -489,15 +587,16 @@ module GenSymIO {
             const isSigned = signFlags[filedom.first];
             for (name, sa, dc, bs, sf) in zip(filenames, segArrayFlags, dclasses, bytesizes, signFlags) {
               if ((sa != isSegArray) || (dc != dataclass)) {
-                  var errorMsg = "Error: inconsistent dtype in dataset %s of file %s".format(dsetName, name);
+                  var errorMsg = "Inconsistent dtype in dataset %s of file %s".format(dsetName, name);
                   gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                  return errorMsg;
+                  return new MsgTuple(errorMsg, MsgType.ERROR);
               } else if (strictTypes && ((bs != bytesize) || (sf != isSigned))) {
-                  var errorMsg = "Error: inconsistent precision or sign in dataset %s of file %s\nWith strictTypes, mixing of precision and signedness not allowed (set strictTypes=False to suppress)".format(dsetName, name);
+                  var errorMsg = "Inconsistent precision or sign in dataset %s of file %s\nWith strictTypes, mixing of precision and signedness not allowed (set strictTypes=False to suppress)".format(dsetName, name);
                   gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                  return errorMsg;
+                  return new MsgTuple(errorMsg, MsgType.ERROR);
               }
             }
+
             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                            "Verified all dtypes across files for dataset %s".format(dsetName));
             var subdoms: [filedom] domain(1);
@@ -512,11 +611,13 @@ module GenSymIO {
                     (subdoms, len) = get_subdoms(filenames, dsetName);
                 }
             } catch e: HDF5RankError {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return notImplementedError("readhdf", try! "Rank %i arrays".format(e.rank));
+                var errorMsg = notImplementedError("readhdf", "Rank %i arrays".format(e.rank));
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             } catch e: Error {
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-                return try! "Error: unknown cause";
+                var errorMsg = "Other error in accessing dataset %s: %s".format(dsetName,e.message());
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
 
             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
@@ -528,7 +629,7 @@ module GenSymIO {
                         var errorMsg = "Error: detected unhandled datatype: segmented? %t, class %i, size %i, signed? %t".format(
                                                 isSegArray, dataclass, bytesize, isSigned);
                         gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                        return errorMsg;
+                        return new MsgTuple(errorMsg, MsgType.ERROR);
                     }
                     var entrySeg = new shared SymEntry(nSeg, int);
                     read_files_into_distributed_array(entrySeg.a, segSubdoms, filenames, dsetName + "/" + SEGARRAY_OFFSET_NAME);
@@ -539,7 +640,7 @@ module GenSymIO {
                     st.addEntry(segName, entrySeg);
                     var valName = st.nextName();
                     st.addEntry(valName, entryVal);
-                    rnames = rnames + "created " + st.attrib(segName) + " +created " + st.attrib(valName) + " , ";
+                    rnames.append((dsetName, "seg_string", "%s+%s".format(segName, valName)));
                 }
                 when (false, C_HDF5.H5T_INTEGER) {
                     var entryInt = new shared SymEntry(len, int);
@@ -564,7 +665,7 @@ module GenSymIO {
                         // Not a boolean dataset, so add original SymEntry to SymTable
                         st.addEntry(rname, entryInt);
                     }
-                    rnames = rnames + "created " + st.attrib(rname) + " , ";
+                    rnames.append((dsetName, "pdarray", rname));
                 }
                 when (false, C_HDF5.H5T_FLOAT) {
                     var entryReal = new shared SymEntry(len, real);
@@ -573,17 +674,96 @@ module GenSymIO {
                     read_files_into_distributed_array(entryReal.a, subdoms, filenames, dsetName);
                     var rname = st.nextName();
                     st.addEntry(rname, entryReal);
-                    rnames = rnames + "created " + st.attrib(rname) + " , ";
+                    rnames.append((dsetName, "pdarray", rname));
                 }
                 otherwise {
                     var errorMsg = "detected unhandled datatype: segmented? %t, class %i, size %i, " +
                                    "signed? %t".format(isSegArray, dataclass, bytesize, isSigned);
                     gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return try! "Error: %".format(errorMsg);
+                    return new MsgTuple(errorMsg, MsgType.ERROR);
                 }
             }
         }
-        return try! rnames.strip(" , ", leading = false, trailing = true);
+
+        if allowErrors && fileErrorCount > 0 {
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                "allowErrors:true, fileErrorCount:%t".format(fileErrorCount));
+        }
+        repMsg = _buildReadAllHdfMsgJson(rnames, allowErrors, fileErrorCount, fileErrors, st);
+        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+        return new MsgTuple(repMsg,MsgType.NORMAL);
+    }
+
+    /**
+     * Construct json object to be returned from readAllHdfMsg
+     * :arg rnames: List of (DataSetName, arkouda_type, id of SymEntry) for items read from HDF5 files
+     * :type rnames: List of 3*string tuples
+     *
+     * :arg allowErrors: True if we allowed errors when reading files from HDF5
+     * :type allowErros: bool
+     *
+     * :arg fileErrorCount: Number of files which threw errors when being read
+     * :type fileErrorCount: int
+     *
+     * :arg fileErrors: List of the error messages when trying to read HDF5 files
+     * :type fileErrors: list(string)
+     *
+     * :arg st: SymTab used to look up attributes of pdarray/seg_string ids
+     * :type borrowed SymTab:
+     *
+     * :returns: response message string formatted in json
+     *
+     * Example
+     *   {
+     *       "items": [
+     *           {
+     *               "dataset_name": "int_tens_pdarray",
+     *               "arkouda_type": "pdarray",
+     *               "created": "created id_9 int64 1000 1 (1000) 8"
+     *           }
+     *       ],
+     *       "allow_errors": "true",
+     *       "file_error_count": "1",
+     *       "file_errors": [
+     *           "Permission error Operation not permitted (error msg) opening path/to/file"
+     *       ]
+     *   }
+     *  Uses keys:  dataset_name, arkouda_type->[pdarray|seg_string], created->(legacy creation statement)
+     */
+    proc _buildReadAllHdfMsgJson(rnames:list(3*string), allowErrors:bool, fileErrorCount:int, fileErrors:list(string), st: borrowed SymTab): string throws {
+        // TODO: Right now we're building the legacy "created ..." string so we'll stuff them in a single array of items
+        // in the future we should begin to build out actual json objects of each pdarray as k:v pairs
+        var items: list(string);
+        for rname in rnames {
+            var (dsetName, akType, id) = rname;
+            var item = "{" + Q + "dataset_name"+ QCQ + dsetName + Q +
+                       "," + Q + "arkouda_type" + QCQ + akType + Q;
+            select (akType) {
+                when ("pdarray") {
+                    item +="," + Q + "created" + QCQ + "created " + st.attrib(id) + Q + "}";
+                }
+                when ("seg_string") {
+                    var (segName, valName) = id.splitMsgToTuple("+", 2);
+                    item += "," + Q + "created" + QCQ + "created " + st.attrib(segName) + "+created " + st.attrib(valName) + Q + "}";
+                }
+                otherwise {
+                    item += "}";
+                }
+            }
+            items.append(item);
+        }
+
+        // Now assemble the reply message
+        var reply = "{" + Q + "items" + Q + ":[" + ",".join(items.these()) + "]";
+        if allowErrors && !fileErrors.isEmpty() { // If configured, build the allowErrors portion
+            reply += ",";
+            reply += Q + "allow_errors" + QCQ + "true" + Q + ",";
+            reply += Q + "file_error_count" + QCQ + fileErrorCount:string + Q + ",";
+            reply += Q + "file_errors" + Q + ": [" + Q;
+            reply += (Q +"," + Q).join(fileErrors.these()) + Q + "]";
+        }
+        reply += "}";
+        return reply;
     }
 
     proc fixupSegBoundaries(a: [?D] int, segSubdoms: [?fD] domain(1), valSubdoms: [fD] domain(1)) {
@@ -668,6 +848,9 @@ module GenSymIO {
         var isSegArray: bool;
 
         try {
+            defer { // Close the file on exit
+                C_HDF5.H5Fclose(file_id);
+            }
             if isStringsDataset(file_id, dsetName) {
                 var offsetDset = dsetName + "/" + SEGARRAY_OFFSET_NAME;
                 var (offsetClass, offsetByteSize, offsetSign) = 
@@ -692,9 +875,6 @@ module GenSymIO {
             } else {
                 (dataclass, bytesize, isSigned) = get_dataset_info(file_id, dsetName);
                 isSegArray = false;
-            }
-            defer {
-                C_HDF5.H5Fclose(file_id);
             }
         } catch e : Error {
             //:TODO: recommend revisiting this catch block 
@@ -724,7 +904,7 @@ module GenSymIO {
         }
 
         var errorMsg="%s cannot be opened to check if hdf5, \
-                           check file permissions".format(filename);
+                           check file permissions or format".format(filename);
         throw getErrorWithContext(
                        msg=errorMsg,
                        lineNumber=getLineNumber(),
@@ -824,18 +1004,14 @@ module GenSymIO {
      */
     proc isBooleanDataset(fileName: string, dsetName: string): bool throws {
         var fileId = C_HDF5.H5Fopen(fileName.c_str(), C_HDF5.H5F_ACC_RDONLY, 
-                                           C_HDF5.H5P_DEFAULT);                  
+                                           C_HDF5.H5P_DEFAULT);
+        defer { // Close the file on exit
+            C_HDF5.H5Fclose(fileId);
+        }
         var boolDataset: bool;
 
         try {
             boolDataset = isBooleanDataset(fileId, dsetName);
-            /*
-             * Put close function call in defer block to ensure it's invoked, 
-             * which prevents accumulation of open file descriptors
-             */
-            defer {
-                C_HDF5.H5Fclose(fileId);
-            }
         } catch e: Error {
             /*
              * If there's an actual error, print it here. :TODO: revisit this
@@ -859,19 +1035,16 @@ module GenSymIO {
             try {
                 var file_id = C_HDF5.H5Fopen(filename.c_str(), C_HDF5.H5F_ACC_RDONLY, 
                                            C_HDF5.H5P_DEFAULT);
+                defer { // Close the file on exit
+                    C_HDF5.H5Fclose(file_id);
+                }
+
                 var dims: [0..#1] C_HDF5.hsize_t; // Only rank 1 for now
                 var dName = try! getReadDsetName(file_id, dsetName);
 
                 // Read array length into dims[0]
                 C_HDF5.HDF5_WAR.H5LTget_dataset_info_WAR(file_id, dName.c_str(), 
                                            c_ptrTo(dims), nil, nil);
-                defer {
-                    /*
-                     * Put close function call in defer block to ensure it's invoked, 
-                     * which prevents accumulation of open file descriptors
-                     */
-                    C_HDF5.H5Fclose(file_id);
-                }
                 lengths[i] = dims[0]: int;
             } catch e: Error {
                 throw getErrorWithContext(
@@ -1000,9 +1173,9 @@ module GenSymIO {
         return {low..high by stride};
     }
 
-    proc tohdfMsg(cmd: string, payload: string, st: borrowed SymTab): string throws {
-        var (arrayName, dsetName, modeStr, jsonfile, dataType)
-            = payload.splitMsgToTuple(5);
+    proc tohdfMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {               
+        var (arrayName, dsetName, modeStr, jsonfile, 
+                                      dataType, segsName) = payload.splitMsgToTuple(6);
 
         var mode = try! modeStr: int;
         var filename: string;
@@ -1011,8 +1184,10 @@ module GenSymIO {
         try {
             filename = jsonToPdArray(jsonfile, 1)[0];
         } catch {
-            return try! "Error: could not decode json filenames via tempfile " +
-                                                      "(%i files: %s)".format(1, jsonfile);
+            var errorMsg = "Could not decode json filenames via tempfile " +
+                                                    "(%i files: %s)".format(1, jsonfile);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
+            return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
         var warnFlag: bool;
@@ -1032,33 +1207,44 @@ module GenSymIO {
                     warnFlag = write1DDistArray(filename, mode, dsetName, e.a, DType.Bool);
                 }
                 when DType.UInt8 {
+                    /*
+                     * Look up the values and segments arrays, both of which are needed to write
+                     * uint8 arrays such as Strings out to external systems.
+                     */
                     var e = toSymEntry(entry, uint(8));
-                    warnFlag = write1DDistStrings(filename, mode, dsetName, e.a, DType.UInt8);
+                    var segsEntry = st.lookup(segsName);                   
+                    var s_e = toSymEntry(segsEntry, int);
+                    warnFlag = write1DDistStrings(filename, mode, dsetName, e.a, DType.UInt8,s_e.a);
                 } otherwise {
                     var errorMsg = unrecognizedTypeError("tohdf", dtype2str(entry.dtype));
-                    try! gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-               
-                    return errorMsg;
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
+                    return new MsgTuple(errorMsg, MsgType.ERROR);
                 }
             }
         } catch e: FileNotFoundError {
-              try! gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-              return try! "Error: unable to open file for writing: %s".format(filename);
+              var errorMsg = "Unable to open %s for writing: %s".format(filename,e.message());
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
         } catch e: MismatchedAppendError {
-              try! gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-              return e.publish();
+              var errorMsg = "Mismatched append %s".format(e.message());
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
         } catch e: WriteModeError {
-              try! gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),e.message());
-              return e.publish();
+              var errorMsg = "Write mode error %s".format(e.message());
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
         } catch e: Error {
               var errorMsg = "problem writing to file %s".format(e);
-              try! gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-              return "Error: %s".format(errorMsg);
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
         }
         if warnFlag {
-            return "Warning: possibly overwriting existing files matching filename pattern";
+             var warnMsg = "Warning: possibly overwriting existing files matching filename pattern";
+             return new MsgTuple(warnMsg, MsgType.WARNING);
         } else {
-            return "wrote array to file";
+            var repMsg = "wrote array to file";
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);            
         }
     }
 
@@ -1066,10 +1252,14 @@ module GenSymIO {
      * Writes out the two pdarrays composing a Strings object to hdf5.
      */
     private proc write1DDistStrings(filename: string, mode: int, dsetName: string, A, 
-                                                                array_type: DType) throws {
+                                                                array_type: DType, SA) throws {
         var prefix: string;
         var extension: string;  
         var warnFlag: bool;      
+
+        var total = new Time.Timer();
+        total.clear();
+        total.start(); 
         
         (prefix,extension) = getFileMetadata(filename);
  
@@ -1084,62 +1274,76 @@ module GenSymIO {
         warnFlag = processFilenames(filenames, matchingFilenames, mode, A, group);
         
         /*
-         * The leadingSliceIndices object, which is a globally-scoped PrivateSpace 
-         * array, contains the leading slice index for each locale, which is used 
-         * to remove the uint(8) characters moved to the previous locale; this
-         * situation occurs when a string spans two locales.
+         * The shuffleLeftIndices object, which is a globally-scoped PrivateSpace, 
+         * contains indices for each locale that (1) specify the chars that can be 
+         * shuffled left to complete the last string in the previous locale and (2)
+         * are used to remove the corresponding chars from the current, donor locale.  
          *
-         * The trailingSliceIndices PrivateSpace is used in the special case 
+         * The shuffleRightIndices PrivateSpace is used in the special case 
          * where the majority of a large string spanning two locales is the sole
-         * string on a locale; in this case, the trailing slice index is used
-         * to move the smaller string chunk to the locale containing the large
-         * string chunk that is the sole string chunk on a locale.
+         * string on a locale; in this case, each index specifies the chars that 
+         * can be shuffled right to start the string completed in the next locale
+         * and remove the corresponding chars from the current, donor locale 
          *
          * The isSingleString PrivateSpace indicates whether each locale contains
-         * chars corresponding to one string/string segment, which occurs if 
+         * chars corresponding to one string/string segment; this occurs if 
          * (1) the char array contains no null uint(8) characters or (2) there is
          * only one null uint(8) char at the end of the string/string segment
          *
          * The endsWithCompleteString PrivateSpace indicates whether the values
          * array for each locale ends with complete string, meaning that the last
          * character in the local slice is a null uint(8) char.
+         *
+         * The charArraySize PrivateSpace contains the size of char local slice
+         * corresponding to each locale.
          */
-        var leadingSliceIndices: [PrivateSpace] int;    
-        var trailingSliceIndices: [PrivateSpace] int;
+        var shuffleLeftIndices: [PrivateSpace] int;    
+        var shuffleRightIndices: [PrivateSpace] int;
         var isSingleString: [PrivateSpace] bool;
         var endsWithCompleteString: [PrivateSpace] bool;
+        var charArraySize: [PrivateSpace] int;
 
         /*
-         * Loop through all locales and set (1) leadingSliceIndices, which are
-         * used to remove leading uint(8) characters from the local slice that
-         * complete a string started in the previous locale (2) trailingSliceIndices,
-         * which are used to removing trailing uint(8) characters used to start
-         * strings that are completed in the next locale locale (3) isSingleString,
-         * which indicates if a locale contains a Strings values array that
-         * corresponds to only one complete string or string segment and (4)
-         * endsWithCompleteString, which indicates if the local slice array has 
-         * a complete string at the end of the array.
+         * Loop through all locales and set the shuffleLeftIndices, shuffleRightIndices,
+         * isSingleString, endsWithCompleteString, and charArraySize PrivateSpaces
          */
+        // initialize timer
+        var t1 = new Time.Timer();
+        t1.clear();
+        t1.start();
+
         coforall (loc, idx) in zip(A.targetLocales(), filenames.domain) 
-                      with (ref leadingSliceIndices, ref trailingSliceIndices, 
-                            ref isSingleString, ref endsWithCompleteString) do on loc {
-            generateValuesMetadata(idx,leadingSliceIndices, trailingSliceIndices, 
-                                        isSingleString, endsWithCompleteString, A);
+             with (ref shuffleLeftIndices, ref shuffleRightIndices, 
+                   ref isSingleString, ref endsWithCompleteString, ref charArraySize) do on loc {
+             generateStringsMetadata(idx,shuffleLeftIndices, shuffleRightIndices, 
+                          isSingleString, endsWithCompleteString, charArraySize, A, SA);
         }
-                                                       
+
+        t1.stop();  
+        var elapsed = t1.elapsed();
+        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                              "Time for generating all values metadata: %.17r".format(elapsed));   
+                                       
         /*
          * Iterate through each locale and (1) open the hdf5 file corresponding to the
-         * locale (2) prepare values and segments lists to be written (3) write each
+         * locale (2) prepare char and segment lists to be written (3) write each
          * list as a Chapel array to the open hdf5 file and (4) close the hdf5 file
          */
         coforall (loc, idx) in zip(A.targetLocales(), filenames.domain) with 
-                        (ref leadingSliceIndices, ref trailingSliceIndices) do on loc {
+                        (ref shuffleLeftIndices, ref shuffleRightIndices, 
+                                                            ref charArraySize) do on loc {
+                        
+            /*
+             * Generate metadata such as file name, file id, and dataset name
+             * for each file to be written
+             */
             const myFilename = filenames[idx];
-            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                   "%s exists? %t".format(myFilename, exists(myFilename)));
 
             var myFileID = C_HDF5.H5Fopen(myFilename.c_str(), 
                                        C_HDF5.H5F_ACC_RDWR, C_HDF5.H5P_DEFAULT);
+            defer { // Close the file on exit
+                C_HDF5.H5Fclose(myFileID);
+            }
             const locDom = A.localSubdomain();
             var dims: [0..#1] C_HDF5.hsize_t;
             dims[0] = locDom.size: C_HDF5.hsize_t;
@@ -1158,251 +1362,278 @@ module GenSymIO {
             }
 
             /*
-             * Check for the possibility that 1..n strings in the values array span 
-             * two neighboring locales; by seeing if the final character in the local 
-             * slice is the null uint(8) character. If it is not, then the last string 
-             * is only a partial string and the remainder of the string is in the 
-             * next locale
+             * Check for the possibility that a string in the current locale spans
+             * two neighboring locales by seeing if the final character in the local 
+             * slice is the null uint(8) character. If it is not, this means the last string 
+             * in the current locale (idx) spans the current AND next locale.
              */
-            if A.localSlice(locDom).back() != NULL_STRINGS_VALUE {
+            if A.localSlice(locDom).back() != NULL_STRINGS_VALUE { 
                 /*
-                 * Since the last value of the local slice is other than the uint(8) null
-                 * character, this means the last string in the current locale (idx) spans 
-                 * the current AND next locale. Consequently, need to do the following:
-                 * 1. Add all current locale values to a list
-                 * 2. Obtain remaining uint(8) values from the next locale
-                 */
-                var charList : list(uint(8));
-                var segmentsList : list(int);
+                 * Retrieve the chars array slice from this locale and populate the charList
+                 * that will be updated per left and/or right shuffle operations until the 
+                 * final char list is assembled
+                 */ 
+                var charArray = A.localSlice(locDom);
+                var charList : list(uint(8)) = new list(charArray);
 
-                /* 
-                 * Generate the values and segments lists from the locale domain; these
-                 * lists will be used to generate post-shuffle values and segments arrays
-                 * to be written to hdf5
-                 */
-                (charList, segmentsList) = sliceToValuesAndSegments(A.localSlice(locDom));
+                gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     'locale %i does not end with null char, need left or right shuffle'.format(
+                                              idx));
 
                 /*
-                 * If this locale contains a single string/string segment (and therefore no 
-                 * leading slice or trailing slice), and is not the first locale, retrieve 
-                 * the trailing chars from the previous locale, if applicable, to set the
+                 * If (1) this locale contains a single string/string segment (and therefore no
+                 * leading slice or trailing slice), and (2) is not the first locale, retrieve
+                 * the right shuffle chars from the previous locale, if applicable, to set the
                  * correct starting chars for the lone string/string segment on this locale.
-                 * 
-                 * Note: if this is the first locale, there are no trailing chars from a
-                 * previous locale, so this code block is not executed in this case.
-                 */
+                 *
+                 * Note: if this is the first locale, there are no chars from a previous 
+                 * locale to shuffle right, so this code block is not executed in this case.
+                 */                
                 if isSingleString[idx] && idx > 0 {
-                    var trailingIndex = trailingSliceIndices[idx-1];
-
-                    if trailingIndex > -1 {
+                    // Retrieve the shuffleRightIndex from the previous locale
+                    var shuffleRightIndex = shuffleRightIndices[idx-1];
+                    
+                    if shuffleRightIndex > -1 {
                         /*
-                         * There are 1..n chars to be shuffled from the previous locale
+                         * There are 1..n chars to be shuffled right from the previous locale
                          * (idx-1) to complete the beginning of the one string assigned 
-                         * to the current locale (idx)
+                         * to the current locale (idx). Accordingly, slice the right shuffle
+                         * chars from the previous locale
                          */
-                        var trailingValuesList : list(uint(8));
+                        var rightShuffleSlice : [shuffleRightIndex..charArraySize[idx-1]-1] uint(8);
+
                         on Locales[idx-1] {
                             const locDom = A.localSubdomain();
+                            var localeArray = A.localSlice(locDom);
+                            rightShuffleSlice = localeArray[shuffleRightIndex..localeArray.size-1];
+                        }      
+                                          
+                        /* 
+                         * Prepend the current locale charsList with the chars shuffled right from 
+                         * the previous locale
+                         */
+                        charList.insert(0,rightShuffleSlice);
 
-                            for (value, i) in zip(A.localSlice(locDom),
-                                                        0..A.localSlice(locDom).size-1) {
-                                if i >= trailingIndex {
-                                    trailingValuesList.append(value:uint(8));
-                                }
-                            }
-                        }
-                        charList.insert(0, trailingValuesList);
+                        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                           'right shuffle from locale %i into single string locale %i'.format(
+                                             idx-1,idx));
+                    } else {
+                        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                           'no right shuffle from locale %i into single string locale %i'.format(
+                                             idx-1,idx));
                     }
                 }
 
                 /*
                  * Now that the start of the first string of the current locale (idx) is correct,
                  * shuffle chars to place a complete string at the end the current locale. 
+                 *
                  * There are two possible scenarios to account for. First, the next locale 
-                 * has a leadingSliceIndex > -1. If so, the chars up to the leadingSliceIndex 
+                 * has a shuffleLeftIndex > -1. If so, the chars up to the shuffleLeftIndex 
                  * will be shuffled from the next locale (idx+1) to complete the last string 
                  * in the current locale (idx). In the second scenario, the next locale is 
-                 * the last locale in the in the Arkouda cluster If so, all of the chars 
-                 * from the next locale (idx+1) are shuffled to the current locale (idx).
+                 * the last locale in the Arkouda cluster. If so, all of the chars 
+                 * from the next locale are shuffled to the current locale.
                  */
-                if leadingSliceIndices[idx+1] > -1 || isLastLocale(idx+1) {
+                var shuffleLeftSlice: [0..shuffleLeftIndices[idx+1]-2] uint(8);
+
+                if shuffleLeftIndices[idx+1] > -1 || isLastLocale(idx+1) {
                     on Locales[idx+1] {
                         const locDom = A.localSubdomain();
-                        var sliceList: list(uint(8), parSafe=false);
+                        
+                        var localeArray = A.localSlice(locDom);
+                        var shuffleLeftIndex = shuffleLeftIndices[here.id];
+                        var localStart = locDom.first;
+                        var localLeadingSliceIndex = localStart + shuffleLeftIndex -2;
 
-                        /*
-                         * Iterate through the local slice values for the next locale and add
-                         * each to the sliceList until the null uint(8) character is reached;
-                         * this subset of the next locale (idx+1) chars corresponds to the
-                         * chars that complete the last string of the current locale (idx)
-                         */
-                        for value in A.localSlice(locDom) {
-                            if value != NULL_STRINGS_VALUE {
-                                sliceList.append(value:uint(8));
-                            } else {
-                                break;
-                            }
-                        }                       
-                        charList.extend(sliceList);   
-                    }
+                        shuffleLeftSlice = localeArray[localStart..localLeadingSliceIndex];    
+                        charList.extend(shuffleLeftSlice);  
+ 
+                        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),   
+                           'shuffled left from locale %i to complete string in locale %i'.format(
+                                        idx+1,idx));                    
+                    } 
+                } else {
+                    gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                                 'no left shuffle from locale %i to locale %i'.format(idx+1,idx));
                 }
 
                 /* 
-                 * To prepare for writing revised values array to hdf5, do the following, 
-                 * if applicable:
-                 * 1. Remove the leading slice characters shuffled to previous locale
-                 * 2. Remove the trailing slice characters shuffled to the next locale
-                 * 3. If (2) does not apply, add null uint(8) char to end of the valuesList
+                 * To prepare for writing the charList to hdf5, do the following, if applicable:
+                 * 1. Remove the characters shuffled left to the previous locale
+                 * 2. Remove the characters shuffled right to the next locale
+                 * 3. If (2) does not apply, add null uint(8) char to end of the charList
                  */
-                var leadingSliceIndex = leadingSliceIndices[idx]:int;
-                var trailingSliceIndex = trailingSliceIndices[idx]:int;
-
-                var valuesList: list(uint(8), parSafe=false);
+                var shuffleLeftIndex = shuffleLeftIndices[idx]:int;
+                var shuffleRightIndex = shuffleRightIndices[idx]:int;
 
                 /*
-                 * Verify if the current locale (idx) contains chars shuffled to the previous 
-                 * locale (idx-1) by checking the leadingSliceIndex, the number of strings in 
+                 * Verify if the current locale (idx) contains chars shuffled left to the previous 
+                 * locale (idx-1) by checking the shuffleLeftIndex, the number of strings in 
                  * the current locale, and whether the preceding locale ends with a complete
-                 * string. If (1) the leadingSliceIndex > -1, (2) this locale contains 2..n 
-                 * strings, and (3) the previous locale does not end with a complete string
-                 * this means that the charList contains chars that were shuffled to complete
-                 * the last string from the previous locale (idx-1) . If so, generate
-                 * a new valuesList that has those values sliced out. Otherwise, set the
-                 * valuesList reference to the charList
+                 * string. If (1) the shuffleLeftIndex > -1, (2) this locale contains 2..n 
+                 * strings, and (3) the previous locale does not end with a complete string,
+                 * this means the charList contains chars that were shuffled left to complete
+                 * the last string in the previous locale (idx-1). If so, generate
+                 * a new charList that has those values sliced out. 
                  */
-                 if leadingSliceIndex > -1 && !isSingleString[idx] 
+                 if shuffleLeftIndex > -1 && !isSingleString[idx] 
                                                        && !endsWithCompleteString[idx-1] {
                      /*
                       * Since the leading slice was used to complete the last string in
                       * the previous locale (idx-1), slice those chars from the charList
                       */
-                     (valuesList, segmentsList) = 
-                                         adjustForLeadingSlice(leadingSliceIndex, charList);
+                     charList = new list(adjustForLeftShuffle(shuffleLeftIndex,charList));    
+
+                     gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                            'adjusted locale %i for left shuffle to %i'.format(idx,idx-1)); 
                  } else {
-                     valuesList = charList;
+                     gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                            'no left shuffle adjustment for locale %i'.format(idx));
                  }
 
                  /*
-                  * Verify if the current locale contains chars shuffled to the next locale 
-                  * (idx+1) because the next locale only has one string/string segment and
-                  * the current locale's trailingSliceIndex > -1. If so, remove the
-                  * chars starting with the trailingSliceIndex, which will place the null 
-                  * uint(8) char is at the end of the valuesList. Otherwise, manually 
-                  * add the null uint(8) char to the end of the valuesList.
+                  * Verify if the current locale contains chars shuffled right to the next 
+                  * locale because (1) the next locale only has one string/string segment
+                  * and (2) the current locale's shuffleRightIndex > -1. If so, remove the
+                  * chars starting with the shuffleRightIndex, which will place the null 
+                  * uint(8) char at the end of the charList. Otherwise, manually add the 
+                  * null uint(8) char to the end of the charList.
                   */
-                 if trailingSliceIndex > -1 && isSingleString[idx+1] {
-                     var sliceIndex = segmentsList.last();
-                     (valuesList, segmentsList) = 
-                                          adjustForTrailingSlice(sliceIndex, valuesList);                
+                 if shuffleRightIndex > -1 && isSingleString[idx+1] {
+                     charList = new list(adjustForRightShuffle(
+                                                  shuffleRightIndex,charList));
+                     gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        'adjusted locale %i for right shuffle to locale %i'.format(
+                                        idx,idx+1));
                  } else {
-                     valuesList.append(NULL_STRINGS_VALUE);            
+                     charList.append(NULL_STRINGS_VALUE);
+                     gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        'no adjustment for right shuffle from locale %i to locale %i'.format(
+                                        idx,idx+1));        
                  }
-                                  
+                 
+                 // Generate the segments list now that the char list is finalized
+                 var segmentsList = generateFinalSegmentsList(charList,idx);
+             
                  // Write the finalized valuesList and segmentsList to the hdf5 group
-                 writeStringsToHdf(myFileID, group, valuesList, segmentsList);
+                 writeStringsToHdf(myFileID, idx, group, charList, segmentsList);
              } else {
                  /*
                   * The current local slice (idx) ends with the uint(8) null character,  
-                  * which is the value required to ensure correct read logic; with this
-                  * confirmed, check to see if the current locale (idx) slice contains
-                  * 1..n chars that compose a string from the previous (idx-1) locale.
+                  * which is the value required to ensure correct read logic.
                   */
-                 var leadingSliceIndex = leadingSliceIndices[idx]:int;
+                 var charList : list(uint(8));
 
-                 if leadingSliceIndex == -1 {
+                 gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                    'locale %i ends with null char, no left or right shuffle needed'.format(idx));
+
+                 /*
+                  * Check to see if the current locale (idx) slice contains 1..n chars that
+                  * complete the last string in the previous (idx-1) locale.
+                  */
+                 var shuffleLeftIndex = shuffleLeftIndices[idx]:int;
+
+                 if shuffleLeftIndex == -1 {
                      /*
-                      * Since the leadingSliceIndex is -1, the current local slice (idx) does 
-                      * not contain chars from the previous locale (idx-1).
+                      * Since the shuffleLeftIndex is -1, the current local slice (idx) does 
+                      * not contain chars from a string started in the previous locale (idx-1). 
+                      * Accordingly, initialize with the current locale slice.
                       */
-                     var valuesList : list(uint(8));
-                     var segmentsList : list(int);
-
-                     (valuesList, segmentsList) = sliceToValuesAndSegments(A.localSlice(locDom));
+                     charList = new list(A.localSlice(locDom));
 
                      /*
-                      * If (1) this locale (idx) contains one string/string segment and (2) ends 
-                      * with the null uint(8) char, check to see if the trailingSliceIndex from 
-                      * the previous locale (idx-1) is > -1. If so, the chars following the 
-                      * trailingSliceIndex from the previous locale (idx-1) complete the one 
-                      * string/string segment within the current locale (idx). 
+                      * If this locale (idx) ends with the null uint(8) char, check to see if 
+                      * the shuffleRightIndex from the previous locale (idx-1) is > -1. If so, 
+                      * the chars following the shuffleRightIndex from the previous locale complete 
+                      * the one string/string segment within the current locale. 
                       */
                      if isSingleString[idx] && idx > 0 {
-                         var trailingIndex = trailingSliceIndices[idx-1];
+                         /*
+                          * Get shuffleRightIndex from previous locale to see if the current locale
+                          * charList needs to be prepended with chars shuffled from previous locale
+                          */
+                         var shuffleRightIndex = shuffleRightIndices[idx-1];
 
-                         if trailingIndex > -1 {
-                             var trailingValuesList : list(uint(8));
+                         if shuffleRightIndex > -1 {
+                             var shuffleRightSlice: [shuffleRightIndex..charArraySize[idx-1]-1] uint(8);
                              on Locales[idx-1] {
                                  const locDom = A.localSubdomain();  
-                                 for (value, i) in zip(A.localSlice(locDom), 
-                                                               0..A.localSlice(locDom).size-1) {
-                                     if i >= trailingIndex {
-                                         trailingValuesList.append(value:uint(8));
-                                     }
-                                 } 
+                                 var localeArray = A.localSlice(locDom);
+                                 shuffleRightSlice = localeArray[shuffleRightIndex..localeArray.size-1]; 
                              }
-                             //prepend the current locale valuesList with the trailingValuesList
-                             valuesList.insert(0, trailingValuesList);
+                             charList.insert(0,shuffleRightSlice);
+                             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                                 'inserted right shuffle slice from locale %i into locale %i'.format(
+                                             idx-1,idx));
+                         } else {
+                             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),  
+                                 'no right shuffle from locale %i inserted into locale %i'.format(
+                                             idx-1,idx));                       
                          }
                      }
-                      
+
                      /*
                       * Account for the special case where the following is true about the
                       * current locale (idx):
                       *
-                      * 1. This is the last locale
+                      * 1. This is the last locale in a multi-locale deployment
                       * 2. There is one partial string started in the previous locale
                       * 3. The previous locale has no trailing slice to complete the partial
                       *    string in the current locale
                       *
                       * In this very special case, (1) move the current locale (idx) chars to 
-                      * the previous locale (idx-1) and (2) clear out the current locale
-                      * segments list because the current locale values list is now empty.
+                      * the previous locale (idx-1) and (2) clear out the current locale charList.
                       */                     
-                     if isLastLocale(idx) {
+                     if numLocales > 1 && isLastLocale(idx) {
                          if !endsWithCompleteString[idx-1] && isSingleString[idx] 
-                                                        && trailingSliceIndices[idx-1] == -1 {
-                             valuesList.clear();
-                             segmentsList.clear();
+                                                        && shuffleRightIndices[idx-1] == -1 {
+                             charList.clear();
+                             gsLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
+                                 'cleared out last locale %i due to left shuffle to locale %i'.format(
+                                          idx,idx-1));
                          }
-                      }
-
-                      // Write the finalized valuesList and segmentsList to the hdf5 group
-                      writeStringsToHdf(myFileID, group, valuesList, segmentsList);
+                     }
+                    
+                     // Generate the segments list now that the char list is finalized
+                     var segmentsList = generateFinalSegmentsList(charList,idx);
+ 
+                     // Write the finalized valuesList and segmentsList to the hdf5 group
+                     writeStringsToHdf(myFileID, idx, group, charList, segmentsList);
                   } else {
                       /*
-                       * The local slice (idx) does possibly contain chars from previous locale 
-                       * (idx-1). Accordingly, generate a corresponding valuesList that can be 
-                       * sliced and check to see if the previous locale ends with a complete
-                       * string. If not, (1) adjust the valuesList by slicing the chars out that
-                       * correspond to chars shuffled to the previous locale (idx-1) and 
-                       * (2) generate a new, corresponding Strings segments list. 
-                       */  
-                      var charList : list(uint(8));
-                      var segmentsList : list(int);
-                      var valuesList : list(uint(8));
-                     
-                      (charList, segmentsList) = sliceToValuesAndSegments(A.localSlice(locDom)); 
-          
-                      /*
-                       * Check to see if previous locale (idx-1) ends with a complete string.
-                       * If not, then the leading slice of this string was used to complete
-                       * the last string in the previous locale, so slice those chars.
+                       * Check to see if previous locale (idx-1) ends with a null character.
+                       * If not, then the left shuffle slice of this locale was used to complete
+                       * the last string in the previous locale, so slice those chars from 
+                       * this locale and create a new, corresponding charList.
                        */
                       if !endsWithCompleteString(idx-1) {
-                          (valuesList, segmentsList) = 
-                                             adjustForLeadingSlice(leadingSliceIndex, charList);
+                          var localStart = locDom.first;
+                          var localLeadingSliceIndex = localStart + shuffleLeftIndex;
+                          var leadingCharArray = adjustCharArrayForLeadingSlice(localLeadingSliceIndex, 
+                                         A.localSlice(locDom),locDom.last);
+                          charList = new list(leadingCharArray);  
+                          gsLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
+                                  'adjusted locale %i for left shuffle to locale %i'.format(
+                                         idx,idx-1));
                       } else {
-                          valuesList = charList;
-                      }
+                          charList = new list(A.localSlice(locDom));
+                          gsLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
+                                  'no left shuffle from locale %i to locale %i'.format(
+                                         idx,idx-1));
+                      } 
+                      
+                      // Generate the segments list now that the char list is finalized
+                      var segmentsList = generateFinalSegmentsList(charList,idx);
 
                       // Write the finalized valuesList and segmentsList to the hdf5 group
-                      writeStringsToHdf(myFileID, group, valuesList, segmentsList);
+                      writeStringsToHdf(myFileID, idx, group, charList, segmentsList);
                     }
                 }
-            
-            // Close the file now that the values and segments pdarrays have been written
-            C_HDF5.H5Fclose(myFileID);
         }
+        total.stop();  
+        gsLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
+                             "Completed write1DDistStrings in %.17r seconds".format(total.elapsed()));  
         return warnFlag;
     }
 
@@ -1443,6 +1674,10 @@ module GenSymIO {
 
             var myFileID = C_HDF5.H5Fopen(myFilename.c_str(), 
                                        C_HDF5.H5F_ACC_RDWR, C_HDF5.H5P_DEFAULT);
+            defer { // Close the file on scope exit
+                C_HDF5.H5Fclose(myFileID);
+            }
+
             const locDom = A.localSubdomain();
             var dims: [0..#1] C_HDF5.hsize_t;
             dims[0] = locDom.size: C_HDF5.hsize_t;
@@ -1467,9 +1702,6 @@ module GenSymIO {
              */           
             H5LTmake_dataset_WAR(myFileID, myDsetName.c_str(), 1, c_ptrTo(dims),
                                       dType, c_ptrTo(A.localSlice(locDom)));
-
-            // Close the file now that the 1..n pdarrays have been written
-            C_HDF5.H5Fclose(myFileID);
         }
         return warnFlag;
     }
@@ -1552,7 +1784,7 @@ module GenSymIO {
         var filenames: [0..#A.targetLocales().size] string;
         for i in 0..#A.targetLocales().size {
             filenames[i] = generateFilename(prefix, extension, i);
-        }
+        }   
         return filenames;
     }
 
@@ -1635,36 +1867,30 @@ module GenSymIO {
               warnFlag = false;
           }
 
-          for loc in 0..#A.targetLocales().size {
-              /*
-               * When done with a coforall over locales, only locale 0's file gets created
-               * correctly, whereas hhe other locales' files have corrupted headers.
-               */
-              //filenames[loc] = try! "%s_LOCALE%s%s".format(prefix, loc:string, extension);
+          coforall loc in A.targetLocales() do on loc {
               var file_id: C_HDF5.hid_t;
 
               gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                                              "Creating or truncating file");
 
-              file_id = C_HDF5.H5Fcreate(filenames[loc].c_str(), C_HDF5.H5F_ACC_TRUNC,
+              file_id = C_HDF5.H5Fcreate(filenames[loc.id].localize().c_str(), C_HDF5.H5F_ACC_TRUNC,
                                                         C_HDF5.H5P_DEFAULT, C_HDF5.H5P_DEFAULT);
-              
-              prepareGroup(file_id, group);
+              defer { // Close file upon exiting scope
+                  C_HDF5.H5Fclose(file_id);
+              }
+
+              if (!group.isEmpty()) {
+                  prepareGroup(file_id, group);
+              }
 
               if file_id < 0 { // Negative file_id means error
                   throw getErrorWithContext(
-                                    msg="The file %s does not exist".format(filenames[loc]),
+                                    msg="The file %s does not exist".format(filenames[loc.id]),
                                     lineNumber=getLineNumber(), 
                                     routineName=getRoutineName(), 
                                     moduleName=getModuleName(), 
                                     errorClass='FileNotFoundError');
               }
-
-              /*
-               * Close the file now that it has been created and, if applicable, the 
-               * Strings group derived from the dsetName has been created.
-               */
-              C_HDF5.H5Fclose(file_id);
            }
         } else {
             throw getErrorWithContext(
@@ -1673,107 +1899,18 @@ module GenSymIO {
                                     routineName=getRoutineName(), 
                                     moduleName=getModuleName(), 
                                     errorClass='IllegalArgumentError');
-        }    
+        }      
         return warnFlag;
     }
 
     /*
-     * If APPEND mode, checks to see if the matchingFilenams matches the filenames
+     * If APPEND mode, checks to see if the matchingFilenames matches the filenames
      * array and, if not, raises a MismatchedAppendError. If in TRUNCATE mode, creates
      * the files matching the filenames. If 1..n of the filenames exist, returns 
      * warning to the user that 1..n files were overwritten.
      */
     proc processFilenames(filenames: [] string, matchingFilenames: [] string, mode: int, A) throws {
-      // if appending, make sure number of files hasn't changed and all are present
-      var warnFlag: bool;
-      if (mode == APPEND) {
-          var allexist = true;
-          var anyexist = false;
-          
-          for f in filenames {
-              var result =  try! exists(f);
-              allexist &= result;
-              if result {
-                  anyexist = true;
-              }
-          }
-
-          /*
-           * Check to see if any exist. If not, this means the user is attempting to append
-           * to 1..n files that don't exist. In this situation, the user is alerted that
-           * the dataset must be saved in TRUNCATE mode.
-           */
-          if !anyexist {
-              throw getErrorWithContext(
-                 msg="Cannot append a non-existent file, please save without mode='append'",
-                 lineNumber=getLineNumber(), 
-                 routineName=getRoutineName(), 
-                 moduleName=getModuleName(), 
-                 errorClass='WriteModeError'
-              );
-          }
-
-          /*
-           * Check if there is a mismatch between the number of files to be appended to and
-           * the number of files actually on the file system. This typically happens when 
-           * a file append is attempted where the number of locales between the file 
-           * creates and updates changes.
-           */         
-          if !allexist || (matchingFilenames.size != filenames.size) {
-              throw getErrorWithContext(
-                 msg="appending to existing files must be done with the same number " +
-                      "of locales. Try saving with a different directory or filename prefix?",
-                 lineNumber=getLineNumber(), 
-                 routineName=getRoutineName(), 
-                 moduleName=getModuleName(), 
-                 errorClass='MismatchedAppendError'
-              );
-          }
-      } else if mode == TRUNCATE { // if truncating, create new file per locale
-          if matchingFilenames.size > 0 {
-              warnFlag = true;
-          } else {
-              warnFlag = false;
-          }
-
-          for loc in 0..#A.targetLocales().size {
-              /*
-               * When done with a coforall over locales, only locale 0's file gets created
-               * correctly, whereas hhe other locales' files have corrupted headers.
-               */
-              //filenames[loc] = try! "%s_LOCALE%s%s".format(prefix, loc:string, extension);
-              var file_id: C_HDF5.hid_t;
-
-              gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                                              "Creating or truncating file");
-
-              file_id = C_HDF5.H5Fcreate(filenames[loc].c_str(), C_HDF5.H5F_ACC_TRUNC,
-                                                      C_HDF5.H5P_DEFAULT, C_HDF5.H5P_DEFAULT);
-
-              if file_id < 0 { // Negative file_id means error
-                  throw getErrorWithContext(
-                                     msg="The file %s does not exist".format(filenames[loc]),
-                                     lineNumber=getLineNumber(), 
-                                     routineName=getRoutineName(), 
-                                     moduleName=getModuleName(), 
-                                     errorClass='FileNotFoundError');
-              }
-
-              /*
-               * Close the file now that it has been created and, if applicable, the 
-               * Strings group derived from the dsetName has been created.
-               */
-              C_HDF5.H5Fclose(file_id);
-           }
-        } else {
-            throw getErrorWithContext(
-                                     msg="The mode %t is invalid".format(mode),
-                                     lineNumber=getLineNumber(), 
-                                     routineName=getRoutineName(), 
-                                     moduleName=getModuleName(), 
-                                     errorClass='IllegalArgumentError');            
-        }    
-        return warnFlag;
+        return processFilenames(filenames, matchingFilenames, mode, A, "");
     }
     
     /*
@@ -1782,207 +1919,174 @@ module GenSymIO {
      * being overwritten.
      */
     proc getMatchingFilenames(prefix : string, extension : string) throws {
-        return glob(try! "%s_LOCALE*%s".format(prefix, extension));    
+        return glob("%s_LOCALE*%s".format(prefix, extension));    
     }
 
     /*
-     * Generates values array metadata required to partition the corresponding strings
-     * across 1..n locales via shuffle operations. The metadata includes leading and
-     * trailing slice indices as well as flags indicating whether the values array
-     * contains one string and if the values array ends with a complete string.
+     * Generates Strings metadata required to partition the corresponding string sequences
+     * across 1..n locales via shuffle operations. The metadata includes (1) left and
+     * right shuffle slice indices (2) flags indicating whether the locale char arrays
+     * contain one string (3) if the char arrays end with a complete string and (4)
+     * the length of each locale slice of the chars array (used for some array slice ops).
      */
-    private proc generateValuesMetadata(idx : int, leadingSliceIndices, 
-                       trailingSliceIndices, isSingleString, endsWithCompleteString, A) {
-        /*
-         * Generate the leadlingSliceIndex, which is used to (1) indicate the chars to be
-         * pulled down to the previous locale to complete the last string there and (2)
-         * filter out the chars from the current locale that were used to complete the 
-         * string in the previous locale, along with the null uint(8) char. 
-         *
-         * Next, generate the trailingSliceIndex, which is used to (1) indicate the chars
-         * to be pulled up to the next locale to complete the first string in that 
-         * locale and (2) filter out the chars from the current locale used to complete
-         * the first string in the next locale. 
-         
-         * Finally, set the endsWithCompleteString value, which indicates if the values
-         * array has the null uint(8) as the final character, which means the final 
-         * string in the locale is complete (does not span to the next locale).
-         */
+    private proc generateStringsMetadata(idx : int, shuffleLeftIndices, 
+                       shuffleRightIndices, isSingleString, endsWithCompleteString, 
+                       charArraySize, A, SA) throws {
         on Locales[idx] {
+            //Retrieve the chars and segs local slices (portions of arrays on this locale)
             const locDom = A.localSubdomain();
+            const segsLocDom = SA.localSubdomain();
+            const charArray = A.localSlice(locDom);
+            const segsArray = SA.localSlice(segsLocDom);
+
+            charArraySize[idx] = charArray.size;
             var leadingSliceSet = false;
 
             //Initialize both indices to -1 to indicate neither exists for locale
-            leadingSliceIndices[idx] = -1;
-            trailingSliceIndices[idx] = -1;
+            shuffleLeftIndices[idx] = -1;
+            shuffleRightIndices[idx] = -1;
 
-            for (value, i) in zip(A.localSlice(locDom), 0..A.localSlice(locDom).size-1) {
+            /*
+             * Check if the last char is the null uint(8) char. If so, the last
+             * string on the locale completes within the locale. Otherwise,
+             * the last string spans to the next locale.
+             */
+            if charArray.back() == NULL_STRINGS_VALUE {
+                endsWithCompleteString[idx] = true;
+            } else {
+                endsWithCompleteString[idx] = false;
+            }
             
-                /*
-                 * Check all chars leading up to the last char in the values array. If a
-                 * char is the null uint(8) char and is not the last char, this is a segment
-                 * index that could be a leadingSliceIndex or a trailingSliceIndex.
-                 */
-                if i < A.localSlice(locDom).size-1 {
-                    if value == NULL_STRINGS_VALUE {
-                        /*
-                         * The first null char of the values array is the leadingSliceIndex,
-                         * which wil be used to pull chars from current locale to complete
-                         * the string started in the previous locale, if applicable.
-                         */
-                        if !leadingSliceSet {
-                            leadingSliceIndices[idx] = i + 1;
-                            leadingSliceSet = true; 
-                        } else {
-                            /*
-                             * If the leadingSliceIndex has already been set, the next null
-                             * char is a candidate to be the trailingSliceIndex.
-                             */
-                             trailingSliceIndices[idx] = i + 1;
-                        }
-                    }
-                } else {
-                    /*
-                     * Since this is the last character within the array, check to see if it 
-                     * is a null char. If it is, that means that the last string in this values 
-                     * array does not span to the next locale. Consequently, (1) no chars from
-                     * the next locale will be used to complete the last string in this locale
-                     * and (2) no chars from this locale will be sliced to complete the first
-                     * string in the next locale.
-                     */
-                     if value == NULL_STRINGS_VALUE {
-                        endsWithCompleteString[idx] = true;
-                     } else {
-                        endsWithCompleteString[idx] = false;
-                     }
+            // initialize the firstSeg and lastSeg variables
+            var firstSeg = -1;
+            var lastSeg = -1;
+
+            /*
+             * If the first locale (locale 0), the first segment is retrieved
+             * via segsArray.front(), corresponding to 0. Otherwise, find the 
+             * first occurrence of the null uint(8) char and the firstSeg is the 
+             * next non-null char. The lastSeg in all cases is the final segsArray 
+             * element retrieved via segsArray.back()
+             */
+            if idx == 0 {
+                firstSeg = segsArray.front();
+                lastSeg = segsArray.back();
+            } else {                                                         
+                var (nullString,fSeg) = charArray.find(NULL_STRINGS_VALUE);
+                if nullString {
+                    firstSeg = fSeg + 1;
                 }
-            }    
+                lastSeg = segsArray.back();
+            }
+
+            /*
+             * Normalize the first and last seg elements (make them zero-based) by
+             * subtracting the char domain first index element. 
+             */
+            var normalize = 0;
+            if idx > 0 {
+                normalize = locDom.first;
+            }
+    
+            var adjFirstSeg = firstSeg - normalize;
+            var adjLastSeg = lastSeg - normalize;
+                                                
+            if adjFirstSeg == 0 {
+                shuffleLeftIndices[idx] = -1;
+            } else {
+                shuffleLeftIndices[idx] = adjFirstSeg;
+            }
+            
+            if !endsWithCompleteString[idx] {
+                shuffleRightIndices[idx] = adjLastSeg;
+            } else {
+                shuffleRightIndices[idx] = -1;
+            }
         
-            if leadingSliceIndices[idx] > -1 || trailingSliceIndices[idx] > -1 {    
+            if shuffleLeftIndices[idx] > -1 || shuffleRightIndices[idx] > -1 {    
                 /*
                  * If either of the indices are > -1, this means there's 2..n null characters
-                 * in the string corresponding to the values array, which means the values
-                 * array contains 2..n string segments/complete strings.
+                 * in the char array, which means the char array contains 2..n strings and/or
+                 * string portions.
                  */   
                 isSingleString[idx] = false;
             } else {
                 /*
-                 * Since there is neither a leadingSliceIndex nor a trailingSliceIndex for 
-                 * this locale, it only contains a single complete string or string segment.
+                 * Since there is neither a shuffleLeftIndex nor a shuffleRightIndex for 
+                 * this locale, this local contains a single, complete string.
                  */
                 isSingleString[idx] = true;
             }
 
             /* 
-             * For the special case of this being the first locale, set the leadingSliceIndex 
+             * For the special case of this being the first locale, set the shuffleLeftIndex 
              * to -1 since there is no previous locale that has an incomplete string at the
              * end that will require chars sliced from locale 0 to complete. If there is one
              * null uint(8) char that is not at the end of the values array, this is the 
-             * trailingSliceIndex for the first locale.
+             * shuffleRightIndex for the first locale.
              */
             if idx == 0 {
-                if leadingSliceIndices[idx] > -1 {
-                    trailingSliceIndices[idx] = leadingSliceIndices[idx];
+                if shuffleLeftIndices[idx] > -1 {
+                    shuffleRightIndices[idx] = shuffleLeftIndices[idx];
                 }
-                leadingSliceIndices[idx] = -1;
+                shuffleLeftIndices[idx] = -1;
             }
             
             /*
-             * For the special case of this being the last locale, set the trailingSliceIndex 
-             * to -1 since there is no next locale to shuffle trailing slice to.
+             * For the special case of this being the last locale, set the shuffleRightIndex 
+             * to -1 since there is no next locale to shuffle a trailing slice to.
              */
             if isLastLocale(idx) {
-                trailingSliceIndices[idx] = -1;
+                shuffleRightIndices[idx] = -1;
             }
         }
     }
+    
+    /*
+     * Adjusts for the shuffling of a leading char sequence to the previous locale by 
+     * slicing leading chars that compose a string started in the previous locale and 
+     * returning a new char array.
+     */
+    private proc adjustCharArrayForLeadingSlice(sliceIndex, charArray, last) throws { 
+        return charArray[sliceIndex..last]; 
+    }    
 
     /*
-     * Processes a local Strings slice into (1) a uint(8) values list for use in methods 
-     * that finalize the values array elements following any shuffle operations and (2)
-     * a segments list representing starting indices for each string in the values list.
+     * Adjusts for the left shuffle of the leading char sequence from the current locale
+     * to the previous locale by returning a slice containing chars from the shuffleLeftIndex
+     * to the end of the charList.
      */
-    private proc sliceToValuesAndSegments(rawChars) {
-        var charList: list(uint(8), parSafe=false);
-        var indices: list(int, parSafe=false);
+    private proc adjustForLeftShuffle(shuffleLeftIndex: int, charList) throws {
+        return charList[shuffleLeftIndex..charList.size-1];
+    }
 
-        //initialize segments with index to first char in values
-        indices.append(0);
-        
-        for (value, i) in zip(rawChars, 0..rawChars.size-1) do {
-            charList.append(value:uint(8));
+    /* 
+     * Adjusts for the right shuffle of the trailing char sequence from the current locale
+     * to the next locale by returning a slice containing chars up to and including 
+     * the rightShuffleIndex. 
+     */
+    private proc adjustForRightShuffle(shuffleRightIndex: int, 
+                                               charsList: list(uint(8))) throws {        
+        return charsList[0..shuffleRightIndex];
+    }
+
+    private proc generateFinalSegmentsList(charList : list(uint(8)), idx: int) throws {
+        var segments: list(int);
+        segments.append(0);
+
+        for (value, i) in zip(charList, 0..charList.size-1) do {
             /*
              * If the char is the null uint(8) char, check to see if it is the 
              * last char. If not, added to the indices. If it is the last char,  
              * don't add, because it is the correct ending char for a Strings 
              * values array to be written to a locale.
              */ 
-            if value == NULL_STRINGS_VALUE && i < rawChars.size-1 {
-                indices.append(i+1);
+            if value == NULL_STRINGS_VALUE && i < charList.size-1 {
+                segments.append(i+1);
             }
         }
-
-        return (charList, indices);
-    }
-
-    /*
-     * Adjusts for the shuffling of a leading char sequence to the 
-     * previous locale by (1) slicing leading chars that compose
-     * a string started in the previous locale and returning (1) 
-     * a new values list that composes all of the strings that start
-     * in the current locale and (2) a new segments list that 
-     * corresponds to the new values list
-     */
-    private proc adjustForLeadingSlice(sliceIndex : int,
-                                   charList : list(uint(8))) {
-        var valuesList: list(uint(8), parSafe=false);
-        var indices: list(int);
-        var i: int = 0;
-        indices.append(0);
         
-        var segmentsBound = charList.size - sliceIndex - 1;
-
-        for value in charList(sliceIndex..charList.size-1)  {
-            valuesList.append(value:uint(8));
-            
-            /*
-             * If the value is a null char and is not the last char
-             * in the list, then it is a segment use to delimit
-             * strings within the corresponding values array.
-             */
-            if value == NULL_STRINGS_VALUE && i < segmentsBound {
-                indices.append(i+1);
-            }
-            i+=1;
-        }
-
-        return (valuesList,indices);
-    }
-
-    /* 
-     * Adjusts for the shuffling of a trailing char sequence to the next 
-     * locale by (1) slicing trailing chars that correspond to 1..n
-     * chars composing a string that completes in the next locale,
-     * returning (1) a new list that composes all strings that end in the 
-     * current locale and (2) returns a new segments list corresponding
-     * to the new values list for the current locale
-     */
-    private proc adjustForTrailingSlice(sliceIndex : int,
-                                   charList : list(uint(8))) {
-        var valuesList: list(uint(8), parSafe=false);
-        var indices: list(int);
-        var i: int = 0;
-        indices.append(0);
-
-        for value in charList(0..sliceIndex-1)  {
-            valuesList.append(value:uint(8));
-            if value == NULL_STRINGS_VALUE && i < sliceIndex-1 {
-                indices.append(i+1);
-            }
-            i+=1;
-        }
-
-        return (valuesList,indices);
+        return segments;
     }
 
     /*
@@ -2019,8 +2123,16 @@ module GenSymIO {
     /*
      * Writes the values and segments lists to hdf5 within a group.
      */
-    private proc writeStringsToHdf(fileId: int, group: string, 
+    private proc writeStringsToHdf(fileId: int, idx: int, group: string, 
                               valuesList: list(uint(8)), segmentsList: list(int)) throws {
+        // initialize timer
+        var t1: Time.Timer;
+        if logLevel == LogLevel.DEBUG {
+            t1 = new Time.Timer();
+            t1.clear();
+            t1.start();
+        }
+
         H5LTmake_dataset_WAR(fileId, '/%s/values'.format(group).c_str(), 1,
                      c_ptrTo([valuesList.size:uint(64)]), getHDF5Type(uint(8)),
                             c_ptrTo(valuesList.toArray()));
@@ -2028,6 +2140,13 @@ module GenSymIO {
         H5LTmake_dataset_WAR(fileId, '/%s/segments'.format(group).c_str(), 1,
                      c_ptrTo([segmentsList.size:uint(64)]),getHDF5Type(int),
                            c_ptrTo(segmentsList.toArray()));
+
+        if logLevel == LogLevel.DEBUG {           
+            t1.stop();  
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                  "Time for writing Strings to hdf5 file on locale %i: %.17r".format(
+                       idx,t1.elapsed()));        
+        }
     }
     
     /*

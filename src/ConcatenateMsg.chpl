@@ -5,8 +5,9 @@ module ConcatenateMsg
     use Time only;
     use Math only;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
+    use Message;
     
     use MultiTypeSymbolTable;
     use MultiTypeSymEntry;
@@ -15,18 +16,14 @@ module ConcatenateMsg
     use PrivateDist;
     
     use AryUtil;
-
-    const cmLogger = new Logger();
-    if v {
-        cmLogger.level = LogLevel.DEBUG;
-    } else {
-        cmLogger.level = LogLevel.INFO;
-    }
+    
+    private config const logLevel = ServerConfig.logLevel;
+    const cmLogger = new Logger(logLevel);
 
     /* Concatenate a list of arrays together
        to form one array
      */
-    proc concatenateMsg(cmd: string, payload: string, st: borrowed SymTab) throws {
+    proc concatenateMsg(cmd: string, payload: string, st: borrowed SymTab) : MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string;
         var (nstr, objtype, mode, rest) = payload.splitMsgToTuple(4);
@@ -43,7 +40,7 @@ module ConcatenateMsg
             var errorMsg = incompatibleArgumentsError(pn, 
                              "Expected %i arrays but got %i".format(n, names.size)); 
             cmLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);                               
-            return errorMsg;
+            return new MsgTuple(errorMsg, MsgType.ERROR);
         }
         /* var arrays: [0..#n] borrowed GenSymEntry; */
         var size: int = 0;
@@ -83,7 +80,7 @@ module ConcatenateMsg
                 otherwise { 
                     var errorMsg = notImplementedError(pn, objtype); 
                     cmLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);  
-                    return errorMsg;                    
+                    return new MsgTuple(errorMsg,MsgType.ERROR);                  
                 }
             }
             var g: borrowed GenSymEntry;
@@ -105,7 +102,7 @@ module ConcatenateMsg
                              "Expected %s dtype but got %s dtype".format(dtype2str(dtype), 
                                     dtype2str(g.dtype)));
                     cmLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return errorMsg;
+                    return new MsgTuple(errorMsg,MsgType.ERROR);
                 }
             }
             // accumulate size from each array size
@@ -114,12 +111,24 @@ module ConcatenateMsg
               const dummyDomain = makeDistDom(g.size);
               coforall loc in Locales {
                 on loc {
-                  blocksizes[here.id] += dummyDomain.localSubdomain().size;
-                  if objtype == "str" {
+                  const mynumsegs = dummyDomain.localSubdomain().size;
+                  blocksizes[here.id] += mynumsegs;
+                  /* If the size of the array is less than the number of locales,
+                   * some locales will have no segments. For those locales, skip
+                   * the byte size computation because, not only is it unnecessary,
+                   * but it also causes an out of bounds array index due to the 
+                   * way the low and high of the empty domain are computed. 
+                   */
+                  if (objtype == "str") && (mynumsegs > 0) {
                     const e = toSymEntry(g, int);
                     const firstSeg = e.a[e.aD.localSubdomain().low];
                     var mybytes: int;
-                    if here.id == numLocales - 1 {
+                    /* If this locale contains the last segment, we cannot use the
+                     * next segment offset to calculate the number of bytes for this
+                     * locale, and we must instead use the total size of the values
+                     * array.
+                     */
+                    if (e.aD.localSubdomain().high >= e.aD.high) {
                       mybytes = valSize - firstSeg;
                     } else {
                       mybytes = e.a[e.aD.localSubdomain().high + 1] - firstSeg;
@@ -159,21 +168,27 @@ module ConcatenateMsg
                         on loc {
                           // Number of strings on this locale for this input array
                           const mynsegs = thisSegs.aD.localSubdomain().size;
-                          ref mysegs = thisSegs.a.localSlice[thisSegs.aD.localSubdomain()];
-                          // Segments must be rebased to start from blockValStart,
-                          // which is the current pointer to this locale's chunk of
-                          // the values array
-                          esegs.a[{blockstarts[here.id]..#mynsegs}] = mysegs - mysegs[thisSegs.aD.localSubdomain().low] + blockValStarts[here.id];
-                          blockstarts[here.id] += mynsegs;
-                          const firstSeg = thisSegs.a[thisSegs.aD.localSubdomain().low];
-                          var mybytes: int;
-                          if here.id == numLocales - 1 {
-                            mybytes = thisVals.size - firstSeg;
-                          } else {
-                            mybytes = thisSegs.a[thisSegs.aD.localSubdomain().high + 1] - firstSeg;
+                          // If no strings on this locale, skip to avoid out of bounds array
+                          // accesses
+                          if mynsegs > 0 {
+                            ref mysegs = thisSegs.a.localSlice[thisSegs.aD.localSubdomain()];
+                            // Segments must be rebased to start from blockValStart,
+                            // which is the current pointer to this locale's chunk of
+                            // the values array
+                            esegs.a[{blockstarts[here.id]..#mynsegs}] = mysegs - mysegs[thisSegs.aD.localSubdomain().low] + blockValStarts[here.id];
+                            blockstarts[here.id] += mynsegs;
+                            const firstSeg = thisSegs.a[thisSegs.aD.localSubdomain().low];
+                            var mybytes: int;
+                            // If locale contains last string, must use overall number of bytes
+                            // to compute size, instead of start of next string
+                            if (thisSegs.aD.localSubdomain().high >= thisSegs.aD.high) {
+                              mybytes = thisVals.size - firstSeg;
+                            } else {
+                              mybytes = thisSegs.a[thisSegs.aD.localSubdomain().high + 1] - firstSeg;
+                            }
+                            evals.a[{blockValStarts[here.id]..#mybytes}] = thisVals.a[firstSeg..#mybytes];
+                            blockValStarts[here.id] += mybytes;
                           }
-                          evals.a[{blockValStarts[here.id]..#mybytes}] = thisVals.a[firstSeg..#mybytes];
-                          blockValStarts[here.id] += mybytes;
                         }
                       }
                     } else {
@@ -190,7 +205,7 @@ module ConcatenateMsg
                 var repMsg = "created " + st.attrib(segName) + "+created " + st.attrib(valName);
                 cmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                   "created concatenated pdarray %s".format(st.attrib(valName)));
-                return repMsg;
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             when "pdarray" {
                 var rname = st.nextName();
@@ -287,17 +302,18 @@ module ConcatenateMsg
                     otherwise {
                         var errorMsg = notImplementedError("concatenate",dtype);
                         cmLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg); 
-                        return errorMsg;                         
+                        return new MsgTuple(errorMsg,MsgType.ERROR);                      
                     }
                 }
+
                 repMsg = "created " + st.attrib(rname);
                 cmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-                return repMsg;
+                return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             otherwise { 
                 var errorMsg = notImplementedError(pn, objtype); 
                 cmLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return errorMsg;
+                return new MsgTuple(errorMsg, MsgType.ERROR);
             }
         }
     }
