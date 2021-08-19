@@ -12,6 +12,8 @@ module ServerConfig
     use Reflection;
     use ServerErrors;
     use Logging;
+    
+    enum BroadcastType {STDOUT,FILE,HTTP,HTTPS};
 
     /*
     Trace logging flag
@@ -50,6 +52,10 @@ module ServerConfig
 
     proc get_hostname(): string {
       return here.hostname;
+    }
+    
+    proc get_ip((): string {
+      return here.ip;
     }
 
     /*

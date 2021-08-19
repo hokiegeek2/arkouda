@@ -11,15 +11,37 @@ module FileIO {
     proc appendFile(filePath : string, line : string) throws {
         var writer : channel;
         if exists(filePath) {
-            var aFile = try! open(filePath, iomode.rw);
-            writer = try! aFile.writer(start=aFile.size);
+            var aFile = open(filePath, iomode.rw);
+            writer = aFile.writer(start=aFile.size);
 
         } else {
-              var aFile = try! open(filePath, iomode.cwr);
-              writer = try! aFile.writer();
+              var aFile = open(filePath, iomode.cwr);
+              writer = aFile.writer();
         }
 
         writer.writeln(line);
+        writer.flush();
+        writer.close();
+    }
+
+    proc writeToFile(filePath : string, line : string) throws {
+        var writer : channel;
+        var aFile = open(filePath, iomode.cwr);
+        writer = aFile.writer();
+
+        writer.writeln(line);
+        writer.flush();
+        writer.close();
+    }
+    
+    proc writeLinesToFile(filePath : string, lines : string) throws {
+        var writer : channel;
+        var aFile = open(filePath, iomode.cwr);
+        writer = aFile.writer();
+
+        for line in lines {
+            writer.writeln(line);
+        }
         writer.flush();
         writer.close();
     }

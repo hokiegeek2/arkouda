@@ -20,6 +20,7 @@ use Reflection;
 use SymArrayDmap;
 use ServerErrorStrings;
 use Message;
+use ExternalSystem;
 
 private config const logLevel = ServerConfig.logLevel;
 const asLogger = new Logger(logLevel);
@@ -206,6 +207,14 @@ proc main() {
         socket.send(serialize(msg="shutdown server (%i req)".format(repCount), 
                          msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));
     }
+    
+    proc broadcastConfig() throws {
+        var channel = getExternalChannel(ChannelType.FILE,
+                         new FileChannelParams(ServerConfig.getConfig(), '/tmp/server.txt'));
+        channel.output(ServerConfig.getConfig());
+    }
+    
+    broadcastConfig();
     
     while !shutdownServer {
         // receive message on the zmq socket
