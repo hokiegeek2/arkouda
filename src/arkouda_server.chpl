@@ -207,14 +207,26 @@ proc main() {
         socket.send(serialize(msg="shutdown server (%i req)".format(repCount), 
                          msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));
     }
-    
-    proc broadcastConfig() throws {
-        var channel = getExternalChannel(ChannelType.FILE,
-                         new FileChannelParams(ServerConfig.getConfig(), '/tmp/server.txt'));
-        channel.write(ServerConfig.getConfig());
+
+    proc broadcastConnectHost() throws {        
+        var channel = getExternalChannel(new HttpChannelParams(
+                                                channelType=ChannelType.HTTP,
+                                                url=ServerConfig.getEnv('HTTP_URL'),
+                                                requestType=HttpRequestType.PATCH,
+                                                requestFormat=HttpRequestFormat.JSON,
+                                                verbose=true,
+                                                ssl=true,
+                                                sslKey=ServerConfig.getEnv('KEY_FILE'),
+                                                sslCert=ServerConfig.getEnv('CERT_FILE'),
+                                                sslCacert=ServerConfig.getEnv('CACERT_FILE'),
+                                                sslCapath='',
+                                                sslKeyPasswd=''));
+        var payload = ServerConfig.getEnv('HTTP_PAYLOAD').format(ServerConfig.getConnectHostIp());
+        asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),payload);
+        channel.write(payload);
     }
-    
-    broadcastConfig();
+
+    broadcastConnectHost();
     
     while !shutdownServer {
         // receive message on the zmq socket

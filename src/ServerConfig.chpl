@@ -11,6 +11,7 @@ module ServerConfig
     use ServerErrorStrings;
     use Reflection;
     use ServerErrors;
+    use FileIO;
     use Logging;
     
     enum BroadcastType {STDOUT,FILE,HTTP,HTTPS};
@@ -52,6 +53,33 @@ module ServerConfig
 
     proc get_hostname(): string {
       return here.hostname;
+    }
+
+    /*
+     * Retrieves th hostname of the locale 0 arkouda_server process, which is useful for 
+     * registering Arkouda with cloud environments such as Kubernetes.
+     */
+    proc getConnectHostname() throws {
+        var hostname: string;
+        on Locales[0] {
+            hostname = here.name.strip('-0');
+        }
+        return hostname;
+    }
+
+    /*
+     * Retrieves the host ip address of the locale 0 arkouda_server process, which is useful 
+     * for registering Arkouda with cloud environments such as Kubernetes.
+     */
+    proc getConnectHostIp() throws {
+        var hostip: string;
+        on Locales[0] {
+            var ipString = getLineFromFile('/etc/hosts',getConnectHostname());
+            var splits = ipString.split();
+            hostip = splits[0]:string;
+            hostip.split();
+        }
+        return hostip;
     }
 
     /*
@@ -97,6 +125,8 @@ module ServerConfig
             const authenticate: bool;
             const logLevel: LogLevel;
             const byteorder: string;
+            const connectHostname: string;
+            const connectHostIp: string;
         }
         var (Zmajor, Zminor, Zmicro) = ZMQ.version;
         var H5major: c_uint, H5minor: c_uint, H5micro: c_uint;
@@ -115,7 +145,9 @@ module ServerConfig
             LocaleConfigs = [loc in LocaleSpace] new owned LocaleConfig(loc),
             authenticate = authenticate,
             logLevel = logLevel,
-            byteorder = try! getByteorder()
+            byteorder = try! getByteorder(),
+            connectHostname = try! getConnectHostname(),
+            connectHostIp = try! getConnectHostIp()
         );
 
         return cfg;

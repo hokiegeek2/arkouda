@@ -47,8 +47,8 @@ module FileIO {
     }
 
     proc getLineFromFile(filePath : string, lineIndex : int=-1) : string throws {
-        var aFile = try! open(filePath, iomode.rw);
-        var lines = try! aFile.lines();
+        var aFile = open(filePath, iomode.rw);
+        var lines = aFile.lines();
         var line : string;
         var returnLine : string;
         var i = 1;
@@ -63,6 +63,24 @@ module FileIO {
         }
 
         return returnLine.strip();
+    }
+    
+    proc getLineFromFile(path: string, match: string) throws {
+        var aFile = open(path, iomode.r);
+        var reader: channel = aFile.reader();
+        var returnLine: string;
+
+        for line in reader.lines() {
+            if line.find(match) >= 0 {
+                returnLine = line;
+                break;
+            }
+        }
+
+        reader.flush();
+        reader.close();
+
+        return returnLine;
     }
 
     proc delimitedFileToMap(filePath : string, delimiter : string=',') : map {

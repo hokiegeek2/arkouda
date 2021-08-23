@@ -1,6 +1,7 @@
 module ExternalSystem {
     use Curl;
     use URL;
+    use Reflection;
     use FileIO;
     use Logging;
     use ServerConfig;
@@ -46,16 +47,18 @@ module ExternalSystem {
     enum HttpRequestFormat{TEXT,JSON,MULTIPART};    
 
     /*
-     * Base class defining the Arkouda Channel interface
+     * Base class defining the Arkouda Channel interface consisting of a
+     * write method that writes a payload to an external system.
      */
     class Channel {
-        proc write(content : string) throws {
+        proc write(payload : string) throws {
             throw new owned Error("All derived classes must implement write");
         }
     }
 
     /*
-     *
+     * The FileChannel class writes a payload out to a file, either by appending
+     * or overwriting an existing file or creating and writing to a new file.
      */
     class FileChannel : Channel {
         var path: string;
@@ -67,15 +70,19 @@ module ExternalSystem {
             this.append = params.append;
         }
         
-        override proc write(content : string) throws {
+        override proc write(payload: string) throws {
             if append {
-                appendFile(path, content);
+                appendFile(path, payload);
             } else {
-                writeToFile(path, content);
+                writeToFile(path, payload);
             }
         }
     }
     
+    /*
+     * The HttpChannel class writes a payload out to an HTTP/S endpoint
+     * in a configurable format via a configurable request type.
+     */
     class HttpChannel : Channel {
 
         var url: string;
@@ -122,7 +129,11 @@ module ExternalSystem {
             select(format) {     
                 when HttpRequestFormat.JSON {
                     args.append("Accept: application/json");
-                    args.append("Content-Type: application/json");                    
+                    if this.requestType == HttpRequestType.PATCH {
+                        args.append('Content-Type: application/json-patch+json');
+                    } else {
+                        args.append("Content-Type: application/json");    
+                    }               
                 }     
                 when HttpRequestFormat.TEXT {
                     args.append("Accept: text/plain");
@@ -137,7 +148,12 @@ module ExternalSystem {
             return args;
         }
         
-        override proc write(content : string) throws {
+        /*
+         * Writes the payload out to an HTTP/S endpoint in a format specified
+         * by the requestFormat instance attribute via the request type 
+         * specified in the requestType instance attribute.
+         */
+        override proc write(payload : string) throws {
             var curl = Curl.easyInit();
 
             Curl.easySetopt(curl, CURLOPT_URL, this.url);
@@ -152,15 +168,31 @@ module ExternalSystem {
             
             var args = generateHeader(curl, this.requestFormat);
 
-            Curl.easySetopt(curl, CURLOPT_POSTFIELDS, content);
-            Curl.easySetopt(curl, CURLOPT_CUSTOMREQUEST, 'POST');
+            Curl.easySetopt(curl, CURLOPT_POSTFIELDS, payload);
+            Curl.easySetopt(curl, CURLOPT_CUSTOMREQUEST, this.requestType:string);
+
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "Configured HttpChannel for type %s format %s".format(
+                      this.requestType, this.requestFormat));
+
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "Executing Http request with payload %s".format(payload));
 
             var ret = Curl.easyPerform(curl);
-
-            writeln("perform returned ", ret);
+            
+            if ret == 0 {
+                esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                    "Successfully executed Http request");
+            } else {
+                esLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
+                    "Error in executing Http request, return code: %i".format(ret));
+            }
 
             args.free();
-            Curl.easyCleanup(curl);           
+            Curl.easyCleanup(curl);     
+            
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                       "Closed HttpChannel");      
         }
     }    
     
