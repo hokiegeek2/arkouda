@@ -211,7 +211,7 @@ proc main() {
     proc broadcastConfig() throws {
         var channel = getExternalChannel(ChannelType.FILE,
                          new FileChannelParams(ServerConfig.getConfig(), '/tmp/server.txt'));
-        channel.output(ServerConfig.getConfig());
+        channel.write(ServerConfig.getConfig());
     }
     
     broadcastConfig();

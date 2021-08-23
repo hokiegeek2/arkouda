@@ -53,10 +53,6 @@ module ServerConfig
     proc get_hostname(): string {
       return here.hostname;
     }
-    
-    proc get_ip((): string {
-      return here.ip;
-    }
 
     /*
     Indicates whether token authentication is being used for Akrouda server requests

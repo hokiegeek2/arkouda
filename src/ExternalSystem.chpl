@@ -88,6 +88,8 @@ module ExternalSystem {
             when ChannelType.FILE {
                 var fcParams = cParams: FileChannelParams;
                 return new FileChannel(fcParams.filePath);
+            } when ChannelType.HTTP {
+            
             }
             otherwise {
                 throw new owned Error("Invalid channelType");
