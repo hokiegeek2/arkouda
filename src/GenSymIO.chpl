@@ -42,12 +42,20 @@ module GenSymIO {
         var msg:string = "";
         var rname:string = "";
 
-        // TODO: Surround everything with a try/catch to eliminate try! killing the server
         var (dtypeBytes, sizeBytes, data) = payload.splitMsgToTuple(b" ", 3);
-        var dtype = str2dtype(try! dtypeBytes.decode());
-        var size = try! sizeBytes:int;
-        var tmpf:file; defer { ensureClose(tmpf); }
+        var dtype = DType.UNDEF;
+        var size:int;
+        try {
+            dtype = str2dtype(dtypeBytes.decode());
+            size = sizeBytes:int;
+        } catch {
+            var errorMsg = "Error parsing/decoding either dtypeBytes or size";
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
+        }
+
         overMemLimit(2*8*size);
+        var tmpf:file; defer { ensureClose(tmpf); }
 
         gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                           "dtype: %t size: %i".format(dtype,size));
@@ -93,14 +101,16 @@ module GenSymIO {
     }
 
     /*
-    * Read the data payload from the memory buffer, encapsulate
-    * within a SymEntry, and write to the SymTab cache
-    * Here tmpf is a memory buffer which contains the data we want to read.
-    */
+     * Read the data payload from the memory buffer, encapsulate
+     * within a SymEntry, and write to the SymTab cache
+     * Here tmpf is a memory buffer which contains the data we want to read.
+     */
     private proc makeEntry(size:int, type t, st: borrowed SymTab, tmpf:file): string throws {
         var entry = new shared SymEntry(size, t);
         var tmpr = tmpf.reader(kind=iobig, start=0);
-        tmpr.read(entry.a);
+        var localA: [entry.aD.low..entry.aD.high] t;
+        tmpr.read(localA);
+        entry.a = localA;
         tmpr.close(); 
         var name = st.nextName();
         st.addEntry(name, entry);
@@ -108,8 +118,8 @@ module GenSymIO {
     }
 
     /*
-    * Ensure the file is closed, disregard errors
-    */
+     * Ensure the file is closed, disregard errors
+     */
     private proc ensureClose(tmpf:file): bool {
         var success = true;
         try {
@@ -130,21 +140,26 @@ module GenSymIO {
         var entry = st.lookup(payload);
         overMemLimit(2*entry.size*entry.itemsize);
         var tmpf: file; defer { ensureClose(tmpf); }
+
+        proc localizeArr(A: [?D] ?eltType) {
+            const localA:[D.low..D.high] eltType = A;
+            return localA;
+        }
         try {
             tmpf = openmem();
             var tmpw = tmpf.writer(kind=iobig);
             if entry.dtype == DType.Int64 {
-                tmpw.write(toSymEntry(entry, int).a);
+                tmpw.write(localizeArr(toSymEntry(entry, int).a));
             } else if entry.dtype == DType.Float64 {
-                tmpw.write(toSymEntry(entry, real).a);
+                tmpw.write(localizeArr(toSymEntry(entry, real).a));
             } else if entry.dtype == DType.Bool {
-                tmpw.write(toSymEntry(entry, bool).a);
+                tmpw.write(localizeArr(toSymEntry(entry, bool).a));
             } else if entry.dtype == DType.UInt8 {
-                tmpw.write(toSymEntry(entry, uint(8)).a);
+                tmpw.write(localizeArr(toSymEntry(entry, uint(8)).a));
             } else {
                 var errorMsg = "Error: Unhandled dtype %s".format(entry.dtype);                
                 gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-                return try! b"Error: Unhandled dtype %s".format(entry.dtype);
+                return errorMsg.encode(); // return as bytes
             }
             tmpw.close();
         } catch {
@@ -199,6 +214,9 @@ module GenSymIO {
         var filename: string;
         try {
             filename = jsonToPdArray(jsonfile, 1)[0];
+            if filename.isEmpty() {
+                throw new Error("filename was empty");  // will be caught by catch block
+            }
         } catch {
             var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(
                                      1, jsonfile);                                     
@@ -1748,7 +1766,10 @@ module GenSymIO {
               defer { // Close file upon exiting scope
                   C_HDF5.H5Fclose(file_id);
               }
-              prepareGroup(file_id, group);
+
+              if (!group.isEmpty()) {
+                  prepareGroup(file_id, group);
+              }
 
               if file_id < 0 { // Negative file_id means error
                   throw getErrorWithContext(
@@ -1777,89 +1798,7 @@ module GenSymIO {
      * warning to the user that 1..n files were overwritten.
      */
     proc processFilenames(filenames: [] string, matchingFilenames: [] string, mode: int, A) throws {
-      // if appending, make sure number of files hasn't changed and all are present
-      var warnFlag: bool;
-
-      if (mode == APPEND) {
-          var allexist = true;
-          var anyexist = false;
-          
-          for f in filenames {
-              var result =  try! exists(f);
-              allexist &= result;
-              if result {
-                  anyexist = true;
-              }
-          }
-
-          /*
-           * Check to see if any exist. If not, this means the user is attempting to append
-           * to 1..n files that don't exist. In this situation, the user is alerted that
-           * the dataset must be saved in TRUNCATE mode.
-           */
-          if !anyexist {
-              throw getErrorWithContext(
-                 msg="Cannot append a non-existent file, please save without mode='append'",
-                 lineNumber=getLineNumber(), 
-                 routineName=getRoutineName(), 
-                 moduleName=getModuleName(), 
-                 errorClass='WriteModeError'
-              );
-          }
-
-          /*
-           * Check if there is a mismatch between the number of files to be appended to and
-           * the number of files actually on the file system. This typically happens when 
-           * a file append is attempted where the number of locales between the file 
-           * creates and updates changes.
-           */         
-          if !allexist || (matchingFilenames.size != filenames.size) {
-              throw getErrorWithContext(
-                 msg="appending to existing files must be done with the same number " +
-                      "of locales. Try saving with a different directory or filename prefix?",
-                 lineNumber=getLineNumber(), 
-                 routineName=getRoutineName(), 
-                 moduleName=getModuleName(), 
-                 errorClass='MismatchedAppendError'
-              );
-          }
-      } else if mode == TRUNCATE { // if truncating, create new file per locale
-          if matchingFilenames.size > 0 {
-              warnFlag = true;
-          } else {
-              warnFlag = false;
-          }
-
-          coforall loc in A.targetLocales() do on loc {
-              var file_id: C_HDF5.hid_t;
-
-              gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                                              "Creating or truncating file");
-
-              file_id = C_HDF5.H5Fcreate(filenames[loc.id].localize().c_str(), C_HDF5.H5F_ACC_TRUNC,
-                                                      C_HDF5.H5P_DEFAULT, C_HDF5.H5P_DEFAULT);
-              defer { // close file upon exiting scope
-                  C_HDF5.H5Fclose(file_id);
-              }
-              if file_id < 0 { // Negative file_id means error
-                  throw getErrorWithContext(
-                                     msg="The file %s does not exist".format(filenames[loc.id]),
-                                     lineNumber=getLineNumber(), 
-                                     routineName=getRoutineName(), 
-                                     moduleName=getModuleName(), 
-                                     errorClass='FileNotFoundError');
-              }
-           }
-        } else {
-            throw getErrorWithContext(
-                                     msg="The mode %t is invalid".format(mode),
-                                     lineNumber=getLineNumber(), 
-                                     routineName=getRoutineName(), 
-                                     moduleName=getModuleName(), 
-                                     errorClass='IllegalArgumentError');            
-        }    
-
-        return warnFlag;
+        return processFilenames(filenames, matchingFilenames, mode, A, "");
     }
     
     /*
