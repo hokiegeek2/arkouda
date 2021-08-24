@@ -208,7 +208,7 @@ proc main() {
                          msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));
     }
 
-    proc broadcastConnectHost() throws {        
+    proc registerWithExternalSystem() throws {        
         var channel = getExternalChannel(new HttpChannelParams(
                                                 channelType=ChannelType.HTTP,
                                                 url=ServerConfig.getEnv('HTTP_URL'),
@@ -220,13 +220,13 @@ proc main() {
                                                 sslCert=ServerConfig.getEnv('CERT_FILE'),
                                                 sslCacert=ServerConfig.getEnv('CACERT_FILE'),
                                                 sslCapath='',
-                                                sslKeyPasswd=''));
+                                                sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
         var payload = ServerConfig.getEnv('HTTP_PAYLOAD').format(ServerConfig.getConnectHostIp());
         asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),payload);
         channel.write(payload);
     }
-
-    broadcastConnectHost();
+    
+    registerWithExternalSystem();
     
     while !shutdownServer {
         // receive message on the zmq socket

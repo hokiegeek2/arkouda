@@ -29,6 +29,11 @@ module ExternalSystem {
     extern const CURLOPT_CUSTOMREQUEST:CURLoption;  
 
     /*
+     * Enum describing the external system to register Arkouda with
+     */
+    enum ExternalSystemType{KUBERNETES,REDIS,CONSUL};
+
+    /*
      * Enum describing the type of channel used to write to an
      * external system.
      */
