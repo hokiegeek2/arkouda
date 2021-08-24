@@ -82,9 +82,9 @@ server:
   resources:
     limits:
       cpu: 4000m
-      memory: 4096Mi
+      memory: 8192Mi
     requests:
       cpu: 4000m
-      memory: 4096Mi
-  threadsPerLocale: 4
+      memory: 8192Mi
+  threadsPerLocale: 16
   

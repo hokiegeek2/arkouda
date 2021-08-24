@@ -30,6 +30,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     procps \
     dnsutils \
     vim \
+    hdf5-tools \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m ubuntu && echo "ubuntu:ubuntu" | chpasswd && adduser ubuntu sudo
@@ -48,10 +49,7 @@ ENV CHPL_LAUNCHER=amudprun
 RUN chmod 777 /opt
 
 USER ubuntu
-
-ADD id_rsa /home/ubuntu/.ssh/
-ADD id_rsa.pub /home/ubuntu/.ssh/
-RUN sudo chown -R ubuntu:ubuntu ~/.ssh
+RUN mkdir /home/ubuntu/.ssh
 
 RUN mkdir -p /opt/chapel \
     && wget -q -O - https://github.com/chapel-lang/chapel/archive/$CHPL_VERSION.tar.gz | tar -xzC /opt/chapel --transform 's/chapel-//' \

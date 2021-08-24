@@ -5,7 +5,7 @@ metadata:
 spec:
   type: LoadBalancer
   ports:
-    - port: 5566
+    - port: 5555
       targetPort: 5555
       protocol: TCP
   selector:
