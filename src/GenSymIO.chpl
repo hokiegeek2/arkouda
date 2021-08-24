@@ -15,7 +15,7 @@ module GenSymIO {
     use Map;
     use PrivateDist;
     use Reflection;
-    use Errors;
+    use ServerErrors;
     use Logging;
     use Message;
     use ServerConfig;
@@ -36,17 +36,17 @@ module GenSymIO {
      * Creates a pdarray server-side and returns the SymTab name used to
      * retrieve the pdarray from the SymTab.
      */
-    proc arrayMsg(cmd: string, payload: bytes, st: borrowed SymTab): MsgTuple throws {
+    proc arrayMsg(cmd: string, args: string, ref data: bytes, st: borrowed SymTab): MsgTuple throws {
         // Set up our return items
         var msgType = MsgType.NORMAL;
         var msg:string = "";
         var rname:string = "";
 
-        var (dtypeBytes, sizeBytes, data) = payload.splitMsgToTuple(b" ", 3);
+        var (dtypeBytes, sizeBytes) = args.splitMsgToTuple(" ", 2);
         var dtype = DType.UNDEF;
         var size:int;
         try {
-            dtype = str2dtype(dtypeBytes.decode());
+            dtype = str2dtype(dtypeBytes);
             size = sizeBytes:int;
         } catch {
             var errorMsg = "Error parsing/decoding either dtypeBytes or size";
@@ -54,40 +54,30 @@ module GenSymIO {
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
-        overMemLimit(2*8*size);
-        var tmpf:file; defer { ensureClose(tmpf); }
+        overMemLimit(2*size);
 
         gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                           "dtype: %t size: %i".format(dtype,size));
 
-        // Write the data payload composing the pdarray to a memory buffer
-        try {
-            tmpf = openmem();
-            var tmpw = tmpf.writer(kind=iobig);
-            tmpw.write(data);
-            tmpw.close();
-        } catch {
-            var errorMsg = "Could not write to memory buffer";
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return new MsgTuple(errorMsg, MsgType.ERROR);
+        proc bytesToSymEntry(size:int, type t, st: borrowed SymTab, ref data:bytes): string throws {
+            var entry = new shared SymEntry(size, t);
+            var localA = makeArrayFromPtr(data.c_str():c_void_ptr:c_ptr(t), size:uint);
+            entry.a = localA;
+            var name = st.nextName();
+            st.addEntry(name, entry);
+            return name;
         }
 
-        try {  // Read data in SymEntry based on type
-            if dtype == DType.Int64 {
-                rname = makeEntry(size, int, st, tmpf);
-            } else if dtype == DType.Float64 {
-                rname = makeEntry(size, real, st, tmpf);
-            } else if dtype == DType.Bool {
-                rname = makeEntry(size, bool, st, tmpf);
-            } else if dtype == DType.UInt8 {
-                rname = makeEntry(size, uint(8), st, tmpf);
-            } else {
-                msg = "Unhandled data type %s".format(dtypeBytes);
-                msgType = MsgType.ERROR;
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),msg);
-            }
-        } catch {
-            msg = "Could not read from memory buffer into SymEntry";
+        if dtype == DType.Int64 {
+            rname = bytesToSymEntry(size, int, st, data);
+        } else if dtype == DType.Float64 {
+            rname = bytesToSymEntry(size, real, st, data);
+        } else if dtype == DType.Bool {
+            rname = bytesToSymEntry(size, bool, st, data);
+        } else if dtype == DType.UInt8 {
+            rname = bytesToSymEntry(size, uint(8), st, data);
+        } else {
+            msg = "Unhandled data type %s".format(dtypeBytes);
             msgType = MsgType.ERROR;
             gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),msg);
         }
@@ -100,22 +90,6 @@ module GenSymIO {
         return new MsgTuple(msg, msgType);
     }
 
-    /*
-     * Read the data payload from the memory buffer, encapsulate
-     * within a SymEntry, and write to the SymTab cache
-     * Here tmpf is a memory buffer which contains the data we want to read.
-     */
-    private proc makeEntry(size:int, type t, st: borrowed SymTab, tmpf:file): string throws {
-        var entry = new shared SymEntry(size, t);
-        var tmpr = tmpf.reader(kind=iobig, start=0);
-        var localA: [entry.aD.low..entry.aD.high] t;
-        tmpr.read(localA);
-        entry.a = localA;
-        tmpr.close(); 
-        var name = st.nextName();
-        st.addEntry(name, entry);
-        return name;
-    }
 
     /*
      * Ensure the file is closed, disregard errors
@@ -139,48 +113,29 @@ module GenSymIO {
         var arrayBytes: bytes;
         var entry = st.lookup(payload);
         overMemLimit(2*entry.size*entry.itemsize);
-        var tmpf: file; defer { ensureClose(tmpf); }
 
-        proc localizeArr(A: [?D] ?eltType) {
-            const localA:[D.low..D.high] eltType = A;
-            return localA;
-        }
-        try {
-            tmpf = openmem();
-            var tmpw = tmpf.writer(kind=iobig);
-            if entry.dtype == DType.Int64 {
-                tmpw.write(localizeArr(toSymEntry(entry, int).a));
-            } else if entry.dtype == DType.Float64 {
-                tmpw.write(localizeArr(toSymEntry(entry, real).a));
-            } else if entry.dtype == DType.Bool {
-                tmpw.write(localizeArr(toSymEntry(entry, bool).a));
-            } else if entry.dtype == DType.UInt8 {
-                tmpw.write(localizeArr(toSymEntry(entry, uint(8)).a));
-            } else {
-                var errorMsg = "Error: Unhandled dtype %s".format(entry.dtype);                
-                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
-                return errorMsg.encode(); // return as bytes
-            }
-            tmpw.close();
-        } catch {
-            return b"Error: Unable to write SymEntry to memory buffer";
+        proc distArrToBytes(A: [?D] ?eltType) {
+            var ptr = c_malloc(eltType, D.size);
+            var localA = makeArrayFromPtr(ptr, D.size:uint);
+            localA = A;
+            const size = D.size*c_sizeof(eltType):int;
+            return createBytesWithOwnedBuffer(ptr:c_ptr(uint(8)), size, size);
         }
 
-        try {
-            var tmpr = tmpf.reader(kind=iobig, start=0);
-            tmpr.readbytes(arrayBytes);
-            tmpr.close();
-        } catch {
-            return b"Error: Unable to copy array from memory buffer to string";
+        if entry.dtype == DType.Int64 {
+            arrayBytes = distArrToBytes(toSymEntry(entry, int).a);
+        } else if entry.dtype == DType.Float64 {
+            arrayBytes = distArrToBytes(toSymEntry(entry, real).a);
+        } else if entry.dtype == DType.Bool {
+            arrayBytes = distArrToBytes(toSymEntry(entry, bool).a);
+        } else if entry.dtype == DType.UInt8 {
+            arrayBytes = distArrToBytes(toSymEntry(entry, uint(8)).a);
+        } else {
+            var errorMsg = "Error: Unhandled dtype %s".format(entry.dtype);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return errorMsg.encode(); // return as bytes
         }
-        //var repMsg = try! "Array: %i".format(arraystr.length) + arraystr;
-        /*
-         Engin: fwiw, if you want to achieve the above, you can:
 
-         return b"Array: %i %|t".format(arrayBytes.length, arrayBytes);
-
-         But I think the main problem is how to separate the length from the data
-         */
        return arrayBytes;
     }
 
@@ -200,6 +155,14 @@ module GenSymIO {
     }
 
     /*
+     * Indicates whether the filename represents a glob expression as opposed to
+     * an specific filename
+     */
+    proc isGlobPattern(filename: string): bool throws {
+        return filename.endsWith("*");
+    }
+
+    /*
      * Spawns a separate Chapel process that executes and returns the 
      * result of the h5ls command
      */
@@ -211,11 +174,12 @@ module GenSymIO {
         var repMsg: string;
         var (jsonfile) = payload.splitMsgToTuple(1);
 
+        // Retrieve filename from payload
         var filename: string;
         try {
             filename = jsonToPdArray(jsonfile, 1)[0];
             if filename.isEmpty() {
-                throw new Error("filename was empty");  // will be caught by catch block
+                throw new IllegalArgumentError("filename was empty");  // will be caught by catch block
             }
         } catch {
             var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(
@@ -224,26 +188,37 @@ module GenSymIO {
             return new MsgTuple(errorMsg, MsgType.ERROR);                                    
         }
 
-        // Attempt to interpret filename as a glob expression and ls the first result
-        var tmp = glob(filename);
+        // If the filename represents a glob pattern, retrieve the locale 0 filename
+        if isGlobPattern(filename) {
+            // Attempt to interpret filename as a glob expression and ls the first result
+            var tmp = glob(filename);
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "glob-expanded filename: %s to size: %i files".format(filename, tmp.size));
 
-        gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                          "glob expanded filename: %s to size: %i files".format(filename, tmp.size));
-
-        if tmp.size <= 0 {
-            var errorMsg = "No files matching %s".format(filename);
+            if tmp.size <= 0 {
+                var errorMsg = "Cannot retrieve filename from glob expression %s, check file name or format".format(filename);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
             
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return new MsgTuple(errorMsg, MsgType.ERROR);
+            // Set filename to globbed filename corresponding to locale 0
+            filename = tmp[tmp.domain.first];
         }
-        filename = tmp[tmp.domain.first];
+        
+        // Check to see if the file exists. If not, return an error message
+        if !exists(filename) {
+            var errorMsg = "File %s does not exist in a location accessible to Arkouda".format(filename);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg,MsgType.ERROR);
+        } 
+        
         var exitCode: int;
-        var errMsg: string;
 
         try {
             if exists(tmpfile) {
                 remove(tmpfile);
             }
+
             var cmd = try! "h5ls \"%s\" > \"%s\"".format(filename, tmpfile);
             var sub = spawnshell(cmd);
 
@@ -260,13 +235,13 @@ module GenSymIO {
             r.readstring(repMsg);
             r.close();
         } catch e : Error {
-            var errorMsg = "failed to spawn process and read output %t".format(e);
+            var errorMsg = "failed to spawn process and execute ls: %t".format(e.message());
             gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
         if exitCode != 0 {
-            var errorMsg = "error opening %s, check file permissions".format(filename);
+            var errorMsg = "could not execute ls on %s, check file permissions or format".format(filename);
             gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg, MsgType.ERROR);
         } else {
@@ -274,6 +249,7 @@ module GenSymIO {
         }
     }
 
+    // DEPRECATED - All client paths redirect to the readAllHdfMsg version
     /* Read dataset from HDF5 files into arkouda symbol table. */
     proc readhdfMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string;
@@ -305,7 +281,7 @@ module GenSymIO {
             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                "glob expanded %s to %i files".format(filelist[0], tmp.size));
             if tmp.size == 0 {
-                var errorMsg = "Error: no files matching %s".format(filelist[0]);
+                var errorMsg = "File %s does not exist in a location accessible to Arkouda".format(filelist[0]);
                 gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
                 return new MsgTuple(errorMsg, MsgType.ERROR);  
             }
@@ -453,6 +429,25 @@ module GenSymIO {
         }
     }
 
+    /*
+     * Utility proc to test casting a string to a specified type
+     * :arg c: String to cast
+     * :type c: string
+     * 
+     * :arg toType: the type to cast into
+     * :type toType: type
+     *
+     * :returns: bool true if the cast was successful, false otherwise
+     */
+    proc checkCast(c:string, type toType): bool {
+        try {
+            var x:toType = c:toType;
+            return true;
+        } catch {
+            return false;
+        }
+    }
+
     /* 
      * Reads all datasets from 1..n HDF5 files into an Arkouda symbol table. 
      */
@@ -460,14 +455,32 @@ module GenSymIO {
         // reqMsg = "readAllHdf <ndsets> <nfiles> [<json_dsetname>] | [<json_filenames>]"
         var repMsg: string;
         // May need a more robust delimiter then " | "
-        var (strictFlag, ndsetsStr, nfilesStr, arraysStr) = payload.splitMsgToTuple(4);
+        var (strictFlag, ndsetsStr, nfilesStr, allowErrorsFlag, arraysStr) = payload.splitMsgToTuple(5);
         var strictTypes: bool = true;
-        if (strictFlag.toLower() == "false") {
+        if (strictFlag.toLower().strip() == "false") {
           strictTypes = false;
         }
+
+        var allowErrors: bool = "true" == allowErrorsFlag.toLower(); // default is false
+        if allowErrors {
+            gsLogger.warn(getModuleName(), getRoutineName(), getLineNumber(), "Allowing file read errors");            
+        }
+
+        // Test arg casting so we can send error message instead of failing
+        if (!checkCast(ndsetsStr, int)) {
+            var errMsg = "Number of datasets:`%s` could not be cast to an integer".format(ndsetsStr);
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errMsg);
+            return new MsgTuple(errMsg, MsgType.ERROR);
+        }
+        if (!checkCast(nfilesStr, int)) {
+            var errMsg = "Number of files:`%s` could not be cast to an integer".format(nfilesStr);
+            gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errMsg);
+            return new MsgTuple(errMsg, MsgType.ERROR);
+        }
+
         var (jsondsets, jsonfiles) = arraysStr.splitMsgToTuple(" | ",2);
-        var ndsets = try! ndsetsStr:int;
-        var nfiles = try! nfilesStr:int;
+        var ndsets = ndsetsStr:int; // Error checked above
+        var nfiles = nfilesStr:int; // Error checked above
         var dsetlist: [0..#ndsets] string;
         var filelist: [0..#nfiles] string;
 
@@ -476,7 +489,7 @@ module GenSymIO {
         } catch {
             var errorMsg = "Could not decode json dataset names via tempfile (%i files: %s)".format(
                                                ndsets, jsondsets);
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
@@ -484,7 +497,7 @@ module GenSymIO {
             filelist = jsonToPdArray(jsonfiles, nfiles);
         } catch {
             var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
@@ -495,11 +508,16 @@ module GenSymIO {
         dsetnames = dsetlist;
 
         if filelist.size == 1 {
+            if filelist[0].strip().size == 0 {
+                var errorMsg = "filelist was empty.";
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
             var tmp = glob(filelist[0]);
             gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                   "glob expanded %s to %i files".format(filelist[0], tmp.size));
             if tmp.size == 0 {
-                var errorMsg = "No files matching %s".format(filelist[0]);
+                var errorMsg = "The wildcarded filename %s either corresponds to files inaccessible to Arkouda or files of an invalid format".format(filelist[0]);
                 gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
                 return new MsgTuple(errorMsg, MsgType.ERROR);
             }
@@ -514,35 +532,53 @@ module GenSymIO {
         var dclasses: [filedom] C_HDF5.hid_t;
         var bytesizes: [filedom] int;
         var signFlags: [filedom] bool;
-        var rnames: string;
+        var rnames: list((string, string, string)); // tuple (dsetName, item type, id)
+        var fileErrors: list(string);
+        var fileErrorCount:int = 0;
+        var fileErrorMsg:string = "";
         for dsetName in dsetnames do {
             for (i, fname) in zip(filedom, filenames) {
+                var hadError = false;
                 try {
                     (segArrayFlags[i], dclasses[i], bytesizes[i], signFlags[i]) = get_dtype(fname, dsetName);
                 } catch e: FileNotFoundError {
-                    var errorMsg = "File %s not found".format(fname);
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                    fileErrorMsg = "File %s not found".format(fname);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: PermissionError {
-                    var errorMsg = "Permission error %s opening %s".format(e.message(),fname);
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                    fileErrorMsg = "Permission error %s opening %s".format(e.message(),fname);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: DatasetNotFoundError {
-                    var errorMsg = "Dataset %s not found in file %s".format(dsetName,fname);
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                    fileErrorMsg = "Dataset %s not found in file %s".format(dsetName,fname);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: NotHDF5FileError {
-                    var errorMsg = "The file %s is not an HDF5 file: %s".format(fname,e.message());
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                    fileErrorMsg = "The file %s is not an HDF5 file: %s".format(fname,e.message());
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e: SegArrayError {
-                    var errorMsg = "SegmentedArray error: %s".format(e.message());
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                    fileErrorMsg = "SegmentedArray error: %s".format(e.message());
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
                 } catch e : Error {
-                    var errorMsg = "Other error in accessing file %s: %s".format(fname,e.message());
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                    fileErrorMsg = "Other error in accessing file %s: %s".format(fname,e.message());
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                    hadError = true;
+                    if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                }
+
+                if hadError {
+                    // Keep running total, but we'll only report back the first 10
+                    if fileErrorCount < 10 {
+                        fileErrors.append(fileErrorMsg.replace("\n", " ").replace("\r", " ").replace("\t", " ").strip());
+                    }
+                    fileErrorCount += 1;
                 }
             }
             const isSegArray = segArrayFlags[filedom.first];
@@ -604,7 +640,7 @@ module GenSymIO {
                     st.addEntry(segName, entrySeg);
                     var valName = st.nextName();
                     st.addEntry(valName, entryVal);
-                    rnames = rnames + "created " + st.attrib(segName) + " +created " + st.attrib(valName) + " , ";
+                    rnames.append((dsetName, "seg_string", "%s+%s".format(segName, valName)));
                 }
                 when (false, C_HDF5.H5T_INTEGER) {
                     var entryInt = new shared SymEntry(len, int);
@@ -629,7 +665,7 @@ module GenSymIO {
                         // Not a boolean dataset, so add original SymEntry to SymTable
                         st.addEntry(rname, entryInt);
                     }
-                    rnames = rnames + "created " + st.attrib(rname) + " , ";
+                    rnames.append((dsetName, "pdarray", rname));
                 }
                 when (false, C_HDF5.H5T_FLOAT) {
                     var entryReal = new shared SymEntry(len, real);
@@ -638,7 +674,7 @@ module GenSymIO {
                     read_files_into_distributed_array(entryReal.a, subdoms, filenames, dsetName);
                     var rname = st.nextName();
                     st.addEntry(rname, entryReal);
-                    rnames = rnames + "created " + st.attrib(rname) + " , ";
+                    rnames.append((dsetName, "pdarray", rname));
                 }
                 otherwise {
                     var errorMsg = "detected unhandled datatype: segmented? %t, class %i, size %i, " +
@@ -649,9 +685,85 @@ module GenSymIO {
             }
         }
 
-        repMsg = rnames.strip(" , ", leading = false, trailing = true);
+        if allowErrors && fileErrorCount > 0 {
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                "allowErrors:true, fileErrorCount:%t".format(fileErrorCount));
+        }
+        repMsg = _buildReadAllHdfMsgJson(rnames, allowErrors, fileErrorCount, fileErrors, st);
         gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
         return new MsgTuple(repMsg,MsgType.NORMAL);
+    }
+
+    /**
+     * Construct json object to be returned from readAllHdfMsg
+     * :arg rnames: List of (DataSetName, arkouda_type, id of SymEntry) for items read from HDF5 files
+     * :type rnames: List of 3*string tuples
+     *
+     * :arg allowErrors: True if we allowed errors when reading files from HDF5
+     * :type allowErros: bool
+     *
+     * :arg fileErrorCount: Number of files which threw errors when being read
+     * :type fileErrorCount: int
+     *
+     * :arg fileErrors: List of the error messages when trying to read HDF5 files
+     * :type fileErrors: list(string)
+     *
+     * :arg st: SymTab used to look up attributes of pdarray/seg_string ids
+     * :type borrowed SymTab:
+     *
+     * :returns: response message string formatted in json
+     *
+     * Example
+     *   {
+     *       "items": [
+     *           {
+     *               "dataset_name": "int_tens_pdarray",
+     *               "arkouda_type": "pdarray",
+     *               "created": "created id_9 int64 1000 1 (1000) 8"
+     *           }
+     *       ],
+     *       "allow_errors": "true",
+     *       "file_error_count": "1",
+     *       "file_errors": [
+     *           "Permission error Operation not permitted (error msg) opening path/to/file"
+     *       ]
+     *   }
+     *  Uses keys:  dataset_name, arkouda_type->[pdarray|seg_string], created->(legacy creation statement)
+     */
+    proc _buildReadAllHdfMsgJson(rnames:list(3*string), allowErrors:bool, fileErrorCount:int, fileErrors:list(string), st: borrowed SymTab): string throws {
+        // TODO: Right now we're building the legacy "created ..." string so we'll stuff them in a single array of items
+        // in the future we should begin to build out actual json objects of each pdarray as k:v pairs
+        var items: list(string);
+        for rname in rnames {
+            var (dsetName, akType, id) = rname;
+            var item = "{" + Q + "dataset_name"+ QCQ + dsetName + Q +
+                       "," + Q + "arkouda_type" + QCQ + akType + Q;
+            select (akType) {
+                when ("pdarray") {
+                    item +="," + Q + "created" + QCQ + "created " + st.attrib(id) + Q + "}";
+                }
+                when ("seg_string") {
+                    var (segName, valName) = id.splitMsgToTuple("+", 2);
+                    item += "," + Q + "created" + QCQ + "created " + st.attrib(segName) + "+created " + st.attrib(valName) + Q + "}";
+                }
+                otherwise {
+                    item += "}";
+                }
+            }
+            items.append(item);
+        }
+
+        // Now assemble the reply message
+        var reply = "{" + Q + "items" + Q + ":[" + ",".join(items.these()) + "]";
+        if allowErrors && !fileErrors.isEmpty() { // If configured, build the allowErrors portion
+            reply += ",";
+            reply += Q + "allow_errors" + QCQ + "true" + Q + ",";
+            reply += Q + "file_error_count" + QCQ + fileErrorCount:string + Q + ",";
+            reply += Q + "file_errors" + Q + ": [" + Q;
+            reply += (Q +"," + Q).join(fileErrors.these()) + Q + "]";
+        }
+        reply += "}";
+        return reply;
     }
 
     proc fixupSegBoundaries(a: [?D] int, segSubdoms: [?fD] domain(1), valSubdoms: [fD] domain(1)) {
@@ -792,7 +904,7 @@ module GenSymIO {
         }
 
         var errorMsg="%s cannot be opened to check if hdf5, \
-                           check file permissions".format(filename);
+                           check file permissions or format".format(filename);
         throw getErrorWithContext(
                        msg=errorMsg,
                        lineNumber=getLineNumber(),
@@ -1792,7 +1904,7 @@ module GenSymIO {
     }
 
     /*
-     * If APPEND mode, checks to see if the matchingFilenams matches the filenames
+     * If APPEND mode, checks to see if the matchingFilenames matches the filenames
      * array and, if not, raises a MismatchedAppendError. If in TRUNCATE mode, creates
      * the files matching the filenames. If 1..n of the filenames exist, returns 
      * warning to the user that 1..n files were overwritten.
@@ -1807,7 +1919,7 @@ module GenSymIO {
      * being overwritten.
      */
     proc getMatchingFilenames(prefix : string, extension : string) throws {
-        return glob(try! "%s_LOCALE*%s".format(prefix, extension));    
+        return glob("%s_LOCALE*%s".format(prefix, extension));    
     }
 
     /*

@@ -1,12 +1,12 @@
 from __future__ import annotations
 from typing import cast, List, Sequence
 from typeguard import typechecked
-import json, struct
+import json
 import numpy as np # type: ignore
 from arkouda.client import generic_msg
 from arkouda.dtypes import dtype, DTypes, resolve_scalar_dtype, \
-     structDtypeCodes, translate_np_dtype, NUMBER_FORMAT_STRINGS, \
-     int_scalars, numeric_scalars, numpy_scalars
+     translate_np_dtype, NUMBER_FORMAT_STRINGS, \
+     int_scalars, numeric_scalars, numpy_scalars, get_server_byteorder
 from arkouda.dtypes import int64 as akint64
 from arkouda.dtypes import str_ as akstr_
 from arkouda.dtypes import bool as npbool
@@ -850,16 +850,24 @@ class pdarray:
         if arraybytes > maxTransferBytes:
             raise RuntimeError(('Array exceeds allowed size for transfer. Increase ' +
                                'client.maxTransferBytes to allow'))
-        # The reply from the server will be a bytes object
-        rep_msg = generic_msg(cmd="tondarray", args="{}".format(self.name), recv_bytes=True)
+        # The reply from the server will be binary data
+        data = cast(memoryview,generic_msg(cmd="tondarray", args="{}".format(self.name), recv_binary=True))
         # Make sure the received data has the expected length
-        if len(rep_msg) != self.size*self.dtype.itemsize:
+        if len(data) != self.size*self.dtype.itemsize:
             raise RuntimeError("Expected {} bytes but received {}".\
-                               format(self.size*self.dtype.itemsize, len(rep_msg)))
-        # Use struct to interpret bytes as a big-endian numeric array
-        fmt = '>{:n}{}'.format(self.size, structDtypeCodes[self.dtype.name])
-        # Return a numpy ndarray
-        return np.array(struct.unpack(fmt, rep_msg)) # type: ignore
+                               format(self.size*self.dtype.itemsize, len(data)))
+        # The server sends us native-endian data so we need to account for
+        # that. If the view is readonly, copy so the np array is mutable
+        dt = np.dtype(self.dtype)
+        if get_server_byteorder() == 'big':
+            dt = dt.newbyteorder('>')
+        else:
+            dt = dt.newbyteorder('<')
+
+        if data.readonly:
+            return np.frombuffer(data, dt).copy()
+        else:
+            return np.frombuffer(data, dt)
 
     def to_cuda(self):
         """
@@ -914,24 +922,8 @@ class pdarray:
             raise ModuleNotFoundError(('Numba is not enabled or installed and ' +
                                       'is required for GPU support.'))
 
-        # Total number of bytes in the array data
-        arraybytes = self.size * self.dtype.itemsize
-        
-        from arkouda.client import maxTransferBytes
-        # Guard against overflowing client memory
-        if arraybytes > maxTransferBytes:
-            raise RuntimeError(("Array exceeds allowed size for transfer. " +
-                               "Increase client.maxTransferBytes to allow"))
-        # The reply from the server will be a bytes object
-        rep_msg = generic_msg(cmd="tondarray", args="{}".format(self.name), recv_bytes=True)
-        # Make sure the received data has the expected length
-        if len(rep_msg) != self.size*self.dtype.itemsize:
-            raise RuntimeError("Expected {} bytes but received {}".\
-                               format(self.size*self.dtype.itemsize, len(rep_msg)))
-        # Use struct to interpret bytes as a big-endian numeric array
-        fmt = '>{:n}{}'.format(self.size, structDtypeCodes[self.dtype.name])
         # Return a numba devicendarray
-        return cuda.to_device(struct.unpack(fmt, rep_msg))
+        return cuda.to_device(self.to_ndarray())
 
     @typechecked
     def save(self, prefix_path : str, dataset : str='array', mode : str='truncate') -> str:

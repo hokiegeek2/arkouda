@@ -15,6 +15,7 @@ pspStr = ''
 context = zmq.Context()
 socket = context.socket(zmq.REQ)
 connected = False
+serverConfig = None
 # username and token for when basic authentication is enabled
 username = ''
 token = ''
@@ -90,7 +91,7 @@ def connect(server : str="localhost", port : int=5555, timeout : int=0,
     On success, prints the connected address, as seen by the server. If called
     with an existing connection, the socket will be re-initialized.
     """
-    global context, socket, pspStr, connected, verbose, username, token
+    global context, socket, pspStr, connected, serverConfig, verbose, username, token
 
     logger.debug("ZMQ version: {}".format(zmq.zmq_version()))
 
@@ -140,12 +141,12 @@ def connect(server : str="localhost", port : int=5555, timeout : int=0,
     logger.debug("[Python] Received response: {}".format(str(return_message)))
     connected = True
 
-    conf = get_config()
-    if conf['arkoudaVersion'] != __version__:
+    serverConfig = _get_config_msg()
+    if serverConfig['arkoudaVersion'] != __version__:
         warnings.warn(('Version mismatch between client ({}) and server ({}); ' +
                       'this may cause some commands to fail or behave ' +
                       'incorrectly! Updating arkouda is strongly recommended.').\
-                      format(__version__, conf['arkoudaVersion']), RuntimeWarning)
+                      format(__version__, serverConfig['arkoudaVersion']), RuntimeWarning)
     clientLogger.info(return_message)
 
 def _parse_url(url : str) -> Tuple[str,int,Optional[str]]:
@@ -294,8 +295,8 @@ def _start_tunnel(addr : str, tunnel_server : str) -> Tuple[str,object]:
     except Exception as e:
         raise ConnectionError(e)
 
-def _send_string_message(cmd : str, recv_bytes : bool=False, 
-                                   args : str=None) -> Union[str, bytes]:
+def _send_string_message(cmd : str, recv_binary : bool=False,
+                         args : str=None) -> Union[str, memoryview]:
     """
     Generates a RequestMessage encapsulating command and requesting
     user information, sends it to the Arkouda server, and returns 
@@ -305,16 +306,15 @@ def _send_string_message(cmd : str, recv_bytes : bool=False,
     ----------
     cmd : str
         The name of the command to be executed by the Arkouda server
-    recv_bytes : bool, defaults to False
-        A boolean indicating whether the return message will be in bytes
-        as opposed to a string
+    recv_binary : bool, defaults to False
+        Indicates if the return message will be a string or binary data
     args : str
         A delimited string containing 1..n command arguments
 
     Returns
     -------
-    Union[str,bytes]
-        The response string or byte array sent back from the Arkouda server
+    Union[str,memoryview]
+        The response string or binary data sent back from the Arkouda server
         
     Raises
     ------
@@ -326,21 +326,19 @@ def _send_string_message(cmd : str, recv_bytes : bool=False,
         expected fields       
     """
     message = RequestMessage(user=username, token=token, cmd=cmd, 
-                          format=MessageFormat.STRING, args=cast(str,args))
+                          format=MessageFormat.STRING, args=args)
 
     logger.debug('sending message {}'.format(message))
 
     socket.send_string(json.dumps(message.asdict()))
 
-    if recv_bytes:
-        return_message = socket.recv()
-
-        # raise errors or warnings sent back from the server
-        if return_message.startswith(b"Error:"): 
-            raise RuntimeError(return_message.decode())
-        elif return_message.startswith(b"Warning:"): 
-            warnings.warn(return_message.decode())
-        return return_message
+    if recv_binary:
+        frame = socket.recv(copy=False)
+        view = frame.buffer
+        # raise errors sent back from the server
+        if bytes(view[0:len(b"Error:")]) == b"Error:":
+            raise RuntimeError(frame.bytes.decode())
+        return view
     else:
         raw_message = socket.recv_string()
         try:
@@ -358,8 +356,9 @@ def _send_string_message(cmd : str, recv_bytes : bool=False,
             raise ValueError('Return message is not valid JSON: {}'.\
                              format(raw_message))
 
-def _send_binary_message(cmd : str, payload : bytes, recv_bytes : bool=False,
-                                            args : str=None) -> Union[str, bytes]:
+
+def _send_binary_message(cmd : str, payload : memoryview, recv_binary : bool=False,
+                         args : str=None) -> Union[str, memoryview]:
     """
     Generates a RequestMessage encapsulating command and requesting user information,
     information prepends the binary payload, sends the binary request to the Arkouda 
@@ -369,19 +368,18 @@ def _send_binary_message(cmd : str, payload : bytes, recv_bytes : bool=False,
     ----------
     cmd : str
         The name of the command to be executed by the Arkouda server    
-    payload : bytes
-        The bytes to be converted to a pdarray, Strings, or Categorical object
-        on the Arkouda server
-    recv_bytes : bool, defaults to False
-        A boolean indicating whether the return message will be in bytes
-        as opposed to a string
+    payload : memoryview
+        The binary data to be converted to a pdarray, Strings, or Categorical
+        object on the Arkouda server
+    recv_binary : bool, defaults to False
+        Indicates if the return message will be a string or binary data
     args : str
         A delimited string containing 1..n command arguments
 
     Returns
     -------
-    Union[str,bytes]
-        The response string or byte array sent back from the Arkouda server
+    Union[str,memoryview]
+        The response string or binary data sent back from the Arkouda server
 
     Raises
     ------
@@ -393,21 +391,21 @@ def _send_binary_message(cmd : str, payload : bytes, recv_bytes : bool=False,
         expected fields
     """
     message = RequestMessage(user=username, token=token, cmd=cmd, 
-                                format=MessageFormat.BINARY, args=cast(str,args))
+                                format=MessageFormat.BINARY, args=args)
 
     logger.debug('sending message {}'.format(message))
 
-    socket.send('{}BINARY_PAYLOAD'.\
-                format(json.dumps(message.asdict())).encode() + payload)
+    socket.send('{}BINARY_PAYLOAD'.format(json.dumps(message.asdict())).encode(),
+                flags=zmq.SNDMORE)
+    socket.send(payload, copy=False)
 
-    if recv_bytes:
-        binary_return_message = cast(bytes, socket.recv())
-        # raise errors or warnings sent back from the server
-        if binary_return_message.startswith(b"Error:"): \
-                                   raise RuntimeError(binary_return_message.decode())
-        elif binary_return_message.startswith(b"Warning:"): \
-                                        warnings.warn(binary_return_message.decode())
-        return binary_return_message
+    if recv_binary:
+        frame = socket.recv(copy=False)
+        view = frame.buffer
+        # raise errors sent back from the server
+        if bytes(view[0:len(b"Error:")]) == b"Error:":
+            raise RuntimeError(frame.bytes.decode())
+        return view
     else:
         raw_message = socket.recv_string()
         try:
@@ -439,7 +437,7 @@ def disconnect() -> None:
     ConnectionError
         Raised if there's an error disconnecting from the Arkouda server
     """
-    global socket, pspStr, connected, verbose, token
+    global socket, pspStr, connected, serverConfig, verbose, token
 
     if connected:
         # send disconnect message to server
@@ -452,6 +450,7 @@ def disconnect() -> None:
         except Exception as e:
             raise ConnectionError(e)
         connected = False
+        serverConfig = None
         clientLogger.info(return_message)
     else:
         clientLogger.info("not connected; cannot disconnect")
@@ -476,7 +475,7 @@ def shutdown() -> None:
         Raised if the client is not connected to the Arkouda server or
         there is an error in disconnecting from the server
     """
-    global socket, pspStr, connected, verbose
+    global socket, pspStr, connected, serverConfig, verbose
 
     if not connected:
         raise RuntimeError('not connected, cannot shutdown server')
@@ -492,9 +491,10 @@ def shutdown() -> None:
     except Exception as e:
         raise RuntimeError(e)
     connected = False
+    serverConfig = None
 
-def generic_msg(cmd : str, args : Union[str,bytes]=None, send_bytes : bool=False, 
-                recv_bytes : bool=False) -> Union[str, bytes]:
+def generic_msg(cmd : str, args : str=None, payload : memoryview=None, send_binary : bool=False,
+                recv_binary : bool=False) -> Union[str, memoryview]:
     """
     Sends a binary or string message composed of a command and corresponding 
     arguments to the arkouda_server, returning the response sent by the server.
@@ -503,17 +503,18 @@ def generic_msg(cmd : str, args : Union[str,bytes]=None, send_bytes : bool=False
     ----------
     cmd : str
         The server-side command to be executed
-    args : Union[str,bytes]
-        A space-delimited list of command arguments or a byte array, the latter
-        of which is for creating an Arkouda array
-    send_bytes : bool
-        Indicates if the message to be sent is binary, defaults to False
-    recv_bytes : bool
-        Indicates if the return message will be binary, default to False
+    args : str
+        A space-delimited list of command arguments
+    payload : memoryview
+        The payload when sending binary data
+    send_binary : bool
+        Indicates if the message to be sent is a string or binary
+    recv_binary : bool
+        Indicates if the return message will be a string or binary
 
     Returns
     -------
-    Union[str, bytes]
+    Union[str, memoryview]
         The string or binary return message
     
     Raises
@@ -527,7 +528,7 @@ def generic_msg(cmd : str, args : Union[str,bytes]=None, send_bytes : bool=False
     Notes
     -----
     If the server response is a string, the string corresponds to a success  
-    confirmation, warn message, or error message. A response of type bytes 
+    confirmation, warn message, or error message. A memoryview response
     corresponds to an Arkouda array output as a numpy array.
     """
     global socket, pspStr, connected, verbose
@@ -536,14 +537,14 @@ def generic_msg(cmd : str, args : Union[str,bytes]=None, send_bytes : bool=False
         raise RuntimeError("client is not connected to a server")
     
     try:
-        if send_bytes:
-            return _send_binary_message(cmd=cmd, 
-                                            payload=cast(bytes,args), 
-                                            recv_bytes=recv_bytes)         
+        if send_binary:
+            assert payload is not None
+            return _send_binary_message(cmd=cmd, payload=payload,
+                                        recv_binary=recv_binary, args=args)
         else:
-            return _send_string_message(cmd=cmd, args=cast(str,args), 
-                                            recv_bytes=recv_bytes)
-                
+            assert payload is None
+            return _send_string_message(cmd=cmd, args=args, recv_binary=recv_binary)
+
     except KeyboardInterrupt as e:
         # if the user interrupts during command execution, the socket gets out 
         # of sync reset the socket before raising the interrupt exception
@@ -565,6 +566,21 @@ def get_config() -> Mapping[str, Union[str, int, float]]:
         maxTaskPar (maximum number of tasks per locale)
         physicalMemory
         
+    Raises
+    ------
+    RuntimeError
+        Raised if the client is not connected to a server
+    """
+
+    if serverConfig is None:
+        raise RuntimeError("client is not connected to a server")
+
+    return serverConfig
+
+def _get_config_msg() -> Mapping[str, Union[str, int, float]]:
+    """
+    Get runtime information about the server.
+
     Raises
     ------
     RuntimeError

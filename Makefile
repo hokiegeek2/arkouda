@@ -24,6 +24,9 @@ endif
 CHPL_FLAGS += -smemTrack=true
 CHPL_FLAGS += -lhdf5 -lhdf5_hl -lzmq
 
+# We have seen segfaults with cache remote at some node counts
+CHPL_FLAGS += --no-cache-remote
+
 # add-path: Append custom paths for non-system software.
 # Note: Darwin `ld` only supports `-rpath <path>`, not `-rpath=<paths>`.
 define add-path
@@ -165,7 +168,7 @@ endef
 $(eval $(call create_help_target,arkouda-help,ARKOUDA_HELP_TEXT))
 
 # Set the arkouda server version from the VERSION file
-VERSION=$(shell python -c "import versioneer; print(versioneer.get_versions()[\"version\"])")
+VERSION=$(shell python3 -c "import versioneer; print(versioneer.get_versions()[\"version\"])")
 # Test for existence of VERSION file
 # ifneq ("$(wildcard $(VERSIONFILE))","")
 # 	VERSION=$(shell cat ${VERSIONFILE})
@@ -366,6 +369,9 @@ CLEAN_TARGETS += test-clean
 .PHONY: test-clean
 test-clean:
 	$(RM) $(TEST_TARGETS) $(addsuffix _real,$(TEST_TARGETS))
+
+version:
+	@echo $(VERSION);
 
 #####################
 #### Epilogue.mk ####

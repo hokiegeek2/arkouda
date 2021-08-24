@@ -3,18 +3,15 @@ from enum import Enum
 import numpy as np # type: ignore
 from typeguard import typechecked
 import builtins
+import sys
 
 __all__ = ["DTypes", "DTypeObjects", "dtype", "bool", "int64", "float64", 
            "uint8", "str_", "check_np_dtype", "translate_np_dtype", 
            "resolve_scalar_dtype", "ARKOUDA_SUPPORTED_DTYPES", "bool_scalars",
-           "float_scalars", "int_scalars", "numeric_scalars", "numpy_scalars", 
-           "str_scalars", "all_scalars"]
+           "float_scalars", "int_scalars", "numeric_scalars", "numpy_scalars",
+           "str_scalars", "all_scalars", "get_byteorder",
+           "get_server_byteorder"]
 
-# supported dtypes
-structDtypeCodes = {'int64': 'q',
-                    'float64': 'd',
-                    'bool': '?',
-                    'uint8': 'B'}
 NUMBER_FORMAT_STRINGS = {'bool': '{}',
                          'int64': '{:n}',
                          'float64': '{:.17f}',
@@ -161,3 +158,27 @@ def resolve_scalar_dtype(val : object) -> str: # type: ignore
     # Other python type
     else:
         return builtins.str(type(val))
+
+def get_byteorder(dt: np.dtype) -> str:
+    """
+    Get a concrete byteorder (turns '=' into '<' or '>')
+    """
+    if dt.byteorder == '=':
+        if sys.byteorder == 'little':
+            return '<'
+        elif sys.byteorder == 'big':
+            return '>'
+        else:
+            raise ValueError("Client byteorder must be 'little' or 'big'")
+    else:
+        return dt.byteorder
+
+def get_server_byteorder() -> str:
+    """
+    Get the server's byteorder
+    """
+    from arkouda.client import get_config
+    order = get_config()['byteorder']
+    if order not in ('little', 'big'):
+        raise ValueError("Server byteorder must be 'little' or 'big'")
+    return cast('str', order)

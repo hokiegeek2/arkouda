@@ -220,7 +220,8 @@ proc main() {
          * string encapsulating user, token, cmd, message format and args from the 
          * remaining payload.
          */
-        var (rawRequest, payload) = reqMsgRaw.splitMsgToTuple(b"BINARY_PAYLOAD",2);
+        var (rawRequest, _) = reqMsgRaw.splitMsgToTuple(b"BINARY_PAYLOAD",2);
+        var payload = if reqMsgRaw.endsWith(b"BINARY_PAYLOAD") then socket.recv(bytes) else b"";
         var user, token, cmd: string;
 
         // parse requests, execute requests, format responses
@@ -285,17 +286,18 @@ proc main() {
             }
 
             /*
-             * Declare the repTuple and binaryRepMsg variables, one of which is processed, if 
-             * applicable, and sent to sendRepMsg depending upon whether a string (repTuple)
-             * or bytes (binaryRepMsg) is to be returned.
+             * For messages that return a string repTuple is filled. For binary
+             * messages the message is sent directly to minimize copies.
              */
-            var binaryRepMsg: bytes;
             var repTuple: MsgTuple;
 
             select cmd
             {
-                when "array"             {repTuple = arrayMsg(cmd, payload, st);}
-                when "tondarray"         {binaryRepMsg = tondarrayMsg(cmd, args, st);}
+                when "array"             {repTuple = arrayMsg(cmd, args, payload, st);}
+                when "tondarray"         {
+                  var binaryRepMsg = tondarrayMsg(cmd, args, st);
+                  sendRepMsg(binaryRepMsg);
+                }
                 when "cast"              {repTuple = castMsg(cmd, args, st);}
                 when "mink"              {repTuple = minkMsg(cmd, args, st);}
                 when "maxk"              {repTuple = maxkMsg(cmd, args, st);}
@@ -314,7 +316,10 @@ proc main() {
                 when "segmentedIn1d"     {repTuple = segIn1dMsg(cmd, args, st);}
                 when "segmentedFlatten"  {repTuple = segFlattenMsg(cmd, args, st);}
                 when "lshdf"             {repTuple = lshdfMsg(cmd, args, st);}
+                
+                // DEPRECATED all client paths point to readAllHdfMsg
                 when "readhdf"           {repTuple = readhdfMsg(cmd, args, st);}
+                
                 when "readAllHdf"        {repTuple = readAllHdfMsg(cmd, args, st);}
                 when "tohdf"             {repTuple = tohdfMsg(cmd, args, st);}
                 when "create"            {repTuple = createMsg(cmd, args, st);}
@@ -392,14 +397,9 @@ proc main() {
             }
 
             /*
-             * 1. Determine if the reply message is binary or a string via the repTuple.msg attribute
-             * 2. If a string, invoke serialize to generate a JSON-formatted reply string
-             * 3. Invoke the sendRepMsg function
+             * If the reply message is a string send it now
              */          
-            if repTuple.msg.isEmpty() {
-                // Since the repTuple.msg attribute is empty, this is a binary reply message
-                sendRepMsg(binaryRepMsg);
-            } else {
+            if !repTuple.msg.isEmpty() {
                 sendRepMsg(serialize(msg=repTuple.msg,msgType=repTuple.msgType,
                                                               msgFormat=MsgFormat.STRING, user=user));
             }
@@ -426,7 +426,13 @@ proc main() {
             }
         } catch (e: Error) {
             // Generate a ReplyMsg of type ERROR and serialize to a JSON-formatted string
-            sendRepMsg(serialize(msg=unknownError(e.message()),msgType=MsgType.ERROR, 
+            var errorMsg = e.message();
+            
+            if errorMsg.isEmpty() {
+                errorMsg = "unexpected error";
+            }
+
+            sendRepMsg(serialize(msg=errorMsg,msgType=MsgType.ERROR, 
                                                          msgFormat=MsgFormat.STRING, user=user));
             if trace {
                 asLogger.error(getModuleName(), getRoutineName(), getLineNumber(), 

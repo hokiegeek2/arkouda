@@ -1,12 +1,11 @@
 import numpy as np # type: ignore
 import pandas as pd # type: ignore
-import struct
 from typing import cast, Iterable, Optional, Union
 from typeguard import typechecked
 from arkouda.client import generic_msg
-from arkouda.dtypes import structDtypeCodes, NUMBER_FORMAT_STRINGS, float64, int64, \
+from arkouda.dtypes import NUMBER_FORMAT_STRINGS, float64, int64, \
      DTypes, isSupportedInt, isSupportedNumber, NumericDTypes, SeriesDTypes,\
-    int_scalars, numeric_scalars
+    int_scalars, numeric_scalars, get_byteorder, get_server_byteorder
 from arkouda.dtypes import dtype as akdtype
 from arkouda.pdarrayclass import pdarray, create_pdarray
 from arkouda.strings import Strings
@@ -204,11 +203,16 @@ def array(a : Union[pdarray,np.ndarray, Iterable]) -> Union[pdarray, Strings]:
         raise RuntimeError(("Array exceeds allowed transfer size. Increase " +
                             "ak.maxTransferBytes to allow"))
     # Pack binary array data into a bytes object with a command header
-    # including the dtype and size
-    fmt = ">{:n}{}".format(size, structDtypeCodes[a.dtype.name])
-    req_msg = "{} {:n} ".\
-                    format(a.dtype.name, size).encode() + struct.pack(fmt, *a)
-    repMsg = generic_msg(cmd='array', args=req_msg, send_bytes=True)
+    # including the dtype and size. If the server has a different byteorder
+    # than our numpy array we need to swap to match since the server expects
+    # native endian bytes
+    if ((get_byteorder(a.dtype) == '<' and get_server_byteorder() == 'big') or
+        (get_byteorder(a.dtype) == '>' and get_server_byteorder() == 'little')):
+        aview = memoryview(a.byteswap())
+    else:
+        aview = memoryview(a)
+    args = "{} {:n} ".  format(a.dtype.name, size)
+    repMsg = generic_msg(cmd='array', args=args, payload=aview, send_binary=True)
     return create_pdarray(repMsg)
 
 def zeros(size : int_scalars, dtype : type=np.float64) -> pdarray:
@@ -744,9 +748,9 @@ def random_strings_uniform(minlen : int_scalars, maxlen : int_scalars,
     ... characters='printable')
     array(['+5"f', '-P]3', '4k', '~HFF', 'F'])
     """
-    if minlen < 0 or maxlen < minlen or size < 0:
-        raise ValueError(("Incompatible arguments: minlen < 0, maxlen " +
-                          "< minlen, or size < 0"))
+    if minlen < 0 or maxlen <= minlen or size < 0:
+        raise ValueError("Incompatible arguments: minlen < 0, maxlen " +
+                          "<= minlen, or size < 0")
 
     repMsg = generic_msg(cmd="randomStrings", args="{} {} {} {} {} {}".\
           format(NUMBER_FORMAT_STRINGS['int64'].format(size),

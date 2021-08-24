@@ -360,13 +360,18 @@ class PdarrayCreationTest(ArkoudaTest):
         
         with self.assertRaises(ValueError) as cm:          
             ak.random_strings_uniform(maxlen=1,minlen=5, size=100)          
-        self.assertEqual("Incompatible arguments: minlen < 0, maxlen < minlen, or size < 0", 
-                         cm.exception.args[0])   
+        self.assertEqual("Incompatible arguments: minlen < 0, maxlen <= minlen, or size < 0", 
+                         cm.exception.args[0])
         
         with self.assertRaises(ValueError) as cm:          
             ak.random_strings_uniform(maxlen=5,minlen=1, size=-1)          
-        self.assertEqual("Incompatible arguments: minlen < 0, maxlen < minlen, or size < 0", 
-                         cm.exception.args[0])    
+        self.assertEqual("Incompatible arguments: minlen < 0, maxlen <= minlen, or size < 0", 
+                         cm.exception.args[0])
+
+        with self.assertRaises(ValueError) as cm:          
+            ak.random_strings_uniform(maxlen=5, minlen=5, size=10)          
+        self.assertEqual("Incompatible arguments: minlen < 0, maxlen <= minlen, or size < 0", 
+                         cm.exception.args[0])
         
         with self.assertRaises(TypeError) as cm:          
             ak.random_strings_uniform(minlen='1', maxlen=5, size=10)          
@@ -574,3 +579,47 @@ class PdarrayCreationTest(ArkoudaTest):
         
         ones.fill(np.float64(2))  
         self.assertTrue((np.float64(2) == ones.to_ndarray()).all())  
+
+    def test_endian(self):
+        N = 100
+
+        a = np.random.randint(1, N, N)
+        aka = ak.array(a)
+        npa = aka.to_ndarray();
+        self.assertTrue(np.allclose(a, npa))
+
+        a = a.newbyteorder().byteswap()
+        aka = ak.array(a)
+        npa = aka.to_ndarray();
+        self.assertTrue(np.allclose(a, npa))
+
+        a = a.newbyteorder().byteswap()
+        aka = ak.array(a)
+        npa = aka.to_ndarray();
+        self.assertTrue(np.allclose(a, npa))
+
+    def test_clobber(self):
+        N = 100
+        narrs = 10
+
+        arrs = [np.random.randint(1, N, N) for _ in range(narrs)]
+        akarrs = [ak.array(arr) for arr in arrs]
+        nparrs = [arr.to_ndarray() for arr in akarrs]
+        for (a, npa) in zip(arrs, nparrs):
+            self.assertTrue(np.allclose(a, npa))
+
+        arrs = [np.full(N, i) for i in range(narrs)]
+        akarrs = [ak.array(arr) for arr in arrs]
+        nparrs = [arr.to_ndarray() for arr in akarrs]
+
+        for (a, npa, i) in zip(arrs, nparrs, range(narrs)):
+            self.assertTrue(np.all(a == i))
+            self.assertTrue(np.all(npa == i))
+
+            a += 1
+            self.assertTrue(np.all(a == i+1))
+            self.assertTrue(np.all(npa == i))
+
+            npa += 1
+            self.assertTrue(np.all(a == i+1))
+            self.assertTrue(np.all(npa == i+1))
