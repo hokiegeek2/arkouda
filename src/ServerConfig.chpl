@@ -13,8 +13,6 @@ module ServerConfig
     use ServerErrors;
     use FileIO;
     use Logging;
-    
-    enum BroadcastType {STDOUT,FILE,HTTP,HTTPS};
 
     /*
     Trace logging flag
@@ -56,7 +54,7 @@ module ServerConfig
     }
 
     /*
-     * Retrieves th hostname of the locale 0 arkouda_server process, which is useful for 
+     * Retrieves the hostname of the locale 0 arkouda_server process, which is useful for 
      * registering Arkouda with cloud environments such as Kubernetes.
      */
     proc getConnectHostname() throws {

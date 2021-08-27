@@ -31,7 +31,7 @@ module ExternalSystem {
     /*
      * Enum describing the external system to register Arkouda with
      */
-    enum ExternalSystemType{KUBERNETES,REDIS,CONSUL};
+    enum SystemType{KUBERNETES,REDIS,CONSUL,NONE};
 
     /*
      * Enum describing the type of channel used to write to an
@@ -278,5 +278,58 @@ module ExternalSystem {
             }
         }
     }
+    
+    proc registerWithKubernetes() throws {
+        var channel = getExternalChannel(new HttpChannelParams(
+                                         channelType=ChannelType.HTTP,
+                                         url=ServerConfig.getEnv('EXTERNAL_SERVICE_URL'),
+                                         requestType=HttpRequestType.PATCH,
+                                         requestFormat=HttpRequestFormat.JSON,
+                                         verbose=true,
+                                         ssl=true,
+                                         sslKey=ServerConfig.getEnv('KEY_FILE'),
+                                         sslCert=ServerConfig.getEnv('CERT_FILE'),
+                                         sslCacert=ServerConfig.getEnv('CACERT_FILE'),
+                                         sslCapath='',
+                                         sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
 
+        var servicePayload = '{"apiVersion": "v1","kind": "Service","metadata": \
+                             {"name": "%s"},"spec": {"ports": [{"port": %i,"protocol": \
+                             "TCP","targetPort": %i}]}}'.format(
+                                          ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
+                                          ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
+                                          ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
+
+        channel.write(servicePayload);
+                                          
+        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registered service via payload %".format(servicePayload));
+                     
+  
+                                         
+        var endpointPayload = '{"kind": "Endpoints","apiVersion": "v1","metadata": {"name": "%s"}, \
+                                "subsets": [{"addresses": [{"ip": "%s"}],"ports": [\
+                                {"port": %i, "protocol": "TCP"}]}]}'.format(
+                                                    ServerConfig.getEnv('ENDPOINT_NAME'),
+                                                    ServerConfig.getConnectHostIp(),
+                                                    ServerConfig.getEnv('ENDPOINT_PORT'):int);
+        
+        channel = getExternalChannel(new HttpChannelParams(
+                                         channelType=ChannelType.HTTP,
+                                         url=ServerConfig.getEnv('ENDPOINT_URL'),
+                                         requestType=HttpRequestType.PATCH,
+                                         requestFormat=HttpRequestFormat.JSON,
+                                         verbose=true,
+                                         ssl=true,
+                                         sslKey=ServerConfig.getEnv('KEY_FILE'),
+                                         sslCert=ServerConfig.getEnv('CERT_FILE'),
+                                         sslCacert=ServerConfig.getEnv('CACERT_FILE'),
+                                         sslCapath='',
+                                         sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
+
+        channel.write(servicePayload);
+        
+        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registered endpoint via payload %".format(endpointPayload));
+    }
 }
