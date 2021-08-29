@@ -280,9 +280,24 @@ module ExternalSystem {
     }
     
     proc registerWithKubernetes() throws {
+    
+        proc generateEndpointUrl() : string {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv('K8S_HOST');
+            var endpointName = ServerConfig.getEnv('ENDPOINT_NAME');
+            return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,endpointName);
+        }
+    
+        proc generateExternalServiceUrl() : string {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv('K8S_HOST');
+            var externalServiceName = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
+            return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,externalServiceName);
+        }
+   
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=ServerConfig.getEnv('EXTERNAL_SERVICE_URL'),
+                                         url=getExternalServiceName(),
                                          requestType=HttpRequestType.PATCH,
                                          requestFormat=HttpRequestFormat.JSON,
                                          verbose=true,
@@ -300,6 +315,9 @@ module ExternalSystem {
                                           ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
                                           ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
 
+        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registering service via payload %".format(servicePayload));
+
         channel.write(servicePayload);
                                           
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
@@ -316,7 +334,7 @@ module ExternalSystem {
         
         channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=ServerConfig.getEnv('ENDPOINT_URL'),
+                                         url=getEndpointUrl(),
                                          requestType=HttpRequestType.PATCH,
                                          requestFormat=HttpRequestFormat.JSON,
                                          verbose=true,
@@ -326,6 +344,9 @@ module ExternalSystem {
                                          sslCacert=ServerConfig.getEnv('CACERT_FILE'),
                                          sslCapath='',
                                          sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
+
+        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registering endpoint via payload %".format(endpointPayload));
 
         channel.write(servicePayload);
         
