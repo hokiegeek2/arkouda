@@ -25,6 +25,8 @@ use ExternalSystem;
 private config const logLevel = ServerConfig.logLevel;
 const asLogger = new Logger(logLevel);
 
+private config const externalSystem = SystemType.NONE;
+
 proc initArkoudaDirectory() {
     var arkDirectory = '%s%s%s'.format(here.cwd(), pathSep,'.arkouda');
     initDirectory(arkDirectory);
@@ -209,11 +211,37 @@ proc main() {
     }
 
     /*
-     * Registers Arkouda with an external system on startup.
+     * Registers Arkouda with an external system on startup, defaulting to none.
      */
-    proc registerWithExternalSystem() throws {        
-        registerWithKubernetes();
+    proc registerWithExternalSystem() throws {   
+        select externalSystem {
+            when SystemType.KUBERNETES {     
+                registerWithKubernetes();
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Registered Arkouda with Kubernetes");
+            }
+            otherwise {
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Did not register Arkouda with any external systems");            
+            }
+        }
     }
+    
+    
+    proc deregisterFromExternalSystem() throws {
+        select externalSystem {
+            when SystemType.KUBERNETES {     
+                deregisterFromKubernetes();
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Deregistered Arkouda from Kubernetes");
+            }
+            otherwise {
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Did not deregister Arkouda from any external system");            
+            }
+        }    
+    }
+    
     
     on Locales[0] {
          registerWithExternalSystem();
@@ -453,6 +481,10 @@ proc main() {
     t1.stop();
 
     deleteServerConnectionInfo();
+    
+    on Locales[0] {
+         deregisterFromExternalSystem();
+    }
 
     asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
                "requests = %i responseCount = %i elapsed sec = %i".format(reqCount,repCount,
@@ -478,6 +510,7 @@ Deletes the serverConnetionFile on arkouda_server shutdown
 proc deleteServerConnectionInfo() {
     use FileSystem;
     try {
+        asLogger.info(getModuleName(),getRoutineName(),getLineNumber(),"HELLO");
         if !serverConnectionInfo.isEmpty() {
             remove(serverConnectionInfo);
         }

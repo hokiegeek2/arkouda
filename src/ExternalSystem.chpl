@@ -5,7 +5,7 @@ module ExternalSystem {
     use FileIO;
     use Logging;
     use ServerConfig;
-    use ServerErrors
+    use ServerErrors;
 
     private config const logLevel = ServerConfig.logLevel;
     const esLogger = new Logger(logLevel);
@@ -30,7 +30,7 @@ module ExternalSystem {
     extern const CURLOPT_CUSTOMREQUEST:CURLoption;  
 
     /*
-     * Enum describing the external system Arkouda will connect to.
+     * Enum specifying the type of external system Arkouda will connect to.
      */
     enum SystemType{KUBERNETES,REDIS,CONSUL,NONE};
 
@@ -44,7 +44,7 @@ module ExternalSystem {
      * Enum describing the request type used to write to an
      * external system via HTTP.
      */
-    enum HttpRequestType{POST,PUT,PATCH};
+    enum HttpRequestType{POST,PUT,PATCH,DELETE};
 
     /*
      * Enum describing the request format used to write to an
@@ -283,16 +283,30 @@ module ExternalSystem {
         }
     }
     
-    private proc generateEndpointUrl() : string throws {
+    private proc generateEndpointCreateUrl() : string throws {
         var k8sHost = ServerConfig.getEnv('K8S_HOST');
         var namespace = ServerConfig.getEnv('NAMESPACE');
         return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
     }
 
-    private proc generateExternalServiceUrl() : string throws {
+    private proc generateExternalServiceCreateUrl() : string throws {
         var k8sHost = ServerConfig.getEnv('K8S_HOST');
         var namespace = ServerConfig.getEnv('NAMESPACE');
         return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
+    }
+    
+    private proc generateEndpointDeleteUrl() : string throws {
+        var k8sHost = ServerConfig.getEnv('K8S_HOST');
+        var namespace = ServerConfig.getEnv('NAMESPACE');
+        var name = ServerConfig.getEnv('ENDPOINT_NAME');
+        return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
+    }
+
+    private proc generateExternalServiceDeleteUrl() : string throws {
+        var k8sHost = ServerConfig.getEnv('K8S_HOST');
+        var namespace = ServerConfig.getEnv('NAMESPACE');
+        var name = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
+        return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,name);
     }
     
     /*
@@ -301,11 +315,11 @@ module ExternalSystem {
      * of Kubernetes.
      */
     proc registerWithKubernetes() throws {
-        var serviceUrl = generateExternalServiceUrl();
+        var serviceUrl = generateExternalServiceCreateUrl();
         
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=generateExternalServiceUrl(),
+                                         url=generateExternalServiceCreateUrl(),
                                          requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
                                          verbose=false,
@@ -333,7 +347,7 @@ module ExternalSystem {
                      "Registered service via payload %s and url %s".format(
                                          servicePayload,serviceUrl));
                                               
-        var endpointUrl = generateEndpointUrl();                                 
+        var endpointUrl = generateEndpointCreateUrl();                                 
         var endpointPayload = '{"kind": "Endpoints","apiVersion": "v1","metadata": {"name": "%s"}, \
                                 "subsets": [{"addresses": [{"ip": "%s"}],"ports": [\
                                 {"port": %i, "protocol": "TCP"}]}]}'.format(
@@ -343,7 +357,7 @@ module ExternalSystem {
         
         channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=generateEndpointUrl(),
+                                         url=generateEndpointCreateUrl(),
                                          requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
                                          verbose=false,
@@ -363,5 +377,22 @@ module ExternalSystem {
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                      "Registered endpoint via payload %s and endpointUrl %s".format(
                                          endpointPayload,endpointUrl));
+    }
+    
+    proc deregisterFromKubernetes() throws {
+        
+        var channel = getExternalChannel(new HttpChannelParams(
+                                         channelType=ChannelType.HTTP,
+                                         url=generateExternalServiceDeleteUrl(),
+                                         requestType=HttpRequestType.DELETE,
+                                         requestFormat=HttpRequestFormat.JSON,
+                                         verbose=false,
+                                         ssl=true,
+                                         sslKey=ServerConfig.getEnv('KEY_FILE'),
+                                         sslCert=ServerConfig.getEnv('CERT_FILE'),
+                                         sslCacert=ServerConfig.getEnv('CACERT_FILE'),
+                                         sslCapath='',
+                                         sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
+        channel.write('{}');
     }
 }
