@@ -170,6 +170,20 @@ module ServerErrors {
 
         proc init(){ super.init(); }
     }
+    
+    /*
+     * The ExternalSystemError is thrown if either an error is thrown in execution of command
+     * against the external system or an error code is returned
+     */
+    class ExternalSystemError: ErrorWithContext { 
+
+        proc init(msg : string, lineNumber: int, routineName: string, 
+                                                           moduleName: string) { 
+           super.init(msg,lineNumber,routineName,moduleName,errorClass='UnknownSymbolError'); 
+        } 
+
+        proc init(){ super.init(); }
+    }
 
     /*
      * Generatea a detailed, context-rich error message for errors such as instances of 
@@ -249,7 +263,12 @@ module ServerErrors {
                                                           UnknownSymbolError(msg=msg,
                                                           lineNumber=lineNumber,
                                                           routineName=routineName,
-                                                          moduleName=moduleName); }                                                                                                                 
+                                                          moduleName=moduleName); }
+            when "ExternalSystemError"           { return new owned 
+                                                          ExternalSystemError(msg=msg,
+                                                          lineNumber=lineNumber,
+                                                          routineName=routineName,
+                                                          moduleName=moduleName); }                                                                                                                    
             otherwise                            { return new owned 
                                                           Error(generateErrorContext(
                                                           msg=msg,

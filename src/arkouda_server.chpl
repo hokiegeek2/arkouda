@@ -216,7 +216,7 @@ proc main() {
     }
     
     on Locales[0] {
-        registerWithExternalSystem();
+         registerWithExternalSystem();
     }
     
     while !shutdownServer {

@@ -5,6 +5,7 @@ module ExternalSystem {
     use FileIO;
     use Logging;
     use ServerConfig;
+    use ServerErrors
 
     private config const logLevel = ServerConfig.logLevel;
     const esLogger = new Logger(logLevel);
@@ -29,7 +30,7 @@ module ExternalSystem {
     extern const CURLOPT_CUSTOMREQUEST:CURLoption;  
 
     /*
-     * Enum describing the external system to register Arkouda with
+     * Enum describing the external system Arkouda will connect to.
      */
     enum SystemType{KUBERNETES,REDIS,CONSUL,NONE};
 
@@ -187,10 +188,13 @@ module ExternalSystem {
             
             if ret == 0 {
                 esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                    "Successfully executed Http request");
+                    "Successfully executed Http request with payload %s".format(payload));
             } else {
                 esLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
                     "Error in executing Http request, return code: %i".format(ret));
+                throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
+                    "Http request with payload %s returned error code %i".format(payload,ret),
+                    "ExternalSystemError");
             }
 
             args.free();
@@ -279,28 +283,32 @@ module ExternalSystem {
         }
     }
     
+    private proc generateEndpointUrl() : string throws {
+        var k8sHost = ServerConfig.getEnv('K8S_HOST');
+        var namespace = ServerConfig.getEnv('NAMESPACE');
+        return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
+    }
+
+    private proc generateExternalServiceUrl() : string throws {
+        var k8sHost = ServerConfig.getEnv('K8S_HOST');
+        var namespace = ServerConfig.getEnv('NAMESPACE');
+        return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
+    }
+    
+    /*
+     * Registers Arkouda with Kubernetes by creating a Kubernetes Service and Endpoint 
+     * which together enable service discovery of an Arkouda instance deployed outside
+     * of Kubernetes.
+     */
     proc registerWithKubernetes() throws {
-    
-        proc generateEndpointUrl() : string {
-            var k8sHost = ServerConfig.getEnv('K8S_HOST');
-            var namespace = ServerConfig.getEnv('K8S_HOST');
-            var endpointName = ServerConfig.getEnv('ENDPOINT_NAME');
-            return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,endpointName);
-        }
-    
-        proc generateExternalServiceUrl() : string {
-            var k8sHost = ServerConfig.getEnv('K8S_HOST');
-            var namespace = ServerConfig.getEnv('K8S_HOST');
-            var externalServiceName = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
-            return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,externalServiceName);
-        }
-   
+        var serviceUrl = generateExternalServiceUrl();
+        
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=getExternalServiceName(),
-                                         requestType=HttpRequestType.PATCH,
+                                         url=generateExternalServiceUrl(),
+                                         requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
-                                         verbose=true,
+                                         verbose=false,
                                          ssl=true,
                                          sslKey=ServerConfig.getEnv('KEY_FILE'),
                                          sslCert=ServerConfig.getEnv('CERT_FILE'),
@@ -316,15 +324,16 @@ module ExternalSystem {
                                           ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
 
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Registering service via payload %".format(servicePayload));
+                     "Registering service via payload %s and url %s".format(
+                                         servicePayload,serviceUrl));
 
         channel.write(servicePayload);
-                                          
+        
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Registered service via payload %".format(servicePayload));
-                     
-  
-                                         
+                     "Registered service via payload %s and url %s".format(
+                                         servicePayload,serviceUrl));
+                                              
+        var endpointUrl = generateEndpointUrl();                                 
         var endpointPayload = '{"kind": "Endpoints","apiVersion": "v1","metadata": {"name": "%s"}, \
                                 "subsets": [{"addresses": [{"ip": "%s"}],"ports": [\
                                 {"port": %i, "protocol": "TCP"}]}]}'.format(
@@ -334,10 +343,10 @@ module ExternalSystem {
         
         channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=getEndpointUrl(),
-                                         requestType=HttpRequestType.PATCH,
+                                         url=generateEndpointUrl(),
+                                         requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
-                                         verbose=true,
+                                         verbose=false,
                                          ssl=true,
                                          sslKey=ServerConfig.getEnv('KEY_FILE'),
                                          sslCert=ServerConfig.getEnv('CERT_FILE'),
@@ -346,11 +355,13 @@ module ExternalSystem {
                                          sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
 
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Registering endpoint via payload %".format(endpointPayload));
+                     "Registering endpoint via payload %s and url %s".format(
+                                         endpointPayload,endpointUrl));
 
-        channel.write(servicePayload);
+        channel.write(endpointPayload);
         
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Registered endpoint via payload %".format(endpointPayload));
+                     "Registered endpoint via payload %s and endpointUrl %s".format(
+                                         endpointPayload,endpointUrl));
     }
 }
