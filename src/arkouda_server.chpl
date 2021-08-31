@@ -510,7 +510,6 @@ Deletes the serverConnetionFile on arkouda_server shutdown
 proc deleteServerConnectionInfo() {
     use FileSystem;
     try {
-        asLogger.info(getModuleName(),getRoutineName(),getLineNumber(),"HELLO");
         if !serverConnectionInfo.isEmpty() {
             remove(serverConnectionInfo);
         }

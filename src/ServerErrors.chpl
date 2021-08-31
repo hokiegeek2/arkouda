@@ -179,7 +179,7 @@ module ServerErrors {
 
         proc init(msg : string, lineNumber: int, routineName: string, 
                                                            moduleName: string) { 
-           super.init(msg,lineNumber,routineName,moduleName,errorClass='UnknownSymbolError'); 
+           super.init(msg,lineNumber,routineName,moduleName,errorClass='ExternalSystemError'); 
         } 
 
         proc init(){ super.init(); }

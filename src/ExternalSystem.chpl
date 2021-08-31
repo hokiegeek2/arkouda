@@ -10,6 +10,8 @@ module ExternalSystem {
     private config const logLevel = ServerConfig.logLevel;
     const esLogger = new Logger(logLevel);
     
+    private config const verbose = false;
+    
     /*
      * libcurl C constants required to configure the Curl core
      * of HttpChannel objects.
@@ -28,6 +30,8 @@ module ExternalSystem {
     extern const CURLOPT_HTTPHEADER:CURLoption;
     extern const CURLOPT_POSTFIELDS:CURLoption;
     extern const CURLOPT_CUSTOMREQUEST:CURLoption;  
+    extern const CURLOPT_FAILONERROR:CURLoption;
+    extern const CURLINFO_RESPONSE_CODE:CURLoption;
 
     /*
      * Enum specifying the type of external system Arkouda will connect to.
@@ -100,7 +104,6 @@ module ExternalSystem {
         var sslCacert: string;
         var sslCapath: string;
         var sslKeyPasswd: string;
-        var verbose: bool;
         
         proc init(params: HttpChannelParams) {
             super.init();
@@ -116,8 +119,6 @@ module ExternalSystem {
                 this.sslCapath = params.sslCapath;
                 this.sslKeyPasswd = params.sslKeyPasswd;
             }
-
-            this.verbose = params.verbose;
         }
         
         proc configureSsl(channel) throws {
@@ -129,9 +130,9 @@ module ExternalSystem {
             Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath);        
         }
         
-        proc generateHeader(channel, format: HttpRequestFormat) throws {
+        proc generateHeader(channel) throws {
             var args = new Curl.slist();
-
+            var format = this.requestFormat;
             select(format) {     
                 when HttpRequestFormat.JSON {
                     args.append("Accept: application/json");
@@ -159,12 +160,12 @@ module ExternalSystem {
          * by the requestFormat instance attribute via the request type 
          * specified in the requestType instance attribute.
          */
-        override proc write(payload : string) throws {
+        override proc write(payload: string) throws {
             var curl = Curl.easyInit();
 
             Curl.easySetopt(curl, CURLOPT_URL, this.url);
             
-            if this.verbose {
+            if verbose {
                 Curl.easySetopt(curl, CURLOPT_VERBOSE, true);
             }
 
@@ -172,7 +173,9 @@ module ExternalSystem {
                 configureSsl(curl);
             } 
             
-            var args = generateHeader(curl, this.requestFormat);
+            Curl.easySetopt(curl, CURLOPT_FAILONERROR, 1);
+            
+            var args = generateHeader(curl);
 
             Curl.easySetopt(curl, CURLOPT_POSTFIELDS, payload);
             Curl.easySetopt(curl, CURLOPT_CUSTOMREQUEST, this.requestType:string);
@@ -190,8 +193,6 @@ module ExternalSystem {
                 esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                     "Successfully executed Http request with payload %s".format(payload));
             } else {
-                esLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
-                    "Error in executing Http request, return code: %i".format(ret));
                 throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
                     "Http request with payload %s returned error code %i".format(payload,ret),
                     "ExternalSystemError");
@@ -236,7 +237,6 @@ module ExternalSystem {
         var url: string;
         var requestType: HttpRequestType;
         var requestFormat: HttpRequestFormat;
-        var verbose: bool;
         var ssl: bool = false;
         var sslKey: string;
         var sslCert: string;
@@ -245,14 +245,13 @@ module ExternalSystem {
         var sslKeyPasswd: string;
         
         proc init(channelType: ChannelType, url: string, requestType: HttpRequestType,
-                    requestFormat: HttpRequestFormat, verbose: bool=false, ssl: bool=false, 
+                    requestFormat: HttpRequestFormat, ssl: bool=false, 
                     sslKey: string, sslCert: string, sslCacert: string, sslCapath: string, 
                           sslKeyPasswd: string) {
             super.init(channelType);
             this.url = url;
             this.requestType = requestType;
             this.requestFormat = requestFormat;
-            this.verbose = verbose;
             this.ssl = ssl;
             if this.ssl {
                 this.sslKey = sslKey;
@@ -288,18 +287,18 @@ module ExternalSystem {
         var namespace = ServerConfig.getEnv('NAMESPACE');
         return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
     }
+    
+    private proc generateEndpointUpdateUrl() : string throws {
+        var k8sHost = ServerConfig.getEnv('K8S_HOST');
+        var namespace = ServerConfig.getEnv('NAMESPACE');
+        var name = ServerConfig.getEnv('ENDPOINT_NAME');
+        return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
+    }
 
     private proc generateExternalServiceCreateUrl() : string throws {
         var k8sHost = ServerConfig.getEnv('K8S_HOST');
         var namespace = ServerConfig.getEnv('NAMESPACE');
         return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
-    }
-    
-    private proc generateEndpointDeleteUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        var name = ServerConfig.getEnv('ENDPOINT_NAME');
-        return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
     }
 
     private proc generateExternalServiceDeleteUrl() : string throws {
@@ -312,7 +311,7 @@ module ExternalSystem {
     /*
      * Registers Arkouda with Kubernetes by creating a Kubernetes Service and Endpoint 
      * which together enable service discovery of an Arkouda instance deployed outside
-     * of Kubernetes.
+     * of Kubernetes from applications deployed within Kubernetes.
      */
     proc registerWithKubernetes() throws {
         var serviceUrl = generateExternalServiceCreateUrl();
@@ -322,7 +321,6 @@ module ExternalSystem {
                                          url=generateExternalServiceCreateUrl(),
                                          requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
-                                         verbose=false,
                                          ssl=true,
                                          sslKey=ServerConfig.getEnv('KEY_FILE'),
                                          sslCert=ServerConfig.getEnv('CERT_FILE'),
@@ -360,7 +358,6 @@ module ExternalSystem {
                                          url=generateEndpointCreateUrl(),
                                          requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
-                                         verbose=false,
                                          ssl=true,
                                          sslKey=ServerConfig.getEnv('KEY_FILE'),
                                          sslCert=ServerConfig.getEnv('CERT_FILE'),
@@ -379,14 +376,16 @@ module ExternalSystem {
                                          endpointPayload,endpointUrl));
     }
     
+    /*
+     * Removes the external service endpoint that enables access to Arkouda deployed outside
+     * of Kubernetes from applications deployed within Kubernetes
+     */
     proc deregisterFromKubernetes() throws {
-        
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
                                          url=generateExternalServiceDeleteUrl(),
                                          requestType=HttpRequestType.DELETE,
                                          requestFormat=HttpRequestFormat.JSON,
-                                         verbose=false,
                                          ssl=true,
                                          sslKey=ServerConfig.getEnv('KEY_FILE'),
                                          sslCert=ServerConfig.getEnv('CERT_FILE'),
