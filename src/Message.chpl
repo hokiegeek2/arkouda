@@ -37,13 +37,13 @@ module Message {
     }
 
     /*
-     * Deserializes a JSON-formatted string to a RequestMsg object, where the
+     * Deserializes a JSON-formatted string to a Msg object, where the
      * JSON format is as follows:
      *
      * {"user": "user", "token": "token", "cmd": "cmd", "format": "STRING", "args": "arg1 arg2"}
      *
      */
-    proc deserialize(ref msg: RequestMsg, request: string) throws {
+    proc deserialize(ref msg, request: string) throws {
         var newmem = openmem();
         newmem.writer().write(request);
         var nreader = newmem.reader();

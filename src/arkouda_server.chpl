@@ -20,6 +20,7 @@ use Reflection;
 use SymArrayDmap;
 use ServerErrorStrings;
 use Message;
+use MetricsMsg;
 
 private config const logLevel = ServerConfig.logLevel;
 const asLogger = new Logger(logLevel);
@@ -212,6 +213,7 @@ proc main() {
         var reqMsgRaw = socket.recv(bytes);
 
         reqCount += 1;
+        setCount('NUM_REQUESTS',reqCount);
 
         var s0 = t1.elapsed();
         
@@ -223,6 +225,7 @@ proc main() {
         var (rawRequest, _) = reqMsgRaw.splitMsgToTuple(b"BINARY_PAYLOAD",2);
         var payload = if reqMsgRaw.endsWith(b"BINARY_PAYLOAD") then socket.recv(bytes) else b"";
         var user, token, cmd: string;
+        var responseTime: real;
 
         // parse requests, execute requests, format responses
         try {
@@ -366,7 +369,8 @@ proc main() {
                 when "register"          {repTuple = registerMsg(cmd, args, st);}
                 when "attach"            {repTuple = attachMsg(cmd, args, st);}
                 when "unregister"        {repTuple = unregisterMsg(cmd, args, st);}
-                when "clear"             {repTuple = clearMsg(cmd, args, st);}               
+                when "clear"             {repTuple = clearMsg(cmd, args, st);}       
+                when "metrics"           {repTuple = metricsMsg(cmd, args, st);}        
                 when "connect" {
                     if authenticate {
                         repTuple = new MsgTuple("connected to arkouda server tcp://*:%i as user %s with token %s".format(
@@ -400,13 +404,15 @@ proc main() {
                                                               msgFormat=MsgFormat.STRING, user=user));
             }
 
+            responseTime = t1.elapsed() - s0;
+
             /*
              * log that the request message has been handled and reply message has been sent along with 
              * the time to do so
              */
             if trace {
                 asLogger.info(getModuleName(),getRoutineName(),getLineNumber(), 
-                                              "<<< %s took %.17r sec".format(cmd, t1.elapsed() - s0));
+                                              "<<< %s took %.17r sec".format(cmd, responseTime));
             }
             if (trace && memTrack) {
                 asLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
@@ -417,8 +423,9 @@ proc main() {
             sendRepMsg(serialize(msg=e.msg,msgType=MsgType.ERROR, msgFormat=MsgFormat.STRING, 
                                                         user=user));
             if trace {
+                responseTime = t1.elapsed() - s0;
                 asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
-                    "<<< %s resulted in error %s in  %.17r sec".format(cmd, e.msg, t1.elapsed() - s0));
+                    "<<< %s resulted in error %s in  %.17r sec".format(cmd, e.msg, responseTime));
             }
         } catch (e: Error) {
             // Generate a ReplyMsg of type ERROR and serialize to a JSON-formatted string
@@ -431,6 +438,7 @@ proc main() {
             sendRepMsg(serialize(msg=errorMsg,msgType=MsgType.ERROR, 
                                                          msgFormat=MsgFormat.STRING, user=user));
             if trace {
+                responseTime = t1.elapsed() - s0;
                 asLogger.error(getModuleName(), getRoutineName(), getLineNumber(), 
                     "<<< %s resulted in error: %s in %.17r sec".format(cmd, e.message(),
                                                                                  t1.elapsed() - s0));
