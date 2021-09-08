@@ -212,9 +212,6 @@ proc main() {
         // receive message on the zmq socket
         var reqMsgRaw = socket.recv(bytes);
 
-        reqCount += 1;
-        setCount('NUM_REQUESTS',reqCount);
-
         var s0 = t1.elapsed();
         
         /*
@@ -245,6 +242,7 @@ proc main() {
                 sendRepMsg(serialize(msg=unknownError(e.message()),msgType=MsgType.ERROR,
                                                  msgFormat=MsgFormat.STRING, user="Unknown"));
             }
+           
 
             // deserialize the decoded, JSON-formatted cmdStr into a RequestMsg
             var msg: RequestMsg  = extractRequest(request);
@@ -253,6 +251,12 @@ proc main() {
             cmd    = msg.cmd;
             var format = msg.format;
             var args   = msg.args;
+
+            if cmd != 'metrics' {
+                reqCount += 1;
+                asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),'cmd: %s'.format(cmd));
+                incrementCount('NUM_REQUESTS',1);
+            }
 
             /*
              * If authentication is enabled with the --authenticate flag, authenticate
@@ -372,6 +376,7 @@ proc main() {
                 when "clear"             {repTuple = clearMsg(cmd, args, st);}       
                 when "metrics"           {repTuple = metricsMsg(cmd, args, st);}        
                 when "connect" {
+                    incrementCount('NUM_CONNECTIONS',1);
                     if authenticate {
                         repTuple = new MsgTuple("connected to arkouda server tcp://*:%i as user %s with token %s".format(
                                                           ServerPort,user,token), MsgType.NORMAL);
@@ -381,6 +386,7 @@ proc main() {
                     }
                 }
                 when "disconnect" {
+                    decrementCount('NUM_CONNECTIONS',1);
                     repTuple = new MsgTuple("disconnected from arkouda server tcp://*:%i".format(ServerPort), 
                                                                    MsgType.NORMAL);
                 }
