@@ -53,6 +53,11 @@ module ServerConfig
     }
 
     /*
+    Indicates whether to collect metrics and make them available via a ZMQ endpoint
+    */
+    config const collectMetrics = false;
+
+    /*
     Indicates whether token authentication is being used for Akrouda server requests
     */
     config const authenticate : bool = false;
