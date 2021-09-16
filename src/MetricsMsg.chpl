@@ -10,118 +10,176 @@ module MetricsMsg {
     use MultiTypeSymEntry;
     use Message;
     use Memory.Diagnostics;
+    use DateTime;
 
-    enum MetricType{NUM_REQUESTS,NUM_CONNECTIONS,MEMORY_USED,PCT_MEMORY_USED,ALL};
+    enum MetricCategory{ALL,NUM_REQUESTS,RESPONSE_TIME,SYSTEM,SERVER};
     enum MetricScope{GLOBAL,LOCALE};
 
     private config const logLevel = ServerConfig.logLevel;
     const mLogger = new Logger(logLevel);
     
-    var countMetrics = new map(string, int);
-
-    proc getCount(metric: string) : int {
-        if !countMetrics.contains(metric) {
-            countMetrics.add(metric,0);
-            return 0;
+    var serverMetrics = new CounterTable();
+    
+    var requestMetrics = new CounterTable();
+    
+    class CounterTable {
+        var counts = new map(string, int);
+       
+        proc get(metric: string) : int {
+            if !this.counts.contains(metric) {
+                this.counts.add(metric,0);
+                return 0;
+            } else {
+                return this.counts.getValue(metric);
+            }
+        }   
+        
+        proc set(metric: string, count: int) {
+            this.counts.addOrSet(metric,count);
+        }
+    
+        proc increment(metric: string, increment: int=1) {
+            var current = this.get(metric);
+            
+            // Set new metric value to current plus the increment
+            this.set(metric, current+increment);
+        }
+    
+        proc decrement(metric: string, increment: int=1) {
+            var current = this.get(metric);
+            
+            /*
+             * Set new metric value to current minus the increment 
+             */
+            if current >= increment {
+                this.set(metric, current-increment);    
+            } else {
+                this.set(metric,0);
+            }
+        }   
+        
+        proc items() {
+            return this.counts.items();
         }
         
-        return countMetrics.getValue(metric);
-    }
+        proc size() {
+            return this.counts.size;
+        }
         
-    proc setCount(metric: string, count: int) {
-        countMetrics.addOrSet(metric,count);
-    }
-    
-    proc incrementCount(metric: string, count: int=1) {
-        var current = getCount(metric);
-        setCount(metric, current+1);
-    }
-    
-    proc decrementCount(metric: string, count: int=1) {
-        var current = getCount(metric);
-        if current >= 1 {
-            setCount(metric, current-1);    
-        } else {
-            setCount(metric,0);
+        proc total() {
+            var count = 0;
+            
+            for item in this.items() {
+                count += item[1];
+            }
+            
+            return count; 
         }
     }
     
-    proc exportAllMetrics() throws {
-        var mMetrics = getMemoryMetrics();
-        var cMetrics = getCounterMetrics();
-        
+    proc exportAllMetrics() throws {        
         var metrics = new list(owned Metric?);
-         
-        for cMetric in cMetrics {
-            metrics.append(cMetric);
-        }
-        
-        for mMetric in mMetrics {
-            metrics.append(mMetric);
-        }
+
+        metrics.extend(getRequestMetrics());
+        metrics.extend(getSystemMetrics());
+        metrics.extend(getServerMetrics());
+
         return metrics.toArray();
     }
     
-    proc getCounterMetrics() throws {
-        var metrics: [0..countMetrics.size-1] owned Metric?;
+    proc getServerMetrics() throws {
+        var metrics: list(owned Metric?);
          
-        for (i,item) in zip(0..countMetrics.size-1,countMetrics.items()){
-            metrics[i] = new Metric(name=item[0],value=item[1]);
+        for item in serverMetrics.items(){
+            metrics.append(new Metric(name=item[0], category=MetricCategory.SERVER, 
+                                          value=item[1]));
         }
         return metrics;    
     }    
-  
-    proc getMemoryMetrics() throws {
+
+    proc getRequestMetrics() throws {
+        var metrics = new list(owned Metric?);
+
+        for item in requestMetrics.items() {
+            metrics.append(new Metric(name=item[0], category=MetricCategory.NUM_REQUESTS,
+                                          value=item[1]));
+        }
+        
+        metrics.append(new Metric(name='total', category=MetricCategory.NUM_REQUESTS, 
+                                          value=requestMetrics.total()));
+        return metrics;
+    }
+
+    proc getSystemMetrics() throws {
         var loc = 0;
-        var metrics = new list(owned LocaleMetric?);
+        var metrics = new list(owned Metric?);
 
         for loc in Locales {
             var used = memoryUsed():int;
             var total = here.physicalMemory();
 
-            metrics.append(new LocaleMetric(name="MEMORY_USED",
+            metrics.append(new LocaleMetric(name="memory_used",
+                             category=MetricCategory.SYSTEM,
                              locale_num=loc.id,
                              locale_name=loc.name,
-                             value=used));
-            metrics.append(new LocaleMetric(name="PCT_MEMORY_USED",
+                             value=used):Metric);
+            metrics.append(new LocaleMetric(name="percent_used",
+                             category=MetricCategory.SYSTEM,
                              locale_num=loc.id,
                              locale_name=loc.name,
-                             value=used/total * 100.0000));                            
+                             value=used/total * 100.0000):Metric);                            
         }
-        return metrics.toArray();
+        return metrics;
     }
         
     class Metric {
         var name: string;
-        var scope: MetricScope = MetricScope.GLOBAL;
+        var category: MetricCategory;
+        var scope: MetricScope;
+        var timestamp: datetime;
         var value: real;
+        
+        proc init(name: string, category: MetricCategory, 
+                                         scope: MetricScope=MetricScope.GLOBAL, value: real) {
+            this.name = name;
+            this.category = category;
+            this.scope = scope;
+            this.timestamp = datetime.now();
+            this.value = value;
+        }
     }
     
     class LocaleMetric : Metric {
         var locale_num: int;
         var locale_name: string;
 
-        proc init(name: string, scope: MetricScope=MetricScope.LOCALE, value: real,
-                           locale_num: int, locale_name: string) {
-            super.init(name=name,scope=scope,value=value);
+        proc init(name: string, category: MetricCategory, scope: MetricScope=MetricScope.LOCALE, 
+                         value: real, locale_num: int, locale_name: string) {
+            super.init(name=name, category=category, scope=scope, value=value);
             this.locale_num = locale_num;
             this.locale_name = locale_name;
         }
     }
 
     proc metricsMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {       
-        var metricType = payload.splitMsgToTuple(1)[0]:MetricType;
+        var category = payload.splitMsgToTuple(1)[0]:MetricCategory;
             
         mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                            'metricType: %s'.format(metricType));
+                            'category: %s'.format(category));
         var metrics: string;
 
-        select metricType {
-            when MetricType.ALL {
+        select category {
+            when MetricCategory.ALL {
                 metrics = "%jt".format(exportAllMetrics());
             }
-            when MetricType.MEMORY_USED {
-                metrics = "%jt".format(getMemoryMetrics());
+            when MetricCategory.NUM_REQUESTS {
+                metrics = "%jt".format(getRequestMetrics());
+            }
+            when MetricCategory.SERVER {
+                metrics = "%jt".format(getServerMetrics());
+            }
+            when MetricCategory.SYSTEM {
+                metrics = "%jt".format(getSystemMetrics());
             }
             otherwise {
                 throw getErrorWithContext(getLineNumber(),getModuleName(),getRoutineName(),
