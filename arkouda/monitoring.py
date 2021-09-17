@@ -5,27 +5,30 @@ from dataclasses import dataclass
 from typing import Dict, List, Union
 from prometheus_client import start_http_server, Counter, Gauge
 import arkouda as ak
-from arkouda import client
+from arkouda import client, logger
+from arkouda.logger import LogLevel
 
+logger = logger.getArkoudaLogger(name='Arkouda Monitoring', logFormat='%(message)s', 
+                                 logLevel=LogLevel.DEBUG)
 
-class MetricType(Enum):
+class MetricCategory(Enum):
     ALL = 'ALL'
-    MEMORY_USED = 'MEMORY_USED'
-    PCT_MEMORY_USED = 'PCT_MEMORY_USED'
     NUM_REQUESTS = 'NUM_REQUESTS'
-    NUM_CONNECTIONS = 'NUM_CONNECTIONS'
+    RESPONSE_TIME = 'RESPONSE_TIME'
+    SERVER = 'SERVER'
+    SYSTEM = 'SYSTEM'
 
     def __str__(self) -> str:
         """
         Overridden method returns value, which is useful in outputting
-        a MetricType object to JSON.
+        a MetricCategory object to JSON.
         """
         return self.value
     
     def __repr__(self) -> str:
         """
         Overridden method returns value, which is useful in outputting
-        a MetricType object to JSON.
+        a MetricCategory object to JSON.
         """
         return self.value
     
@@ -36,14 +39,14 @@ class MetricScope(Enum):
     def __str__(self) -> str:
         """
         Overridden method returns value, which is useful in outputting
-        a MetricType object to JSON.
+        a MetricScope object to JSON.
         """
         return self.value
     
     def __repr__(self) -> str:
         """
         Overridden method returns value, which is useful in outputting
-        a MetricType object to JSON.
+        a MetricScope object to JSON.
         """
         return self.value
 
@@ -51,26 +54,26 @@ class MetricScope(Enum):
 class Label():
 
     name: str
-    value: Union[float,int,str]
+    value: Union[bool,float,int,str]
     
-    def __init__(self, name : str, value : Union[float,int]) -> None:
+    def __init__(self, name : str, value : Union[bool,float,int,str]) -> None:
         object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'value', value)
 
 
 @dataclass(frozen=True)
 class Metric():
-    __slots__ = ('scope', 'type_', 'value', 'labels')
+    __slots__ = ('scope', 'category', 'value', 'labels')
 
     scope: MetricScope
-    type_: MetricType
+    category: MetricCategory
     value: Union[float,int]
     labels: List[Label]
     
-    def __init__(self, scope : MetricScope, type_ : MetricType, 
+    def __init__(self, scope : MetricScope, category : MetricCategory, 
                  value : Union[float,int], labels : List[Label]=None) -> None:
         object.__setattr__(self, 'scope', scope)
-        object.__setattr__(self, 'type_', type_)
+        object.__setattr__(self, 'category', category)
         object.__setattr__(self, 'value', value)
         object.__setattr__(self, 'labels', labels)
 
@@ -85,15 +88,16 @@ def asMetric(value : Dict[str,Union[float,int,str]]) -> Metric:
         labels = None
 
     return Metric(scope=MetricScope(value['scope']),
-              type_=MetricType(value['name']),
+              category=MetricCategory(value['name']),
               value=value['value'],
               labels=labels)    
 
 class ArkoudaMetrics:
     
     __slots__ = ('exportPort', 'pollingInterval', 'metricsCache','numberOfRequests',
-                 'numberOfConnections', '_updateMetric', 'memoryUsed', 'pctMemoryUsed',
-                 '_updateGlobalScopedMetric', '_updateLocaleScopedMetric', 'registry')
+                 'numberOfRequestsPerCommand','numberOfConnections', '_updateMetric', 
+                 'memoryUsed', 'pctMemoryUsed','_updateGlobalScopedMetric', 
+                 '_updateLocaleScopedMetric', 'registry')
     
     exportPort: int
     pollingInterval: int 
@@ -111,6 +115,10 @@ class ArkoudaMetrics:
                                                     'Number of Arkouda requests')
         self.numberOfConnections = Gauge('arkouda_number_of_connections', 
                                                     'Number of Arkouda connections')
+        self.numberOfRequests = Gauge('arkouda_total_number_of_requests', 
+                                                    'Total number of Arkouda requests')   
+        self.numberOfRequestsPerCommand = Gauge('arkouda_number_of_requests_per_command', 
+                                                    'Total number of Arkouda requests per command')       
         self.memoryUsed = Gauge('arkouda_memory_used_per_locale', 
                                 'Memory used by Arkouda on each locale',
                                 labelnames=['locale_name','locale_num'])
@@ -119,18 +127,15 @@ class ArkoudaMetrics:
                                    labelnames=['locale_name','locale_num'])
 
         self._updateMetric = {
-            MetricType.NUM_REQUESTS: lambda x: self.numberOfRequests.set(x.value),
-            MetricType.NUM_CONNECTIONS: lambda x: self.numberOfConnections.set(x.value),
-            MetricType.MEMORY_USED: \
+            MetricCategory.NUM_REQUESTS: lambda x: self.numberOfRequests.set(x.value),
+            MetricCategory.SERVER: lambda x: self.numberOfConnections.set(x.value),
+            MetricCategory.SERVER: lambda x: self.numberOfRequests.set(x.value),
+            MetricCategory.SYSTEM: \
                        lambda x: self.memoryUsed.labels(locale_name=x.labels[0].value,
-                                                    locale_num=x.labels[1].value).set(x.value),
-            MetricType.PCT_MEMORY_USED: \
-                       lambda x: self.pctMemoryUsed.labels(locale_name=x.labels[0].value,
-                                                    locale_num=x.labels[1].value).set(x.value)  
-        } 
+                                                    locale_num=x.labels[1].value).set(x.value)}
 
         try:
-            ak.connect()
+            ak.connect('localhost',5556)
         except Exception as e:
             raise EnvironmentError(e)
 
@@ -155,10 +160,11 @@ class ArkoudaMetrics:
             time.sleep(self.pollingInterval)
 
     def fetch(self):
-        metrics = json.loads(client.generic_msg(cmd='metrics', args=str(MetricType.ALL)), 
+        metrics = json.loads(client.generic_msg(cmd='metrics', args=str(MetricCategory.ALL)), 
                              object_hook=asMetric)      
         for metric in metrics:
-            self._updateMetric[metric.type_](metric)
+            self._updateMetric[metric.category](metric)
+            logger.debug('UPDATED METRIC {}'.format(metric))
 
 def main():
     """Main entry point"""
