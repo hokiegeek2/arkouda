@@ -3,6 +3,7 @@ from enum import Enum
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Dict, List, Union
+import numpy as np
 from prometheus_client import start_http_server, Counter, Gauge
 import arkouda as ak
 from arkouda import client, logger
@@ -50,6 +51,12 @@ class MetricScope(Enum):
         """
         return self.value
 
+class MetricKey():
+    __slots__ = ('name', 'category')
+    
+    name: str
+    category: MetricCategory
+
 @dataclass(frozen=True)
 class Label():
 
@@ -63,18 +70,23 @@ class Label():
 
 @dataclass(frozen=True)
 class Metric():
-    __slots__ = ('scope', 'category', 'value', 'labels')
+    __slots__ = ('name', 'category', 'scope', 'value', 'timestamp', 'labels')
 
-    scope: MetricScope
+    name: str
     category: MetricCategory
+    scope: MetricScope
     value: Union[float,int]
+    timestamp: np.datetime64
     labels: List[Label]
     
-    def __init__(self, scope : MetricScope, category : MetricCategory, 
-                 value : Union[float,int], labels : List[Label]=None) -> None:
-        object.__setattr__(self, 'scope', scope)
+    def __init__(self, name : str, category : MetricCategory, scope : MetricScope, 
+                 value : Union[float,int], timestamp : np.datetime64, 
+                 labels : List[Label]=None) -> None:
+        object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'category', category)
+        object.__setattr__(self, 'scope', scope)
         object.__setattr__(self, 'value', value)
+        object.__setattr__(self, 'timestamp', timestamp)
         object.__setattr__(self, 'labels', labels)
 
 
@@ -87,52 +99,58 @@ def asMetric(value : Dict[str,Union[float,int,str]]) -> Metric:
     else:
         labels = None
 
-    return Metric(scope=MetricScope(value['scope']),
-              category=MetricCategory(value['name']),
-              value=value['value'],
-              labels=labels)    
+    return Metric(name=value['name'], 
+                  category=MetricCategory(value['category']),
+                  scope=MetricScope(value['scope']),
+                  value=value['value'],
+                  timestamp=np.datetime64(value['timestamp']),
+                  labels=labels)    
 
 class ArkoudaMetrics:
     
-    __slots__ = ('exportPort', 'pollingInterval', 'metricsCache','numberOfRequests',
+    __slots__ = ('exportPort', 'pollingInterval', 'metricsCache','totalNumberOfRequests',
                  'numberOfRequestsPerCommand','numberOfConnections', '_updateMetric', 
-                 'memoryUsed', 'pctMemoryUsed','_updateGlobalScopedMetric', 
-                 '_updateLocaleScopedMetric', 'registry')
+                 'responseTimesPerCommand', 'memoryUsedPerLocale', 'pctMemoryUsedPerLocale',
+                 'updateGlobalScopedMetric', '_updateLocaleScopedMetric', 'registry')
     
     exportPort: int
     pollingInterval: int 
     metricsCache: defaultdict 
-    numberOfRequests: Counter 
+    totalNumberOfRequests: Counter 
+    numberOfRequestsPerCommand: Counter 
     numberOfConnections: Gauge
-    memoryUsed: Gauge
+    responseTimesPerCommand: Gauge
+    memoryUsedPerLocale: Gauge
+    pctMemoryUsedPerLocale: Gauge
 
     def __init__(self, exportPort=5080, pollingInterval=5):
         self.exportPort = exportPort
         self.pollingInterval = pollingInterval
         self.metricsCache = defaultdict(lambda:0,{})     
-    
-        self.numberOfRequests = Gauge('arkouda_number_of_requests', 
-                                                    'Number of Arkouda requests')
+
         self.numberOfConnections = Gauge('arkouda_number_of_connections', 
                                                     'Number of Arkouda connections')
-        self.numberOfRequests = Gauge('arkouda_total_number_of_requests', 
+        self.totalNumberOfRequests = Gauge('arkouda_total_number_of_requests', 
                                                     'Total number of Arkouda requests')   
         self.numberOfRequestsPerCommand = Gauge('arkouda_number_of_requests_per_command', 
-                                                    'Total number of Arkouda requests per command')       
-        self.memoryUsed = Gauge('arkouda_memory_used_per_locale', 
+                                                'Total number of Arkouda requests per command',
+                                                labelnames=['command'])       
+        self.responseTimesPerCommand = Gauge('arkouda_response_times_per_command', 
+                                                'Response times of Arkouda commands',
+                                                labelnames=['command'])         
+        self.memoryUsedPerLocale = Gauge('arkouda_memory_used_per_locale', 
                                 'Memory used by Arkouda on each locale',
                                 labelnames=['locale_name','locale_num'])
-        self.pctMemoryUsed = Gauge('arkouda_pct_memory_used_per_locale', 
-                                   'Percent memory used by Arkouda on each locale',
+        self.pctMemoryUsedPerLocale = Gauge('arkouda_pct_memory_used_per_locale', 
+                                   'Percent of total memory used by Arkouda on each locale',
                                    labelnames=['locale_name','locale_num'])
 
         self._updateMetric = {
-            MetricCategory.NUM_REQUESTS: lambda x: self.numberOfRequests.set(x.value),
-            MetricCategory.SERVER: lambda x: self.numberOfConnections.set(x.value),
-            MetricCategory.SERVER: lambda x: self.numberOfRequests.set(x.value),
-            MetricCategory.SYSTEM: \
-                       lambda x: self.memoryUsed.labels(locale_name=x.labels[0].value,
-                                                    locale_num=x.labels[1].value).set(x.value)}
+            MetricCategory.NUM_REQUESTS: lambda x: self._updateNumberOfRequests(x),
+            MetricCategory.RESPONSE_TIME: lambda x: self._updateResponseTimes(x),
+            MetricCategory.SERVER: lambda x: self.numberOfConnections.set(int(x.value)),
+            MetricCategory.SYSTEM: lambda x: self._updateSystemMetrics(x)
+        }
 
         try:
             ak.connect('localhost',5556)
@@ -143,7 +161,29 @@ class ArkoudaMetrics:
             raise EnvironmentError('Not connected to Arkouda server')
         
         self._initializeMetrics()
-        print('Completed Initialization of Arkouda Exporter')
+        print('Completed Initialization of Arkouda Exporter')        
+    
+    def _updateNumberOfRequests(self, metric : Metric) -> None:
+        metricName = metric.name
+        
+        if metricName == 'total':
+            self.totalNumberOfRequests.set(metric.value)
+        else:
+            self.numberOfRequestsPerCommand.labels(command=metricName).set(metric.value)
+            
+    def _updateResponseTimes(self, metric : Metric) -> None:
+        self.responseTimesPerCommand.labels(command=metric.name).set(metric.value)
+            
+    def _updateSystemMetrics(self, metric : Metric) -> None:
+        metricName = metric.name
+        
+        if metricName == 'arkouda_memory_used_per_locale':
+            self.memoryUsedPerLocale.labels(locale_name=metric.labels[0].value,
+                                            locale_num=metric.labels[1].value).set(metric.value)
+        else:
+            self.pctMemoryUsedPerLocale.labels(locale_name=metric.labels[0].value,
+                                            locale_num=metric.labels[1].value).set(metric.value)            
+        
     
     def _initializeMetrics(self) -> None:
         config = ak.get_config()
@@ -151,8 +191,8 @@ class ArkoudaMetrics:
         for locale in config['LocaleConfigs']:
             locale_num = locale['id']
             locale_name = locale['name']
-            self.memoryUsed.labels(locale_name,locale_num)
-            self.pctMemoryUsed.labels(locale_name,locale_num)
+            self.memoryUsedPerLocale.labels(locale_name,locale_num)
+            self.pctMemoryUsedPerLocale.labels(locale_name,locale_num)
 
     def run_metrics_loop(self):
         while True:

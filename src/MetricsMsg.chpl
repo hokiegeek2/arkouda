@@ -22,6 +22,34 @@ module MetricsMsg {
     
     var requestMetrics = new CounterTable();
     
+    var responseTimeMetrics = new MeasurementTable();
+
+    class MeasurementTable {
+        var measurements = new map(string, real);
+    
+        proc get(metric: string) : int {
+            if !this.measurements.contains(metric) {
+                this.measurements.add(metric,0.0);
+                return 0;
+            } else {
+                return this.measurements.getValue(metric);
+            }
+        }   
+        
+        proc set(metric: string, measurement: real) {
+            this.measurements.addOrSet(metric, measurement);
+        }
+        
+        proc items() {
+            return this.measurements.items();
+        }
+        
+        proc size() {
+            return this.measurements.size;
+        }
+    
+    }
+
     class CounterTable {
         var counts = new map(string, int);
        
@@ -80,7 +108,8 @@ module MetricsMsg {
     proc exportAllMetrics() throws {        
         var metrics = new list(owned Metric?);
 
-        metrics.extend(getRequestMetrics());
+        metrics.extend(getNumRequestMetrics());
+        metrics.extend(getResponseTimeMetrics());
         metrics.extend(getSystemMetrics());
         metrics.extend(getServerMetrics());
 
@@ -94,19 +123,34 @@ module MetricsMsg {
             metrics.append(new Metric(name=item[0], category=MetricCategory.SERVER, 
                                           value=item[1]));
         }
+
         return metrics;    
     }    
 
-    proc getRequestMetrics() throws {
+    proc getNumRequestMetrics() throws {
         var metrics = new list(owned Metric?);
 
         for item in requestMetrics.items() {
-            metrics.append(new Metric(name=item[0], category=MetricCategory.NUM_REQUESTS,
-                                          value=item[1]));
+            metrics.append(new Metric(name=item[0], 
+                                      category=MetricCategory.NUM_REQUESTS,
+                                      value=item[1]));
         }
         
-        metrics.append(new Metric(name='total', category=MetricCategory.NUM_REQUESTS, 
-                                          value=requestMetrics.total()));
+        metrics.append(new Metric(name='total', 
+                                  category=MetricCategory.NUM_REQUESTS, 
+                                  value=requestMetrics.total()));
+        return metrics;
+    }
+
+    proc getResponseTimeMetrics() throws {
+        var metrics = new list(owned Metric?);
+
+        for item in responseTimeMetrics.items() {
+            metrics.append(new Metric(name=item[0], 
+                                      category=MetricCategory.RESPONSE_TIME,
+                                      value=item[1]));
+        }
+
         return metrics;
     }
 
@@ -118,12 +162,12 @@ module MetricsMsg {
             var used = memoryUsed():int;
             var total = here.physicalMemory();
 
-            metrics.append(new LocaleMetric(name="memory_used",
+            metrics.append(new LocaleMetric(name="arkouda_memory_used_per_locale",
                              category=MetricCategory.SYSTEM,
                              locale_num=loc.id,
                              locale_name=loc.name,
                              value=used):Metric);
-            metrics.append(new LocaleMetric(name="percent_used",
+            metrics.append(new LocaleMetric(name="arkouda_percent_memory_used_per_locale",
                              category=MetricCategory.SYSTEM,
                              locale_num=loc.id,
                              locale_name=loc.name,
@@ -140,11 +184,13 @@ module MetricsMsg {
         var value: real;
         
         proc init(name: string, category: MetricCategory, 
-                                         scope: MetricScope=MetricScope.GLOBAL, value: real) {
+                                scope: MetricScope=MetricScope.GLOBAL, 
+                                timestamp: datetime=datetime.now(), 
+                                value: real) {
             this.name = name;
             this.category = category;
             this.scope = scope;
-            this.timestamp = datetime.now();
+            this.timestamp = timestamp;
             this.value = value;
         }
     }
@@ -153,9 +199,12 @@ module MetricsMsg {
         var locale_num: int;
         var locale_name: string;
 
-        proc init(name: string, category: MetricCategory, scope: MetricScope=MetricScope.LOCALE, 
-                         value: real, locale_num: int, locale_name: string) {
-            super.init(name=name, category=category, scope=scope, value=value);
+        proc init(name: string, category: MetricCategory, 
+                                scope: MetricScope=MetricScope.LOCALE, 
+                                timestamp: datetime=datetime.now(), 
+                                value: real, locale_num: int, locale_name: string) {
+            super.init(name=name, category=category, scope=scope, 
+                                timestamp=timestamp, value=value);
             this.locale_num = locale_num;
             this.locale_name = locale_name;
         }
@@ -173,7 +222,7 @@ module MetricsMsg {
                 metrics = "%jt".format(exportAllMetrics());
             }
             when MetricCategory.NUM_REQUESTS {
-                metrics = "%jt".format(getRequestMetrics());
+                metrics = "%jt".format(getNumRequestMetrics());
             }
             when MetricCategory.SERVER {
                 metrics = "%jt".format(getServerMetrics());

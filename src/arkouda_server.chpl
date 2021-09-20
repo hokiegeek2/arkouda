@@ -305,8 +305,7 @@ proc main() {
 		
 		        if cmd != 'metrics' {
 		            if collectMetrics {
-		                requestMetrics.increment(cmd);
-		                requestMetrics.increment('total');                
+		                requestMetrics.increment(cmd);             
 		            }
 		        }
 		
@@ -426,7 +425,7 @@ proc main() {
 		            when "attach"            {repTuple = attachMsg(cmd, args, st);}
 		            when "unregister"        {repTuple = unregisterMsg(cmd, args, st);}
 		            when "clear"             {repTuple = clearMsg(cmd, args, st);}       
-		            when "metrics"           {repTuple = metricsMsg(cmd, args, st);}        
+		            //when "metrics"           {repTuple = metricsMsg(cmd, args, st);}        
 		            when "connect" {
 		                serverMetrics.increment('num_connections',1);
 		                if authenticate {
@@ -464,6 +463,11 @@ proc main() {
 		
 		        responseTime = t1.elapsed() - s0;
 		
+		        if collectMetrics {
+		            responseTimeMetrics.set(cmd,responseTime);
+		        }
+		        
+		        
 		        /*
 		         * log that the request message has been handled and reply message has been sent along with 
 		         * the time to do so
