@@ -27,6 +27,11 @@ module ServerConfig
     Port for zeromq
     */
     config const ServerPort = 5555;
+    
+    /*
+    Metrics server zeromq port
+    */
+    config const MetricsServerPort = 5556;
 
     /*
     Memory usage limit -- percentage of physical memory
@@ -91,6 +96,7 @@ module ServerConfig
             const HDF5Version: string;
             const serverHostname: string;
             const ServerPort: int;
+            const MetricsServerPort: int;
             const numLocales: int;
             const numPUs: int;
             const maxTaskPar: int;
@@ -110,6 +116,7 @@ module ServerConfig
             HDF5Version = try! "%i.%i.%i".format(H5major, H5minor, H5micro),
             serverHostname = serverHostname,
             ServerPort = ServerPort,
+            MetricsServerPort = MetricsServerPort,
             numLocales = numLocales,
             numPUs = here.numPUs(),
             maxTaskPar = here.maxTaskPar,

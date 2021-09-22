@@ -208,16 +208,19 @@ proc main() {
                          msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));
     }
 
-    proc runMetricsServer() {
+    proc runMetricsServer() throws {
         var context: ZMQ.Context;
-        var socket : ZMQ.Socket = context.socket(ZMQ.REP);
+        var socket: ZMQ.Socket = context.socket(ZMQ.REP);
+        var port = getEnv('METRICS_SERVER_PORT','5556'):int;
 
-        try! socket.bind("tcp://*:%t".format(5556));
+        try! socket.bind("tcp://*:%t".format(port));
+        asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
+                               "Metrics Server initialized and listening in port %i".format(port));	
         while true {
             asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
                                "awaiting message on port 5556");	
-            var req = try! socket.recv(bytes).decode();
-            try! writeln("GOT REQ on 5556 %t".format(req));
+            var req = socket.recv(bytes).decode();
+
             var msg: RequestMsg = extractRequest(req);
             var user   = msg.user;
             var token  = msg.token;
@@ -231,10 +234,10 @@ proc main() {
                 when "metrics" {repTuple = metricsMsg(cmd, args, st);}        
                 when "connect" {
                     if authenticate {
-                        repTuple = new MsgTuple("connected to arkouda server tcp://*:5556 as user %s with token %s".format(
-                                                      user,token), MsgType.NORMAL);
+                        repTuple = new MsgTuple("connected to arkouda metrics server tcp://*:%i as user " +
+                                                "%s with token %s".format(port,user,token), MsgType.NORMAL);
                     } else {
-                        repTuple = new MsgTuple("connected to arkouda server tcp://*:%i".format(ServerPort), 
+                        repTuple = new MsgTuple("connected to arkouda metrics server tcp://*:%i".format(port), 
                                                                                     MsgType.NORMAL);
                     }
                 }
