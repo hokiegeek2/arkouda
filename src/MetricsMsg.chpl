@@ -12,7 +12,7 @@ module MetricsMsg {
     use Memory.Diagnostics;
     use DateTime;
 
-    enum MetricCategory{ALL,NUM_REQUESTS,RESPONSE_TIME,SYSTEM,SERVER};
+    enum MetricCategory{ALL,NUM_REQUESTS,RESPONSE_TIME,SYSTEM,SERVER,SERVER_INFO};
     enum MetricScope{GLOBAL,LOCALE};
 
     private config const logLevel = ServerConfig.logLevel;
@@ -155,12 +155,14 @@ module MetricsMsg {
     }
 
     proc getSystemMetrics() throws {
-        var loc = 0;
         var metrics = new list(owned Metric?);
 
         for loc in Locales {
             var used = memoryUsed():int;
-            var total = here.physicalMemory();
+            var total = loc.physicalMemory():int;
+            
+            mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                              'memoryUsed: %i physicalMemory: %i'.format(used,total));
 
             metrics.append(new LocaleMetric(name="arkouda_memory_used_per_locale",
                              category=MetricCategory.SYSTEM,
@@ -174,6 +176,34 @@ module MetricsMsg {
                              value=used/total * 100.0000):Metric);                            
         }
         return metrics;
+    }
+    
+    proc getServerInfo() throws {
+        var localeInfos = new list(owned LocaleInfo?); 
+
+        for loc in Locales {
+            var used = memoryUsed():int;
+            var total = here.physicalMemory():int;
+            
+            mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                              'memoryUsed: %i physicalMemory: %i'.format(used,total));
+            var info = new LocaleInfo(name=loc.name,
+                                        id=loc.id:string,
+                                        number_of_processing_units=loc.numPUs(),
+                                        physical_memory=loc.physicalMemory():int,
+                                        max_number_of_tasks=loc.maxTaskPar);   
+            mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                              'LocaleInfo %jt'.format(info));  
+            localeInfos.append(info);                                                                                                                  
+        }  
+ 
+        var serverInfo = new ServerInfo(server_hostname=serverHostname, 
+                          version=arkoudaVersion,
+                          server_port=ServerPort,
+                          locales=localeInfos);    
+        mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                              'ServerInfo %jt'.format(serverInfo));
+        return serverInfo;                            
     }
         
     class Metric {
@@ -192,6 +222,31 @@ module MetricsMsg {
             this.scope = scope;
             this.timestamp = timestamp;
             this.value = value;
+        }
+    }
+    
+    class LocaleInfo {
+        var name: string;
+        var id: string;
+        var number_of_processing_units: int;
+        var physical_memory: int;
+        var max_number_of_tasks: int;
+    }
+    
+    class ServerInfo {
+        var server_hostname: string;
+        var version: string;
+        var server_port: int;
+        var locales: [0..numLocales-1] owned LocaleInfo?;
+        var number_of_locales: int;
+        
+        proc init(server_hostname: string, version: string, server_port: int,
+                  locales) {
+            this.server_hostname = server_hostname;
+            this.version = version;
+            this.server_port = server_port;
+            this.locales = locales.toArray();
+            this.number_of_locales = this.locales.size;
         }
     }
     
@@ -230,6 +285,9 @@ module MetricsMsg {
             when MetricCategory.SYSTEM {
                 metrics = "%jt".format(getSystemMetrics());
             }
+            when MetricCategory.SERVER_INFO {
+                metrics = "%jt".format(getServerInfo());
+            }
             otherwise {
                 throw getErrorWithContext(getLineNumber(),getModuleName(),getRoutineName(),
                       'Invalid MetricType', 'IllegalArgumentError');
@@ -237,7 +295,7 @@ module MetricsMsg {
         }
 
         mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                            'metrics %t'.format(metrics));
+                            'metrics %s'.format(metrics));
         return new MsgTuple(metrics, MsgType.NORMAL);        
     }
 }
