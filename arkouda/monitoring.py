@@ -277,7 +277,7 @@ class ArkoudaMetrics:
                            locales=localeInfos)
         self.arkoudaServerInfo = Info('arkouda_server_information', 'Arkouda server and locales configuration information')
         self.arkoudaServerInfo.info({'arkouda_server_name': serverInfo.server_name,
-                                     'arkouda_server_hostbname': serverInfo.server_hostname,
+                                     'arkouda_server_hostname': serverInfo.server_hostname,
                                      'arkouda_version': serverInfo.version})
     
     def _initializeMetrics(self) -> None:
