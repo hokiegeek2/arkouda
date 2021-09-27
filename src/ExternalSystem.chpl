@@ -151,7 +151,7 @@ module ExternalSystem {
                 }
                 
             }
-            Curl.easySetopt(channel, CURLOPT_HTTPHEADER, args);  
+            Curl.curl_easy_setopt(channel, CURLOPT_HTTPHEADER, args);  
             return args;
         }
         
@@ -161,24 +161,24 @@ module ExternalSystem {
          * specified in the requestType instance attribute.
          */
         override proc write(payload: string) throws {
-            var curl = Curl.easyInit();
+            var curl = Curl.curl_easy_init();
 
-            Curl.easySetopt(curl, CURLOPT_URL, this.url);
+            Curl.curl_easy_setopt(curl, CURLOPT_URL, this.url);
             
             if verbose {
-                Curl.easySetopt(curl, CURLOPT_VERBOSE, true);
+                Curl.curl_easy_setopt(curl, CURLOPT_VERBOSE, true);
             }
 
             if this.ssl {
                 configureSsl(curl);
             } 
             
-            Curl.easySetopt(curl, CURLOPT_FAILONERROR, 1);
+            Curl.curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
             
             var args = generateHeader(curl);
 
-            Curl.easySetopt(curl, CURLOPT_POSTFIELDS, payload);
-            Curl.easySetopt(curl, CURLOPT_CUSTOMREQUEST, this.requestType:string);
+            Curl.curl_easy_setopt(curl, CURLOPT_POSTFIELDS, payload);
+            Curl.curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, this.requestType:string);
 
             esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                       "Configured HttpChannel for type %s format %s".format(
@@ -187,7 +187,7 @@ module ExternalSystem {
             esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                       "Executing Http request with payload %s".format(payload));
 
-            var ret = Curl.easyPerform(curl);
+            var ret = Curl.curl_easy_perform(curl);
             
             if ret == 0 {
                 esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
@@ -199,7 +199,7 @@ module ExternalSystem {
             }
 
             args.free();
-            Curl.easyCleanup(curl);     
+            Curl.curl_easy_cleanup(curl);     
             
             esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                        "Closed HttpChannel");      

@@ -259,7 +259,7 @@ module GenSymIO {
 
             sub.wait();
 
-            exitCode = sub.exit_status;
+            exitCode = sub.exitCode;
             
             var f = open(tmpfile, iomode.r);
             defer {  // This will ensure we try to close f when we exit the proc scope.
