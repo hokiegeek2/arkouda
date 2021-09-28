@@ -259,8 +259,14 @@ module GenSymIO {
 
             sub.wait();
 
-            exitCode = sub.exitCode;
-            
+            // Use new-style exitCode if available --
+            // https://github.com/chapel-lang/chapel/pull/18352
+            if hasField(sub.type, "exitCode") {
+                exitCode = sub.exitCode;
+            } else {
+                exitCode = sub.exit_status;
+            }
+
             var f = open(tmpfile, iomode.r);
             defer {  // This will ensure we try to close f when we exit the proc scope.
                 ensureClose(f);
@@ -1053,7 +1059,6 @@ module GenSymIO {
 
     proc tohdfMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         var (arrayName, dsetName, modeStr, jsonfile, dataType, segsName, writeOffsetsFlag)= payload.splitMsgToTuple(7);
-
         var mode = try! modeStr: int;
         var filename: string;
         var entry = st.lookup(arrayName);
@@ -1064,7 +1069,7 @@ module GenSymIO {
         } catch {
             var errorMsg = "Could not decode json filenames via tempfile " +
                                                     "(%i files: %s)".format(1, jsonfile);
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
@@ -1090,12 +1095,12 @@ module GenSymIO {
                      * uint8 arrays such as Strings out to external systems.
                      */
                     var e = toSymEntry(entry, uint(8));
-                    var segsEntry = st.lookup(segsName);                   
+                    var segsEntry = st.lookup(segsName);
                     var s_e = toSymEntry(segsEntry, int);
                     warnFlag = write1DDistStrings(filename, mode, dsetName, e.a, DType.UInt8, s_e.a, writeOffsets);
                 } otherwise {
                     var errorMsg = unrecognizedTypeError("tohdf", dtype2str(entry.dtype));
-                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);            
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
                     return new MsgTuple(errorMsg, MsgType.ERROR);
                 }
             }
