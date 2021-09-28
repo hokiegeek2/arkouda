@@ -1,9 +1,9 @@
 import os, json, time
 from enum import Enum
 from dataclasses import dataclass, asdict
-from typing import Dict, List, Union
-import numpy as np
-from prometheus_client import start_http_server, Counter, Gauge, Info
+from typing import cast, Dict, List, Optional, Union
+import numpy as np # type: ignore
+from prometheus_client import start_http_server, Counter, Gauge, Info # type: ignore
 import arkouda as ak
 from arkouda import client, logger
 from arkouda.logger import LogLevel
@@ -85,7 +85,7 @@ class Metric():
     
     def __init__(self, name : str, category : MetricCategory, scope : MetricScope, 
                  value : Union[float,int], timestamp : np.datetime64, 
-                 labels : List[Label]=None) -> None:
+                 labels : Optional[List[Label]]=None) -> None:
         object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'category', category)
         object.__setattr__(self, 'scope', scope)
@@ -213,16 +213,17 @@ class ArkoudaMetrics:
         self._initializeServerInfo()
         print('Completed Initialization of Arkouda Exporter')        
 
-    def asMetric(self, value : Dict[str,Union[float,int,str]]) -> Metric:
+    def asMetric(self, value : Dict[str,Union[float,int]]) -> Metric:
         scope = MetricScope(value ['scope'])
-                    
+        labels : Optional[List[Label]]
+            
         if scope == MetricScope.LOCALE:
             labels = [Label('locale_name',value=value['locale_name']),
                       Label('locale_num',value=value['locale_num'])]
         else:
             labels = None
 
-        return Metric(name=value['name'], 
+        return Metric(name=str(value['name']), 
                   category=MetricCategory(value['category']),
                   scope=MetricScope(value['scope']),
                   value=value['value'],
@@ -283,7 +284,7 @@ class ArkoudaMetrics:
     def _initializeMetrics(self) -> None:
         config = ak.get_config()
 
-        for locale in config['LocaleConfigs']:
+        for locale in cast(list,config['LocaleConfigs']):
             locale_num = locale['id']
             locale_name = locale['name']           
             self.memoryUsedPerLocale.labels(locale_name=locale_name, 
