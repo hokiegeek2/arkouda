@@ -21,9 +21,12 @@ use SymArrayDmap;
 use ServerErrorStrings;
 use Message;
 use MetricsMsg;
+use ExternalSystem;
 
 private config const logLevel = ServerConfig.logLevel;
 const asLogger = new Logger(logLevel);
+
+private config const externalSystem = SystemType.NONE;
 
 proc initArkoudaDirectory() {
     var arkDirectory = '%s%s%s'.format(here.cwd(), pathSep,'.arkouda');
@@ -208,6 +211,41 @@ proc main() {
                          msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));
     }
 
+    /*
+     * Registers Arkouda with an external system on startup, defaulting to none.
+     */
+    proc registerWithExternalSystem() throws {   
+        select externalSystem {
+            when SystemType.KUBERNETES {     
+                registerWithKubernetes();
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Registered Arkouda with Kubernetes");
+            }
+            otherwise {
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Did not register Arkouda with any external systems");            
+            }
+        }
+    }
+   
+    proc deregisterFromExternalSystem() throws {
+        select externalSystem {
+            when SystemType.KUBERNETES {     
+                deregisterFromKubernetes();
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Deregistered Arkouda from Kubernetes");
+            }
+            otherwise {
+                asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                        "Did not deregister Arkouda from any external system");            
+            }
+        }    
+    }
+      
+    on Locales[0] {
+         registerWithExternalSystem();
+    }
+    
     proc runMetricsServer() throws {
         var context: ZMQ.Context;
         var socket: ZMQ.Socket = context.socket(ZMQ.REP);
@@ -427,8 +465,7 @@ proc main() {
 		            when "register"          {repTuple = registerMsg(cmd, args, st);}
 		            when "attach"            {repTuple = attachMsg(cmd, args, st);}
 		            when "unregister"        {repTuple = unregisterMsg(cmd, args, st);}
-		            when "clear"             {repTuple = clearMsg(cmd, args, st);}       
-		            //when "metrics"           {repTuple = metricsMsg(cmd, args, st);}        
+		            when "clear"             {repTuple = clearMsg(cmd, args, st);}            
 		            when "connect" {
 		                serverMetrics.increment('num_connections',1);
 		                if authenticate {
@@ -514,6 +551,10 @@ proc main() {
     t1.stop();
 
     deleteServerConnectionInfo();
+    
+    on Locales[0] {
+         deregisterFromExternalSystem();
+    }
 
     asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
                "requests = %i responseCount = %i elapsed sec = %i".format(reqCount,repCount,

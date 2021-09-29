@@ -214,7 +214,7 @@ to install the Chapel dependencies followed by downloading and building Chapel.
 ```bash
 # Update Linux kernel and install Chapel dependencies
 sudo apt-get update
-sudo apt-get install gcc g++ m4 perl python python-dev python-setuptools bash make mawk git pkg-config
+sudo apt-get install gcc g++ m4 perl python python-dev python-setuptools bash make mawk git pkg-config libcurl4-gnutls-dev -y
 
 # Download latest Chapel release, explode archive, and navigate to source root directory
 wget https://github.com/chapel-lang/chapel/releases/download/1.24.1/chapel-1.24.1.tar.gz
