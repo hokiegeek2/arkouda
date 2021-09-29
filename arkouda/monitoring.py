@@ -1,6 +1,8 @@
 import os, json, time
 from enum import Enum
-from dataclasses import dataclass, asdict
+import datetime
+from dateutil import parser
+from dataclasses import dataclass
 from typing import cast, Dict, List, Optional, Union
 import numpy as np # type: ignore
 from prometheus_client import start_http_server, Counter, Gauge, Info # type: ignore
@@ -149,7 +151,8 @@ class ArkoudaMetrics:
     __slots__ = ('serverName', 'exportPort', 'pollingInterval','totalNumberOfRequests',
                  'numberOfRequestsPerCommand','numberOfConnections', '_updateMetric', 
                  'responseTimesPerCommand', 'memoryUsedPerLocale', 'pctMemoryUsedPerLocale',
-                 'systemMemoryPerLocale', 'systemProcessingUnitsPerLocale', 'arkoudaServerInfo')
+                 'systemMemoryPerLocale', 'systemProcessingUnitsPerLocale', 'reportedTimestamp',
+                 'arkoudaServerInfo')
     
     serverName: str
     exportPort: int
@@ -162,6 +165,7 @@ class ArkoudaMetrics:
     pctMemoryUsedPerLocale: Gauge
     systemMemoryPerLocale: Gauge
     systemProcessingUnitsPerLocale: Gauge
+    reportedTimestamp: Gauge
     arkoudaServerInfo: Info
 
     def __init__(self, serverName : str, exportPort : int=5080, pollingInterval : int=5) -> None:
@@ -171,6 +175,9 @@ class ArkoudaMetrics:
 
         self.numberOfConnections = Gauge('arkouda_number_of_connections', 
                                          'Number of Arkouda connections',
+                                         labelnames=['arkouda_server_name'])
+        self.reportedTimestamp = Gauge('arkouda_reported_timestamp', 
+                                         'Metric timestamp as reported by Arkouda',
                                          labelnames=['arkouda_server_name'])
         self.totalNumberOfRequests = Gauge('arkouda_total_number_of_requests', 
                                            'Total number of Arkouda requests', 
@@ -227,7 +234,7 @@ class ArkoudaMetrics:
                   category=MetricCategory(value['category']),
                   scope=MetricScope(value['scope']),
                   value=value['value'],
-                  timestamp=np.datetime64(value['timestamp']),
+                  timestamp=parser.parse(value['timestamp']),
                   labels=labels)    
     
     def _updateNumberOfRequests(self, metric : Metric) -> None:
@@ -244,7 +251,10 @@ class ArkoudaMetrics:
                                                arkouda_server_name=self.serverName).set(metric.value)
 
     def _updateServerMetrics(self, metric : Metric) -> None:
-        self.numberOfConnections.labels(arkouda_server_name=self.serverName).set(metric.value)        
+        self.numberOfConnections.labels(arkouda_server_name=self.serverName).set(metric.value)   
+        
+    def _updateReportedTimestamp(self, value : datetime) -> None:     
+        self.reportedTimestamp.labels(arkouda_server_name=self.serverName).set(value)
             
     def _updateSystemMetrics(self, metric : Metric) -> None:
         metricName = metric.name
@@ -301,10 +311,18 @@ class ArkoudaMetrics:
 
     def fetch(self):
         metrics = json.loads(client.generic_msg(cmd='metrics', args=str(MetricCategory.ALL)), 
-                             object_hook=self.asMetric)      
+                             object_hook=self.asMetric)
+
+        if len(metrics) > 0:
+            self._assignTimestamp(metrics)
+             
         for metric in metrics:
             self._updateMetric[metric.category](metric)
             logger.debug('UPDATED METRIC {}'.format(metric))
+
+    def _assignTimestamp(self, metrics : List[Metric]) -> None:
+            self.reportedTimestamp.labels(arkouda_server_name=self.serverName).set(
+                metrics[0].timestamp.timestamp())        
 
 def main():
     os.environ['ARKOUDA_SERVER_NAME']='hokiegeek2'
