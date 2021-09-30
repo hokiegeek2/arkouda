@@ -1,7 +1,7 @@
 import os, json, time
 from enum import Enum
-import datetime
-from dateutil import parser
+from datetime import datetime
+from dateutil import parser # type: ignore
 from dataclasses import dataclass
 from typing import cast, Dict, List, Optional, Union
 import numpy as np # type: ignore
