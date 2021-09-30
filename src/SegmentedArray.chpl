@@ -15,7 +15,7 @@ module SegmentedArray {
   use Reflection;
   use Logging;
   use ServerErrors;
-  use Regexp;
+  use Regex;
 
   private config const logLevel = ServerConfig.logLevel;
   const saLogger = new Logger(logLevel);
@@ -507,7 +507,7 @@ module SegmentedArray {
                                                                                var matchAgg = newDstAggregator(int)) {
         var matches = myRegex.matches(interpretAsString(origVals[off..#len]));
         for m in matches {
-          var match: reMatch = m[0];
+          var match: regexMatch = m[0];
           lenAgg.copy(sparseLens[off + match.offset:int], match.size);
           startAgg.copy(matchStartBool[off + match.offset:int], true);
         }
@@ -628,7 +628,7 @@ module SegmentedArray {
         when SearchMode.endsWith {
           forall (o, l, h) in zip(oa, lengths, hits) with (var myRegex = _unsafeCompileRegex(pattern)) {
             var matches = myRegex.matches(interpretAsString(va[o..#l]));
-            var lastMatch: reMatch = matches[matches.size-1][0];
+            var lastMatch: regexMatch = matches[matches.size-1][0];
             // h = true iff start(lastMatch) + len(lastMatch) == len(string) (-1 to account for null byte)
             h = lastMatch.offset + lastMatch.size == l-1;
           }
@@ -637,7 +637,7 @@ module SegmentedArray {
           forall (o, l, h) in zip(oa, lengths, hits) with (var myRegex = _unsafeCompileRegex(pattern)) {
             // regexp.match only returns a match if the start of the string matches the pattern
             // h = true iff len(match) == len(string) (-1 to account for null byte)
-            // if no match is found reMatch.size returns -1
+            // if no match is found regexMatch.size returns -1
             h = myRegex.match(interpretAsString(va[o..#l])).size == l-1;
           }
         }
@@ -765,7 +765,7 @@ module SegmentedArray {
         else {
           // The string can be peeled; figure out where to split
           var match_index: int = if left then (times - 1) else (matches.size - times);
-          var match: reMatch = matches[match_index][0];
+          var match: regexMatch = matches[match_index][0];
           var j: int = o + match.offset: int;
           // j is now the start of the correct delimiter
           // tweak leftEnd and rightStart based on includeDelimiter

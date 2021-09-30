@@ -3,7 +3,7 @@ from enum import Enum
 from datetime import datetime
 from dateutil import parser # type: ignore
 from dataclasses import dataclass
-from typing import cast, Dict, List, Optional, Union
+from typing import Dict, List, Optional, Union
 import numpy as np # type: ignore
 from prometheus_client import start_http_server, Counter, Gauge, Info # type: ignore
 import arkouda as ak
@@ -98,23 +98,27 @@ class Metric():
 @dataclass(frozen=True)
 class LocaleInfo():
 
-    __slots__ = ('server_name', 'locale_name', 'locale_id', 'number_of_processing_units', 
-                 'physical_memory', 'max_number_of_tasks')
+    __slots__ = ('server_name', 'locale_name', 'locale_id', 'locale_hostname',
+                 'number_of_processing_units', 'physical_memory', 
+                 'max_number_of_tasks')
 
     server_name: str
     locale_name: str
     locale_id: str
+    locale_hostname: str
     number_of_processing_units: int
     physical_memory: int
     max_number_of_tasks: int
     
     def __init__(self, server_name : str, locale_name : str, locale_id : str, 
-                 number_of_processing_units : int, physical_memory : int, 
-                 max_number_of_tasks : int) -> None:
+                 locale_hostname: str, number_of_processing_units : int, 
+                 physical_memory : int, max_number_of_tasks : int) -> None:
         object.__setattr__(self, 'server_name', server_name)
         object.__setattr__(self, 'locale_name', locale_name)
         object.__setattr__(self, 'locale_id', locale_id)
-        object.__setattr__(self, 'number_of_processing_units', number_of_processing_units)
+        object.__setattr__(self, 'locale_hostname', locale_hostname)
+        object.__setattr__(self, 'number_of_processing_units', 
+                           number_of_processing_units)
         object.__setattr__(self, 'physical_memory', physical_memory)
         object.__setattr__(self, 'max_number_of_tasks', max_number_of_tasks)
 
@@ -124,7 +128,7 @@ class ServerInfo():
 
     __slots__ = ('server_name', 'server_hostname', 'server_port', 'version', 
                  'total_physical_memory', 'total_number_of_processing_units',
-                 'number_of_locales')
+                 'number_of_locales', 'locales')
     server_name: str
     server_hostname: str
     server_port: int
@@ -132,14 +136,15 @@ class ServerInfo():
     total_physical_memory: int
     total_number_of_processing_units: int
     number_of_locales: int
+    locales: List[LocaleInfo]
     
-    def __init__(self, server_name : str, server_hostname : str, server_port : int, version : str, 
-                 locales : List[LocaleInfo]) -> None:
+    def __init__(self, server_name : str, server_hostname : str, server_port : int, 
+                 version : str, locales : List[LocaleInfo]) -> None:
         object.__setattr__(self, 'server_name', server_name)
         object.__setattr__(self, 'server_hostname', server_hostname)
         object.__setattr__(self, 'server_port', server_port)
         object.__setattr__(self, 'version', version)
-        #object.__setattr__(self, 'locales', locales)
+        object.__setattr__(self, 'locales', locales)
         object.__setattr__(self, 'number_of_locales', len(locales))
         object.__setattr__(self, 'total_number_of_processing_units',
                         reduce(add,[loc.number_of_processing_units for loc in locales]))
@@ -168,7 +173,8 @@ class ArkoudaMetrics:
     reportedTimestamp: Gauge
     arkoudaServerInfo: Info
 
-    def __init__(self, serverName : str, exportPort : int=5080, pollingInterval : int=5) -> None:
+    def __init__(self, serverName : str, exportPort : int=5080, 
+                 pollingInterval : int=5) -> None:
         self.serverName =  serverName 
         self.exportPort = exportPort
         self.pollingInterval = pollingInterval
@@ -183,23 +189,37 @@ class ArkoudaMetrics:
                                            'Total number of Arkouda requests', 
                                            labelnames=['arkouda_server_name'])   
         self.numberOfRequestsPerCommand = Gauge('arkouda_number_of_requests_per_command', 
-                                                'Total number of Arkouda requests per command',
-                                                labelnames=['command', 'arkouda_server_name'])       
+                                            'Total number of Arkouda requests per command',
+                                            labelnames=['command', 
+                                                        'arkouda_server_name'])       
         self.responseTimesPerCommand = Gauge('arkouda_response_times_per_command', 
-                                                'Response times of Arkouda commands',
-                                                labelnames=['command', 'arkouda_server_name'])         
+                                    'Response times of Arkouda commands',
+                                    labelnames=['command', 
+                                                'arkouda_server_name'])         
         self.memoryUsedPerLocale = Gauge('arkouda_memory_used_per_locale', 
                                 'Memory used by Arkouda on each locale',
-                                labelnames=['locale_name','locale_num', 'arkouda_server_name'])
+                                labelnames=['locale_name',
+                                            'locale_num', 
+                                            'locale_hostname',
+                                            'arkouda_server_name'])
         self.pctMemoryUsedPerLocale = Gauge('arkouda_pct_memory_used_per_locale', 
-                                   'Percent of total memory used by Arkouda on each locale',
-                                   labelnames=['locale_name','locale_num', 'arkouda_server_name'])
+                                'Percent of total memory used by Arkouda on each locale',
+                                labelnames=['locale_name',
+                                            'locale_num', 
+                                            'locale_hostname',
+                                            'arkouda_server_name'])
         self.systemMemoryPerLocale = Gauge('arkouda_memory_per_locale', 
                                           'System memory on each locale host',
-                                          labelnames=['locale_name','locale_num', 'arkouda_server_name'])
+                                          labelnames=['locale_name',
+                                                      'locale_num',
+                                                      'locale_hostname', 
+                                                      'arkouda_server_name'])
         self.systemProcessingUnitsPerLocale = Gauge('arkouda_processing_units_per_locale', 
                                           'System memory on each locale host',
-                                          labelnames=['locale_name','locale_num', 'arkouda_server_name'])
+                                          labelnames=['locale_name',
+                                                      'locale_num', 
+                                                      'locale_hostname',
+                                                      'arkouda_server_name'])
 
         self._updateMetric = {
             MetricCategory.NUM_REQUESTS: lambda x: self._updateNumberOfRequests(x),
@@ -215,8 +235,7 @@ class ArkoudaMetrics:
 
         if not client.connected:
             raise EnvironmentError('Not connected to Arkouda server')
-        
-        self._initializeMetrics()
+
         self._initializeServerInfo()
         print('Completed Initialization of Arkouda Exporter')        
 
@@ -226,7 +245,8 @@ class ArkoudaMetrics:
             
         if scope == MetricScope.LOCALE:
             labels = [Label('locale_name',value=value['locale_name']),
-                      Label('locale_num',value=value['locale_num'])]
+                      Label('locale_num',value=value['locale_num']),
+                      Label('locale_hostname',value=value['locale_hostname'])]
         else:
             labels = None
 
@@ -262,10 +282,12 @@ class ArkoudaMetrics:
         if metricName == 'arkouda_memory_used_per_locale':
             self.memoryUsedPerLocale.labels(locale_name=metric.labels[0].value,
                                             locale_num=metric.labels[1].value,
+                                            locale_hostname=metric.labels[2].value,
                                             arkouda_server_name=self.serverName).set(metric.value)
         else:
             self.pctMemoryUsedPerLocale.labels(locale_name=metric.labels[0].value,
                                             locale_num=metric.labels[1].value,
+                                            locale_hostname=metric.labels[2].value,
                                             arkouda_server_name=self.serverName).set(metric.value)            
     
     def _initializeServerInfo(self) -> None: 
@@ -276,33 +298,22 @@ class ArkoudaMetrics:
                            server_name=self.serverName,
                            locale_name=loc.name,
                            locale_id=loc.id,
+                           locale_hostname=loc.hostname,
                            number_of_processing_units=loc.number_of_processing_units,
                            physical_memory=loc.physical_memory,
                            max_number_of_tasks=loc.max_number_of_tasks) for loc in info.locales]
         
         serverInfo = ServerInfo(
                            server_name=self.serverName,
-                           server_hostname=info.server_hostname,
+                           server_hostname=info.hostname,
                            server_port=info.server_port,
                            version=info.version,
                            locales=localeInfos)
         self.arkoudaServerInfo = Info('arkouda_server_information', 'Arkouda server and locales configuration information')
         self.arkoudaServerInfo.info({'arkouda_server_name': serverInfo.server_name,
                                      'arkouda_server_hostname': serverInfo.server_hostname,
-                                     'arkouda_version': serverInfo.version})
-    
-    def _initializeMetrics(self) -> None:
-        config = ak.get_config()
-
-        for locale in cast(list,config['LocaleConfigs']):
-            locale_num = locale['id']
-            locale_name = locale['name']           
-            self.memoryUsedPerLocale.labels(locale_name=locale_name, 
-                                            locale_num=locale_num,
-                                            arkouda_server_name=self.serverName)
-            self.pctMemoryUsedPerLocale.labels(locale_name=locale_name, 
-                                               locale_num=locale_num,
-                                               arkouda_server_name=self.serverName)
+                                     'arkouda_version': serverInfo.version,
+                                     'arkouda_number_of_locales': str(serverInfo.number_of_locales)})
 
     def run_metrics_loop(self):
         while True:

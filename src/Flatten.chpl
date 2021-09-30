@@ -6,7 +6,7 @@ module Flatten {
   use SymArrayDmap;
   use CommAggregation;
   use Reflection;
-  use Regexp;
+  use Regex;
   use CPtr;
   use SegmentedArray only checkCompile, _unsafeCompileRegex;
 
@@ -65,7 +65,7 @@ module Flatten {
       // mark the locations of null bytes (the positions before original offsets and the last character of matches)
       var matches = myRegex.matches(interpretAsBytes(origVals[off..#len]));
       for m in matches {
-        var match: reMatch = m[0];
+        var match: regexMatch = m[0];
         // set writeToVal to false for matches (except the last character of the match because we will write a null byte)
         for k in (off + match.offset:int)..#(match.size - 1) {
           writeAgg.copy(writeToVal[k], false);

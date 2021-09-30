@@ -242,7 +242,7 @@ proc main() {
                     }
                 }
 		        when "getconfig" {repTuple = getconfigMsg(cmd, args, st);}
-            }            
+            }           
 
             socket.send(serialize(msg=repTuple.msg,msgType=repTuple.msgType,
                                                 msgFormat=MsgFormat.STRING, user=user));
@@ -350,11 +350,11 @@ proc main() {
 		         * For messages that return a string repTuple is filled. For binary
 		         * messages the message is sent directly to minimize copies.
 		         */
-		        var repTuple: MsgTuple;
-		
-		        select cmd
-		        {
-		            when "array"             {repTuple = arrayMsg(cmd, args, payload, st);}
+                var repTuple: MsgTuple;
+
+                select cmd
+                {
+                    when "array"             {repTuple = arrayMsg(cmd, args, payload, st);}
 		            when "tondarray"         {
 		              var binaryRepMsg = tondarrayMsg(cmd, args, st);
 		              sendRepMsg(binaryRepMsg);
