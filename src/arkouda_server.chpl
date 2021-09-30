@@ -241,7 +241,7 @@ proc main() {
             }
         }    
     }
-      
+
     on Locales[0] {
          registerWithExternalSystem();
     }
@@ -407,13 +407,15 @@ proc main() {
 		            when "segmentLengths"    {repTuple = segmentLengthsMsg(cmd, args, st);}
 		            when "segmentedHash"     {repTuple = segmentedHashMsg(cmd, args, st);}
 		            when "segmentedEfunc"    {repTuple = segmentedEfuncMsg(cmd, args, st);}
+                    when "segmentedFindLoc"  {repTuple = segmentedFindLocMsg(cmd, args, st);}
+                    when "segmentedFindAll"  {repTuple = segmentedFindAllMsg(cmd, args, st);}		            
 		            when "segmentedPeel"     {repTuple = segmentedPeelMsg(cmd, args, st);}
 		            when "segmentedIndex"    {repTuple = segmentedIndexMsg(cmd, args, st);}
 		            when "segmentedBinopvv"  {repTuple = segBinopvvMsg(cmd, args, st);}
 		            when "segmentedBinopvs"  {repTuple = segBinopvsMsg(cmd, args, st);}
 		            when "segmentedGroup"    {repTuple = segGroupMsg(cmd, args, st);}
 		            when "segmentedIn1d"     {repTuple = segIn1dMsg(cmd, args, st);}
-		            when "segmentedFlatten"  {repTuple = segFlattenMsg(cmd, args, st);}
+		            when "segmentedFlatten"  {repTuple = segFlattenMsg(cmd, args, st);}		            
 		            when "lshdf"             {repTuple = lshdfMsg(cmd, args, st);}
 		            when "readAllHdf"        {repTuple = readAllHdfMsg(cmd, args, st);}
 		            when "tohdf"             {repTuple = tohdfMsg(cmd, args, st);}
