@@ -168,11 +168,13 @@ module MetricsMsg {
                              category=MetricCategory.SYSTEM,
                              locale_num=loc.id,
                              locale_name=loc.name,
+                             locale_hostname = loc.hostname,
                              value=used):Metric);
             metrics.append(new LocaleMetric(name="arkouda_percent_memory_used_per_locale",
                              category=MetricCategory.SYSTEM,
                              locale_num=loc.id,
                              locale_name=loc.name,
+                             locale_hostname = loc.hostname,                             
                              value=used/total * 100.0000):Metric);                            
         }
         return metrics;
@@ -184,25 +186,20 @@ module MetricsMsg {
         for loc in Locales {
             var used = memoryUsed():int;
             var total = here.physicalMemory():int;
-            
-            mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                              'memoryUsed: %i physicalMemory: %i'.format(used,total));
+
             var info = new LocaleInfo(name=loc.name,
-                                        id=loc.id:string,
-                                        number_of_processing_units=loc.numPUs(),
-                                        physical_memory=loc.physicalMemory():int,
-                                        max_number_of_tasks=loc.maxTaskPar);   
-            mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                              'LocaleInfo %jt'.format(info));  
+                                      id=loc.id:string,
+                                      hostname=loc.hostname,
+                                      number_of_processing_units=loc.numPUs(),
+                                      physical_memory=loc.physicalMemory():int,
+                                      max_number_of_tasks=loc.maxTaskPar);   
             localeInfos.append(info);                                                                                                                  
         }  
  
-        var serverInfo = new ServerInfo(server_hostname=serverHostname, 
-                          version=arkoudaVersion,
-                          server_port=ServerPort,
-                          locales=localeInfos);    
-        mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                              'ServerInfo %jt'.format(serverInfo));
+        var serverInfo = new ServerInfo(hostname=serverHostname, 
+                                        version=arkoudaVersion,
+                                        server_port=ServerPort,
+                                        locales=localeInfos);
         return serverInfo;                            
     }
         
@@ -228,21 +225,22 @@ module MetricsMsg {
     class LocaleInfo {
         var name: string;
         var id: string;
+        var hostname: string;
         var number_of_processing_units: int;
         var physical_memory: int;
         var max_number_of_tasks: int;
     }
     
     class ServerInfo {
-        var server_hostname: string;
+        var hostname: string;
         var version: string;
         var server_port: int;
         var locales: [0..numLocales-1] owned LocaleInfo?;
         var number_of_locales: int;
         
-        proc init(server_hostname: string, version: string, server_port: int,
+        proc init(hostname: string, version: string, server_port: int,
                   locales) {
-            this.server_hostname = server_hostname;
+            this.hostname = hostname;
             this.version = version;
             this.server_port = server_port;
             this.locales = locales.toArray();
@@ -253,15 +251,20 @@ module MetricsMsg {
     class LocaleMetric : Metric {
         var locale_num: int;
         var locale_name: string;
+        var locale_hostname: string;
 
         proc init(name: string, category: MetricCategory, 
                                 scope: MetricScope=MetricScope.LOCALE, 
                                 timestamp: datetime=datetime.now(), 
-                                value: real, locale_num: int, locale_name: string) {
+                                value: real, 
+                                locale_num: int, 
+                                locale_name: string, 
+                                locale_hostname: string) {
             super.init(name=name, category=category, scope=scope, 
                                 timestamp=timestamp, value=value);
             this.locale_num = locale_num;
             this.locale_name = locale_name;
+            this.locale_hostname = locale_hostname;
         }
     }
 

@@ -44,6 +44,48 @@ class RegexTest(ArkoudaTest):
         self.assertFalse(aaa_strings.match('ing a+').any())
         self.assertFalse(aaa_strings.match('a+ str').any())
 
+    def test_regex_find_locations(self):
+        strings = ak.array(['{} string {}'.format(i, i) for i in range(1, 6)])
+
+        expected_num_matches = [2, 2, 2, 2, 2]
+        expected_starts = [0, 9, 11, 20, 22, 31, 33, 42, 44, 53]
+        expected_lens = [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+        actual_num_matches, actual_starts, actual_lens = strings.find_locations('\\d')
+        self.assertListEqual(expected_num_matches, actual_num_matches.to_ndarray().tolist())
+        self.assertListEqual(expected_starts, actual_starts.to_ndarray().tolist())
+        self.assertListEqual(expected_lens, actual_lens.to_ndarray().tolist())
+
+        expected_num_matches = [1, 1, 1, 1, 1]
+        expected_starts = [2, 13, 24, 35, 46]
+        expected_lens = [8, 8, 8, 8, 8]
+        actual_num_matches, actual_starts, actual_lens = strings.find_locations('string \\d')
+        self.assertListEqual(expected_num_matches, actual_num_matches.to_ndarray().tolist())
+        self.assertListEqual(expected_starts, actual_starts.to_ndarray().tolist())
+        self.assertListEqual(expected_lens, actual_lens.to_ndarray().tolist())
+
+    def test_regex_findall(self):
+        strings = ak.array(['{} string {}'.format(i, i) for i in range(1, 6)])
+        expected_matches = ['1', '1', '2', '2', '3', '3', '4', '4', '5', '5']
+        expected_match_origins = [0, 0, 1, 1, 2, 2, 3, 3, 4, 4]
+        actual_matches, actual_match_origins = strings.findall('\\d', return_match_origins=True)
+        self.assertListEqual(expected_matches, actual_matches.to_ndarray().tolist())
+        self.assertListEqual(expected_match_origins, actual_match_origins.to_ndarray().tolist())
+        actual_matches = strings.findall('\\d')
+        self.assertListEqual(expected_matches, actual_matches.to_ndarray().tolist())
+
+        expected_matches = ['string 1', 'string 2', 'string 3', 'string 4', 'string 5']
+        expected_match_origins = [0, 1, 2, 3, 4]
+        actual_matches, actual_match_origins = strings.findall('string \\d', return_match_origins=True)
+        self.assertListEqual(expected_matches, actual_matches.to_ndarray().tolist())
+        self.assertListEqual(expected_match_origins, actual_match_origins.to_ndarray().tolist())
+
+        under = ak.array(['', '____', '_1_2', '3___4___', '5'])
+        expected_matches = ['____', '_', '_', '___', '___']
+        expected_match_origins = [1, 2, 2, 3, 3]
+        actual_matches, actual_match_origins = under.findall('_+', return_match_origins=True)
+        self.assertListEqual(expected_matches, actual_matches.to_ndarray().tolist())
+        self.assertListEqual(expected_match_origins, actual_match_origins.to_ndarray().tolist())
+
     def test_regex_peel(self):
         orig = ak.array(['a.b', 'c.d', 'e.f.g'])
         digit = ak.array(['a1b', 'c1d', 'e1f2g'])
@@ -89,3 +131,39 @@ class RegexTest(ArkoudaTest):
         self.assertListEqual(['', '', '.f.g'], o_right.to_ndarray().tolist())
         self.assertListEqual(['', '', '1f2g'], d_right.to_ndarray().tolist())
         self.assertListEqual(['', '', '__f____g'], u_right.to_ndarray().tolist())
+
+    def test_regex_flatten(self):
+        orig = ak.array(['one|two', 'three|four|five', 'six', 'seven|eight|nine|ten|', 'eleven'])
+        digit = ak.array(['one1two', 'three2four3five', 'six', 'seven4eight5nine6ten7', 'eleven'])
+        under = ak.array(['one_two', 'three_four__five', 'six', 'seven_____eight__nine____ten_', 'eleven'])
+
+        answer_flat = ['one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine', 'ten', '', 'eleven']
+        answer_map = [0, 2, 5, 6, 11]
+
+        orig_flat, orig_map = orig.flatten('|', return_segments=True)
+        digit_flat, digit_map = digit.flatten('\\d', return_segments=True, regex=True)
+        under_flat, under_map = under.flatten('_+', return_segments=True, regex=True)
+
+        self.assertListEqual(answer_flat, orig_flat.to_ndarray().tolist())
+        self.assertListEqual(answer_flat, digit_flat.to_ndarray().tolist())
+        self.assertListEqual(answer_flat, under_flat.to_ndarray().tolist())
+
+        self.assertListEqual(answer_map, orig_map.to_ndarray().tolist())
+        self.assertListEqual(answer_map, digit_map.to_ndarray().tolist())
+        self.assertListEqual(answer_map, under_map.to_ndarray().tolist())
+
+        # empty string, start with delim, end with delim, and only delim cases
+        orig = ak.array(['', '|', '|1|2', '3|4|', '5'])
+        regex = ak.array(['', '____', '_1_2', '3___4___', '5'])
+
+        answer_flat = ['', '', '', '', '1', '2', '3', '4', '', '5']
+        answer_map = [0, 1, 3, 6, 9]
+
+        orig_flat, orig_map = orig.flatten('|', return_segments=True)
+        regex_flat, regex_map = regex.flatten('_+', return_segments=True, regex=True)
+
+        self.assertListEqual(answer_flat, orig_flat.to_ndarray().tolist())
+        self.assertListEqual(answer_flat, regex_flat.to_ndarray().tolist())
+
+        self.assertListEqual(answer_map, orig_map.to_ndarray().tolist())
+        self.assertListEqual(answer_map, regex_map.to_ndarray().tolist())

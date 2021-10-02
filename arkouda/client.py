@@ -1,5 +1,5 @@
 import json, os
-from typing import cast, Mapping, Optional, Tuple, Union
+from typing import cast, List, Mapping, Optional, Tuple, Union
 import warnings
 import zmq # type: ignore
 import pyfiglet # type: ignore
@@ -552,7 +552,7 @@ def generic_msg(cmd : str, args : str=None, payload : memoryview=None, send_bina
         socket.connect(pspStr)
         raise e
 
-def get_config() -> Mapping[str, Union[str, int, float]]:
+def get_config() -> Mapping[str, Union[str, int, float,List[dict]]]:
     """
     Get runtime information about the server.
 

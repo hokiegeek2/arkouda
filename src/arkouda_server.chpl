@@ -282,7 +282,7 @@ proc main() {
                     }
                 }
 		        when "getconfig" {repTuple = getconfigMsg(cmd, args, st);}
-            }            
+            }           
 
             socket.send(serialize(msg=repTuple.msg,msgType=repTuple.msgType,
                                                 msgFormat=MsgFormat.STRING, user=user));
@@ -390,11 +390,11 @@ proc main() {
 		         * For messages that return a string repTuple is filled. For binary
 		         * messages the message is sent directly to minimize copies.
 		         */
-		        var repTuple: MsgTuple;
-		
-		        select cmd
-		        {
-		            when "array"             {repTuple = arrayMsg(cmd, args, payload, st);}
+                var repTuple: MsgTuple;
+
+                select cmd
+                {
+                    when "array"             {repTuple = arrayMsg(cmd, args, payload, st);}
 		            when "tondarray"         {
 		              var binaryRepMsg = tondarrayMsg(cmd, args, st);
 		              sendRepMsg(binaryRepMsg);
@@ -407,15 +407,17 @@ proc main() {
 		            when "setxor1d"          {repTuple = setxor1dMsg(cmd, args, st);}
 		            when "union1d"           {repTuple = union1dMsg(cmd, args, st);}
 		            when "segmentLengths"    {repTuple = segmentLengthsMsg(cmd, args, st);}
-		            when "segmentedHash"     {repTuple = segmentedHashMsg(cmd, args, st);}
-		            when "segmentedEfunc"    {repTuple = segmentedEfuncMsg(cmd, args, st);}
-		            when "segmentedPeel"     {repTuple = segmentedPeelMsg(cmd, args, st);}
-		            when "segmentedIndex"    {repTuple = segmentedIndexMsg(cmd, args, st);}
-		            when "segmentedBinopvv"  {repTuple = segBinopvvMsg(cmd, args, st);}
-		            when "segmentedBinopvs"  {repTuple = segBinopvsMsg(cmd, args, st);}
-		            when "segmentedGroup"    {repTuple = segGroupMsg(cmd, args, st);}
-		            when "segmentedIn1d"     {repTuple = segIn1dMsg(cmd, args, st);}
-		            when "segmentedFlatten"  {repTuple = segFlattenMsg(cmd, args, st);}
+                    when "segmentedHash"     {repTuple = segmentedHashMsg(cmd, args, st);}
+                    when "segmentedEfunc"    {repTuple = segmentedEfuncMsg(cmd, args, st);}
+                    when "segmentedFindLoc"  {repTuple = segmentedFindLocMsg(cmd, args, st);}
+                    when "segmentedFindAll"  {repTuple = segmentedFindAllMsg(cmd, args, st);}
+                    when "segmentedPeel"     {repTuple = segmentedPeelMsg(cmd, args, st);}
+                    when "segmentedIndex"    {repTuple = segmentedIndexMsg(cmd, args, st);}
+                    when "segmentedBinopvv"  {repTuple = segBinopvvMsg(cmd, args, st);}
+                    when "segmentedBinopvs"  {repTuple = segBinopvsMsg(cmd, args, st);}
+                    when "segmentedGroup"    {repTuple = segGroupMsg(cmd, args, st);}
+                    when "segmentedIn1d"     {repTuple = segIn1dMsg(cmd, args, st);}
+                    when "segmentedFlatten"  {repTuple = segFlattenMsg(cmd, args, st);}
 		            when "lshdf"             {repTuple = lshdfMsg(cmd, args, st);}
 		            when "readAllHdf"        {repTuple = readAllHdfMsg(cmd, args, st);}
 		            when "tohdf"             {repTuple = tohdfMsg(cmd, args, st);}

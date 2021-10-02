@@ -137,7 +137,9 @@ setup(
         'typeguard==2.10.0',
         'pyfiglet',
         'kubernetes',
-        'versioneer'
+        'versioneer',
+        'python-dateutil',
+        'prometheus_client'
     ],
 
     # List additional groups of dependencies here (e.g. development
@@ -151,7 +153,7 @@ setup(
     extras_require={  # Optional
         'dev': ['h5py','pexpect', 'pytest', 
                 'pytest-env','Sphinx', 'sphinx-argparse', 
-                'sphinx-autoapi', 'mypy'],
+                'sphinx-autoapi', 'mypy', 'prometheus_client'],
     },
     # replace original install command with version that also builds
     # chapel and the arkouda server.
