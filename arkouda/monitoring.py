@@ -1,9 +1,10 @@
 import os, json, time
 from enum import Enum
 from dataclasses import dataclass, asdict
-from typing import Dict, List, Union
-import numpy as np
-from prometheus_client import start_http_server, Counter, Gauge, Info
+from typing import Dict, List, Optional, Union
+import numpy as np # type: ignore
+from dateutil import parser # type: ignore
+from prometheus_client import start_http_server, Counter, Gauge, Info # type: ignore
 import arkouda as ak
 from arkouda import client, logger
 from arkouda.logger import LogLevel
@@ -215,7 +216,8 @@ class ArkoudaMetrics:
 
     def asMetric(self, value : Dict[str,Union[float,int,str]]) -> Metric:
         scope = MetricScope(value ['scope'])
-                    
+        labels : Optional[List[Label]]
+
         if scope == MetricScope.LOCALE:
             labels = [Label('locale_name',value=value['locale_name']),
                       Label('locale_num',value=value['locale_num'])]
