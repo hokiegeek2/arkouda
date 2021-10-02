@@ -1,0 +1,21 @@
+FROM hokiegeek2/udp-arkouda-server:0.0.1
+
+RUN mkdir /opt/client
+WORKDIR /opt/client
+ADD README.md /opt/client/README.md
+ADD VERSION /opt/client/VERSION
+ADD installers.py /opt/client/installers.py
+ADD setup.py /opt/client/setup.py
+ADD arkouda /opt/client/arkouda
+
+RUN sudo chown -R ubuntu:ubuntu /opt/client/*
+
+RUN pip3 install --upgrade pip
+RUN pip3 install .
+
+WORKDIR /opt
+ADD start-arkouda.sh /opt/start-arkouda.sh
+RUN sudo chown ubuntu:ubuntu /opt/start-arkouda.sh
+
+
+

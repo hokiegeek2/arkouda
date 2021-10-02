@@ -136,6 +136,7 @@ setup(
         'pyzmq>=20.0.0,<=22.2.1',
         'typeguard==2.10.0',
         'pyfiglet',
+        'kubernetes',
         'versioneer'
     ],
 

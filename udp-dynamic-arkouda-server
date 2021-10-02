@@ -1,0 +1,49 @@
+FROM hokiegeek2/udp-arkouda-server-base:0.0.2
+
+ADD src/ /opt/src
+ADD Makefile /opt/Makefile
+ADD dep/ /opt/dep
+ADD VERSION /opt/VERSION
+WORKDIR /opt
+
+ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
+ADD start-arkouda-locale.sh /opt/start-arkouda-locale.sh
+
+ARG SSH_SERVERS=${SSH_SERVERS}
+ARG GASNET_MASTERIP=${GASNET_MASTERIP}
+ENV SSH_SERVERS=${SSH_SERVERS}
+ENV GASNET_MASTERIP=${GASNET_MASTERIP}
+
+RUN sudo chmod 777 -R /opt
+
+RUN sudo apt-get update && sudo apt install hdf5-tools -y
+RUN make install-deps
+ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
+RUN sudo chown -R ubuntu:ubuntu /home/ubuntu
+RUN sudo chmod 777 -R /opt
+RUN make
+
+ENV SSH_SERVERS=
+ENV GASNET_MASTERIP=
+
+EXPOSE 5555
+EXPOSE 5000-65000/udp
+
+RUN pip install --upgrade pip
+
+RUN mkdir /opt/client
+WORKDIR /opt/client
+
+ADD VERSION /opt/client/VERSION
+ADD README.md /opt/client/README.md
+ADD installers.py /opt/client/installers.py
+ADD setup.py /opt/client/setup.py
+ADD arkouda /opt/client/arkouda
+
+RUN pip3 install -e .
+
+WORKDIR /opt
+
+RUN rm -rf ~/.ssh/
+
+ENTRYPOINT sh /opt/start-arkouda-server.sh
