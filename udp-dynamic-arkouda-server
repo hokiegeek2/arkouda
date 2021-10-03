@@ -1,9 +1,8 @@
-FROM hokiegeek2/udp-arkouda-server-base:0.0.2
+FROM hokiegeek2/udp-arkouda-server-base:0.2.0
 
 ADD src/ /opt/src
 ADD Makefile /opt/Makefile
 ADD dep/ /opt/dep
-ADD VERSION /opt/VERSION
 WORKDIR /opt
 
 ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
@@ -34,7 +33,6 @@ RUN pip install --upgrade pip
 RUN mkdir /opt/client
 WORKDIR /opt/client
 
-ADD VERSION /opt/client/VERSION
 ADD README.md /opt/client/README.md
 ADD installers.py /opt/client/installers.py
 ADD setup.py /opt/client/setup.py
