@@ -90,4 +90,4 @@ server:
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
   k8sHost: 
-  threadsPerLocale: 16 
+  threadsPerLocale: 4 
