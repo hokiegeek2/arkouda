@@ -20,7 +20,12 @@ RUN make install-deps
 ENV PATH=/opt/chapel/$CHPL_VERSION/bin/linux64-x86_64/:$PATH
 RUN sudo chown -R ubuntu:ubuntu /home/ubuntu
 RUN sudo chmod 777 -R /opt
-RUN make
+
+ADD ssh_credentials/id_rsa /home/ubuntu/.ssh/id_rsa
+ADD ssh_credentials/id_rsa /home/ubuntu/.ssh/id_rsa.pub
+ADD ssh_credentials/authorized_keys /home/ubuntu/.ssh/authorized_keys
+RUN sudo chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+RUN sudo service ssh start && make
 
 ENV SSH_SERVERS=
 ENV GASNET_MASTERIP=
@@ -28,7 +33,7 @@ ENV GASNET_MASTERIP=
 EXPOSE 5555
 EXPOSE 5000-65000/udp
 
-RUN pip install --upgrade pip
+RUN pip3 install --upgrade pip
 
 RUN mkdir /opt/client
 WORKDIR /opt/client
@@ -42,6 +47,6 @@ RUN pip3 install -e .
 
 WORKDIR /opt
 
-RUN rm -rf ~/.ssh/
+RUN rm -rf ~/.ssh/*
 
 ENTRYPOINT sh /opt/start-arkouda-server.sh

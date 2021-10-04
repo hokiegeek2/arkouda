@@ -31,6 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     dnsutils \
     vim \
     hdf5-tools \
+    libcurl4-openssl-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN useradd -m ubuntu && echo "ubuntu:ubuntu" | chpasswd && adduser ubuntu sudo
