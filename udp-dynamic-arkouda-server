@@ -8,10 +8,8 @@ WORKDIR /opt
 ADD start-arkouda-server.sh /opt/start-arkouda-server.sh
 ADD start-arkouda-locale.sh /opt/start-arkouda-locale.sh
 
-ARG SSH_SERVERS=${SSH_SERVERS}
-ARG GASNET_MASTERIP=${GASNET_MASTERIP}
-ENV SSH_SERVERS=${SSH_SERVERS}
-ENV GASNET_MASTERIP=${GASNET_MASTERIP}
+ENV SSH_SERVERS=0.0.0.0
+ENV GASNET_MASTERIP=0.0.0.0
 
 RUN sudo chmod 777 -R /opt
 
@@ -27,23 +25,17 @@ ADD ssh_credentials/authorized_keys /home/ubuntu/.ssh/authorized_keys
 RUN sudo chown -R ubuntu:ubuntu /home/ubuntu/.ssh
 RUN sudo service ssh start && make
 
-ENV SSH_SERVERS=
-ENV GASNET_MASTERIP=
-
 EXPOSE 5555
 EXPOSE 5000-65000/udp
 
-RUN pip3 install --upgrade pip
+ARG ARKOUDA_VERSION=${ARKOUDA_VERSION}
+ENV ARKOUDA_VERSION=${ARKOUDA_VERSION}
 
-RUN mkdir /opt/client
-WORKDIR /opt/client
+ADD arkouda.tar.gz /opt/
+WORKDIR /opt/$ARKOUDA_VERSION
 
-ADD README.md /opt/client/README.md
-ADD installers.py /opt/client/installers.py
-ADD setup.py /opt/client/setup.py
-ADD arkouda /opt/client/arkouda
-
-RUN pip3 install -e .
+RUN python3 -m pip install --upgrade pip
+RUN python3 -m pip install -e .
 
 WORKDIR /opt
 
