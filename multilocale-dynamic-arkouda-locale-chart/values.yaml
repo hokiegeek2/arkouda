@@ -68,7 +68,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.1.1
+releaseVersion: 0.2.0
 imagePullPolicy: IfNotPresent
 
 ################ Arkouda Server Configuration ################
@@ -86,5 +86,5 @@ server:
     requests:
       cpu: 4000m
       memory: 8192Mi
-  threadsPerLocale: 16
+  threadsPerLocale: 8
   

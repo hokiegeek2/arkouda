@@ -68,7 +68,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.1.1
+releaseVersion: 0.2.0
 imagePullPolicy: IfNotPresent
 numServers: 1
 
@@ -90,4 +90,4 @@ server:
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
   k8sHost: 
-  threadsPerLocale: 16 
+  threadsPerLocale: 8 
