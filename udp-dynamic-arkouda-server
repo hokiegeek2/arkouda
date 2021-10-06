@@ -14,11 +14,8 @@ ENV GASNET_MASTERIP=0.0.0.0
 RUN sudo chown -R ubuntu:ubuntu /opt
 RUN make install-deps
 
-RUN sudo chown -R ubuntu:ubuntu /home/ubuntu
-ADD ssh_credentials/id_rsa /home/ubuntu/.ssh/id_rsa
-ADD ssh_credentials/id_rsa /home/ubuntu/.ssh/id_rsa.pub
-ADD ssh_credentials/authorized_keys /home/ubuntu/.ssh/authorized_keys
-RUN sudo chown -R ubuntu:ubuntu /home/ubuntu/.ssh
+RUN ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa
+RUN cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
 
 RUN sudo chown -R ubuntu:ubuntu /opt
 RUN sudo service ssh start && make
@@ -26,11 +23,11 @@ RUN sudo service ssh start && make
 EXPOSE 5555
 EXPOSE 5000-65000/udp
 
-ARG ARKOUDA_VERSION=${ARKOUDA_VERSION}
-ENV ARKOUDA_VERSION=${ARKOUDA_VERSION}
+ARG ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
+ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 
 ADD arkouda.tar.gz /opt/
-RUN mv /opt/$ARKOUDA_VERSION /opt/client
+RUN mv /opt/$ARKOUDA_DIST_FOLDER /opt/client
 WORKDIR /opt/client
 
 RUN python3 -m pip install --upgrade pip
