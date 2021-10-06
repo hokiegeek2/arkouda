@@ -1,13 +1,10 @@
 import os, json, time
 from enum import Enum
-from dataclasses import dataclass, asdict
 from typing import Dict, List, Optional, Union
 import numpy as np # type: ignore
 from datetime import datetime
 from dateutil import parser # type: ignore
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Union
-import numpy as np # type: ignore
 from prometheus_client import start_http_server, Counter, Gauge, Info # type: ignore
 import arkouda as ak
 from arkouda import client, logger
@@ -312,7 +309,8 @@ class ArkoudaMetrics:
                            server_port=info.server_port,
                            version=info.version,
                            locales=localeInfos)
-        self.arkoudaServerInfo = Info('arkouda_server_information', 'Arkouda server and locales configuration information')
+        self.arkoudaServerInfo = Info('arkouda_server_information', 
+                                      'Arkouda server and locales configuration information')
         self.arkoudaServerInfo.info({'arkouda_server_name': serverInfo.server_name,
                                      'arkouda_server_hostname': serverInfo.server_hostname,
                                      'arkouda_version': serverInfo.version,
