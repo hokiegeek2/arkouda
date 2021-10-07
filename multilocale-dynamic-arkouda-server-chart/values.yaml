@@ -68,7 +68,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.2.0
+releaseVersion: 0.2.2
 imagePullPolicy: IfNotPresent
 numServers: 1
 
