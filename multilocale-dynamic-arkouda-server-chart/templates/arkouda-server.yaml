@@ -71,7 +71,15 @@ spec:
             - name: CHPL_RT_NUM_THREADS_PER_LOCALE
               value: {{ .Values.server.threadsPerLocale | quote }}
             - name: GASNET_SUPERNODE_MAXSIZE
-              value: '1'           
+              value: '1'  
+            - name: NAMESPACE
+              value: {{ .Values.external.namespace }}
+            - name: EXTERNAL_SERVICE_NAME
+              value: {{ .Values.external.externalServiceName }}
+            - name: EXTERNAL_SERVICE_PORT
+              value: {{ .Values.external.externalServicePort | quote}}
+            - name: EXTERNAL_SERVICE_TARGET_PORT
+              value: {{ .Values.external.externalServerTargetPort | quote}}       
       volumes:              
         - name: ssl
           secret:
