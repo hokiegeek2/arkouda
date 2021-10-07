@@ -214,10 +214,10 @@ proc main() {
     /*
      * Registers Arkouda with an external system on startup, defaulting to none.
      */
-    proc registerWithExternalSystem() throws {   
+    proc registerWithExternalSystem(appName: string) throws {   
         select externalSystem {
             when SystemType.KUBERNETES {     
-                registerWithKubernetes();
+                registerWithKubernetes(appName);
                 asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                         "Registered Arkouda with Kubernetes");
             }
@@ -243,9 +243,14 @@ proc main() {
         }    
     }
     
-    
-    on Locales[0] {
-         registerWithExternalSystem();
+    if externalSystem != SystemType.NONE {
+        on Locales[0] {
+            if serverHostname.count('arkouda-locale') > 0 {
+                registerWithExternalSystem('arkouda-locale');
+            } else {
+                registerWithExternalSystem('arkouda-server');
+            }
+        }
     }
     
     proc runMetricsServer() throws {
