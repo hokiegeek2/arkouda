@@ -16,14 +16,12 @@ spec:
         #annotations:
         #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-      nodeSelector:
-        server-host: "true"
       containers:
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: [ "sh", "/opt/start-arkouda-server.sh" ]
-          #command: ['/bin/bash', '-c', '--', 'while true; do sleep 600; done;']
+          #command: [ "sh", "/opt/start-arkouda-server.sh" ]
+          command: ['/bin/bash', '-c', '--', 'while true; do sleep 600; done;']
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}

@@ -16,8 +16,6 @@ spec:
         #annotations:
         #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-      nodeSelector:
-        locale-host: "true"
       containers:
         - name: arkouda-locale
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
