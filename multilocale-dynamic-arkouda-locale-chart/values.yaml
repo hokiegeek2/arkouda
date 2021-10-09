@@ -81,10 +81,10 @@ server:
   memTrack: true
   resources:
     limits:
-      cpu: 4000m
-      memory: 8192Mi
+      cpu: 2000m
+      memory: 2048Mi
     requests:
-      cpu: 4000m
-      memory: 8192Mi
-  threadsPerLocale: 8
+      cpu: 2000m
+      memory: 2048Mi
+  threadsPerLocale: 4
   

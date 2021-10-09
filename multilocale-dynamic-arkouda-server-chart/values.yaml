@@ -82,15 +82,15 @@ server:
   memTrack: true
   resources:
     limits:
-      cpu: 4000m
-      memory: 8192Mi
+      cpu: 2000m
+      memory: 2048Mi
     requests:
-      cpu: 4000m
-      memory: 8192Mi
+      cpu: 2000m
+      memory: 2048Mi
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
   k8sHost: 
-  threadsPerLocale: 8
+  threadsPerLocale: 4
 
 external:
   namespace: arkouda
