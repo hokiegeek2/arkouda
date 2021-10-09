@@ -291,36 +291,10 @@ module ExternalSystem {
         }
     }
     
-    private proc generateEndpointCreateUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
-    }
-    
-    private proc generateEndpointUpdateUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        var name = ServerConfig.getEnv('ENDPOINT_NAME');
-        return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
-    }
-
-    private proc generateServiceCreateUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv(name='NAMESPACE',default='none');
-        return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
-    }
-
-    private proc generateServiceDeleteUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv(name='NAMESPACE',default='default');
-        var name = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
-        return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,name);
-    }
-    
     /*
-     * Registers Arkouda with Kubernetes by creating a Kubernetes Service and Endpoints 
-     * which together enable service discovery of an Arkouda instance deployed outside
-     * of Kubernetes from applications deployed within Kubernetes.
+     * Registers Arkouda with Kubernetes by creating a Kubernetes Service--and an Endpoints 
+     * if Arkouda is deployed outside of Kubernetes--to enable service discovery of Arkouda 
+     * from applications deployed within Kubernetes.
      */
     proc registerWithKubernetes(appName: string) throws {
         if serviceType == ServiceType.INTERNAL {
@@ -328,10 +302,32 @@ module ExternalSystem {
         } else {
             registerAsExternalService();
         }
+
+        proc generateEndpointCreateUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv('NAMESPACE');
+            return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
+        }
     
+        proc generateEndpointUpdateUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv('NAMESPACE');
+            var name = ServerConfig.getEnv('ENDPOINT_NAME');
+            return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
+        }
+
+        proc generateServiceCreateUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv(name='NAMESPACE',default='default');
+            return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
+        }
+
         proc registerAsInternalService(appName) throws {
             var serviceUrl = generateServiceCreateUrl();
-            var servicePayload = '{"apiVersion": "v1","kind": "Service","metadata": {"name": "%s"},"spec": {"ports": [{"port": %i,"protocol": "TCP","targetPort": %i}]},"selector": {"app":"%s"}}'.format(
+            var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
+                                         '{"name": "%s"},"spec": {"ports": [{"port": %i,' ,
+                                         '"protocol": "TCP"},{"targetPort": %i}]},"selector":',
+                                         ' {"app":"%s"}}').format(
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int,
@@ -368,7 +364,9 @@ module ExternalSystem {
         proc registerAsExternalService() throws {
             // Create Kubernetes Service
             var serviceUrl = generateServiceCreateUrl();
-            var servicePayload = '{"apiVersion": "v1","kind": "Service","metadata": {"name": "%s"},"spec": {"ports": [{"port": %i,"protocol": "TCP","targetPort": %i}]}}'.format(
+            var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
+                                             '{"name": "%s"},"spec": {"ports": [{"port": %i,',
+                                             '"protocol": "TCP"},{"targetPort": %i}]}}').format(
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
@@ -395,7 +393,10 @@ module ExternalSystem {
             
             // Create Kubernetes Endpoints  
             var endpointUrl = generateEndpointCreateUrl();                                                                                     
-            var endpointPayload = '{"kind": "Endpoints","apiVersion": "v1", "metadata": {"name": "%s"}, "subsets": [{"addresses": [{"ip": "%s"}],"ports": [{"port": %i, "protocol": "TCP"}]}]}'.format(
+            var endpointPayload = "".join('{"kind": "Endpoints","apiVersion": "v1",',
+                                          ' "metadata": {"name": "%s"}, "subsets": ',
+                                          '[{"addresses": [{"ip": "%s"}],"ports": ',
+                                          '[{"port": %i, "protocol": "TCP"}]}]}').format(
                                                 ServerConfig.getEnv('ENDPOINT_NAME'),
                                                 ServerConfig.getConnectHostIp(),
                                                 ServerConfig.getEnv('ENDPOINT_PORT'):int);
@@ -429,6 +430,13 @@ module ExternalSystem {
      * Kubernetes from applications deployed within Kubernetes
      */
     proc deregisterFromKubernetes() throws {
+        proc generateServiceDeleteUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv(name='NAMESPACE',default='default');
+            var name = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
+            return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,name);
+        }
+        
         var url = generateServiceDeleteUrl();
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
