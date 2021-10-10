@@ -77,7 +77,7 @@ spec:
             - name: EXTERNAL_SERVICE_PORT
               value: {{ .Values.external.externalServicePort | quote}}
             - name: EXTERNAL_SERVICE_TARGET_PORT
-              value: {{ .Values.external.externalServerTargetPort | quote}}       
+              value: {{ .Values.external.externalServiceTargetPort | quote}}       
       volumes:              
         - name: ssl
           secret:
