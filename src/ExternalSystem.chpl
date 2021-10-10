@@ -326,8 +326,8 @@ module ExternalSystem {
             var serviceUrl = generateServiceCreateUrl();
             var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
                                          '{"name": "%s"},"spec": {"ports": [{"port": %i,' ,
-                                         '"protocol": "TCP"},{"targetPort": %i}]},"selector":',
-                                         ' {"app":"%s"}}').format(
+                                         '"protocol": "TCP","targetPort": %i}],"selector":',
+                                         ' {"app":"%s"}}}').format(
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int,
@@ -366,7 +366,7 @@ module ExternalSystem {
             var serviceUrl = generateServiceCreateUrl();
             var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
                                              '{"name": "%s"},"spec": {"ports": [{"port": %i,',
-                                             '"protocol": "TCP"},{"targetPort": %i}]}}').format(
+                                             '"protocol": "TCP","targetPort": %i}]}}').format(
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
                                     ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);

@@ -9,7 +9,7 @@ ARG ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 
 ADD arkouda.tar.gz /opt/
-RUN sudo mv /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
+RUN mv /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
 RUN sudo chown -R ubuntu:ubuntu /opt/arkouda
 WORKDIR /opt/arkouda
 
