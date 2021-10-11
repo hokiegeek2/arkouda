@@ -34,6 +34,7 @@ module ExternalSystem {
     extern const CURLOPT_CUSTOMREQUEST:CURLoption;  
     extern const CURLOPT_FAILONERROR:CURLoption;
     extern const CURLINFO_RESPONSE_CODE:CURLoption;
+    extern const CURLOPT_SSL_VERIFYPEER:CURLoption;
 
     /*
      * Enum specifies the type of external system Arkouda will connect to.
@@ -82,7 +83,7 @@ module ExternalSystem {
     class FileChannel : Channel {
         var path: string;
         var append: bool;
-        
+       
         proc init(params: FileChannelParams) {
             super.init();
             this.path = params.path;
@@ -136,7 +137,8 @@ module ExternalSystem {
             Curl.setopt(channel, CURLOPT_SSLKEY, this.sslKey);
             Curl.setopt(channel, CURLOPT_KEYPASSWD, this.sslKeyPasswd);
             Curl.setopt(channel, CURLOPT_CAINFO, this.sslCacert);
-            Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath);        
+            Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath); 
+            Curl.setopt(channel, CURLOPT_SSL_VERIFYPEER, 0);         
         }
         
         proc generateHeader(channel) throws {
