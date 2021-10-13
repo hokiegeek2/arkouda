@@ -139,6 +139,9 @@ module ExternalSystem {
             Curl.setopt(channel, CURLOPT_CAINFO, this.sslCacert);
             Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath); 
             Curl.setopt(channel, CURLOPT_SSL_VERIFYPEER, 0);         
+            if logLevel == LogLevel.DEBUG {
+                Curl.setopt(channel, CURLOPT_VERBOSE, true);
+            }
         }
         
         proc generateHeader(channel) throws {
