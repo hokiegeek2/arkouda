@@ -1,9 +1,12 @@
-import os
+import os, argparse
 from typing import List, Optional, Union
 from kubernetes import client # type: ignore
 from kubernetes.client.rest import ApiException # type: ignore
-from kubernetes.client import V1Pod # type: ignore
+from kubernetes.client import V1Pod, V1Service, V1ServiceSpec, V1ServicePort, V1ObjectMeta # type: ignore
 
+from arkouda.logger import getArkoudaLogger
+
+logger = getArkoudaLogger(name='Arkouda Integration Client') 
 
 class DaoError(Exception):
     pass
@@ -63,10 +66,11 @@ class KubernetesDao():
                     for pod in pods.items:
                         if self._is_named_pod(pod, app_name):
                             filteredPods.append(pod)
-                    pods = filteredPods
-                return pods
+                    return filteredPods
+                else:
+                    return [pod for pod in pods.items]
             else:
-                return self.core_client.list_pod_for_all_namespaces()
+                return [pod in self.core_client.list_pod_for_all_namespaces().items]
         except ApiException as e:
             raise DaoError(e)
     
@@ -92,19 +96,133 @@ class KubernetesDao():
         :rtype: Union[List[str],str]
         :raises: DaoError if there is an error in retrieving pods
         '''
-        ips = [pod.status.pod_ip for pod in self.get_pods(namespace, app_name)]
+        try:
+            ips = [pod.status.pod_ip for pod in \
+                                self.get_pods(namespace, app_name)]
 
-        if pretty_print:
-            return str(ips).strip('[]').replace(',','')
-        else:
-            return ips
+            if pretty_print:
+                return str(ips).strip('[]').replace(',','')
+            else:
+                return ips   
+        except ApiException as ae:
+            raise DaoError(ae)
+        except Exception as e:
+            raise DaoError(e)
+        
+    def create_service(self, service_name : str, app_name: str, port : int, 
+                       target_port : int, namespace : str='default', 
+                       protocol : str='TCP') -> None:
+        '''
+        Creates the Kubernetes service assigned to the specified application, 
+        ports, and namespace.
+        
+        :param str service_name: name of the service
+        :param str app_name: application selector
+        :param int port: port assigned to the service
+        :param int target_port: target port assigned to the service
+        :param str namespace: namespace to assign service, defaults to 
+               the default Kubernetes namespace
+        :param str protocol: service protocol, defaults to TCP
+        :return: None
+        :raises: DaoError if there is an error in creating the service    
+        '''
+        service = V1Service()
+        service.kind = "Service"
+        service.metadata = V1ObjectMeta(name=service_name)
+
+        spec = V1ServiceSpec()
+        spec.selector = {"app": app_name}
+        spec.ports = [V1ServicePort(protocol=protocol, port=port, 
+                                                    target_port=target_port)]
+        service.spec = spec
+
+        try:
+            self.core_client.create_namespaced_service(namespace=namespace, 
+                                                      body=service)
+        except ApiException as ae:
+            raise DaoError(ae)
+        except Exception as e:
+            raise DaoError(e)
 
 def main():
-    import sys
     dao = KubernetesDao()
-    namespace=sys.argv[1]
-    app_name=sys.argv[2]
-    print(dao.get_pod_ips(namespace=namespace, app_name=app_name, pretty_print=True))
+
+    arg_parser = argparse.ArgumentParser(description='Arkouda Kubernetes client')
+    
+    required = arg_parser.add_argument_group('required arguments')
+    optional = arg_parser.add_argument_group('optional arguments')
+
+    optional.add_argument(
+                       '-a',
+                       '--app_name',
+                       type=str,
+                       help='the Kubernetes app name',
+                       required=False)
+    optional.add_argument(
+                       '-n',
+                       '--namespace',
+                       type=str,
+                       help='the Kubernetes namespace, defaults to default',
+                       default='default',
+                       required=False)
+    optional.add_argument(
+                       '-s',
+                       '--service_name',
+                       type=str,
+                       help='the Kubernetes service name, required for CRUD operations',
+                       required=False)
+    optional.add_argument(
+                       '-pr',
+                       '--protocol',
+                       type=str,
+                       help='the Kubernetes service protocol, defaults to TCP',
+                       default='TCP',
+                       required=False)
+    optional.add_argument(
+                       '-p',
+                       '--port',
+                       type=int,
+                       help='the Kubernetes service port, defaults to 5555',
+                       default=5555,
+                       required=False)
+    optional.add_argument(
+                       '-tp',
+                       '--target_port',
+                       type=int,
+                       help='the Kubernetes target service port, defaults to 5555',
+                       default=5555,
+                       required=False)
+    required.add_argument(
+                       '-i',
+                       '--invocation_method',
+                       type=str,
+                       help='the KubernetesDao method to invoke',
+                       required=True)
+
+    args = arg_parser.parse_args()
+
+    namespace=args.namespace
+    app_name=args.app_name
+    service_name=args.service_name
+    port=args.port 
+    target_port=args.target_port 
+    protocol=args.protocol
+    invocation_method=args.invocation_method
+    
+    if invocation_method == 'get_pod_ips':
+        print(dao.get_pod_ips(namespace=namespace, 
+                              app_name=app_name, 
+                              pretty_print=True))
+    elif invocation_method ==  'create_service':
+        dao.create_service(service_name=service_name,
+                           namespace=namespace,
+                           app_name=app_name,
+                           port=port,
+                           target_port=target_port,
+                           protocol=protocol)
+    else:
+        logger.error('method {} is not supported from command line'.format(
+            invocation_method))
 
 if __name__ == "__main__":
     main()
