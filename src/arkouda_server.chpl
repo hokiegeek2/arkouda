@@ -244,6 +244,7 @@ proc main() {
     }
     
     if externalSystem != SystemType.NONE {
+
         on Locales[0] {
             if serverHostname.count('arkouda-locale') > 0 {
                 registerWithExternalSystem('arkouda-locale');

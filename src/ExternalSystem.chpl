@@ -132,16 +132,18 @@ module ExternalSystem {
         }
         
         proc configureSsl(channel) throws {
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "Configuring ssl");
             Curl.setopt(channel, CURLOPT_USE_SSL, this.ssl);
             Curl.setopt(channel, CURLOPT_SSLCERT, this.sslCert);
             Curl.setopt(channel, CURLOPT_SSLKEY, this.sslKey);
             Curl.setopt(channel, CURLOPT_KEYPASSWD, this.sslKeyPasswd);
-            Curl.setopt(channel, CURLOPT_CAINFO, this.sslCacert);
-            Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath); 
+            //Curl.setopt(channel, CURLOPT_CAINFO, this.sslCacert);
+            //Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath); 
             Curl.setopt(channel, CURLOPT_SSL_VERIFYPEER, 0);         
-            if logLevel == LogLevel.DEBUG {
-                Curl.setopt(channel, CURLOPT_VERBOSE, true);
-            }
+            Curl.setopt(channel, CURLOPT_VERBOSE, true);
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "Configured ssl");
         }
         
         proc generateHeader(channel) throws {
@@ -178,14 +180,11 @@ module ExternalSystem {
             var curl = Curl.curl_easy_init();
 
             Curl.curl_easy_setopt(curl, CURLOPT_URL, this.url);
-            
-            if verbose {
-                Curl.curl_easy_setopt(curl, CURLOPT_VERBOSE, true);
-            }
-
-            if this.ssl {
-                configureSsl(curl);
-            } 
+            Curl.curl_easy_setopt(curl, CURLOPT_VERBOSE, true);
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                      "Getting ready to configure ssl");
+           
+            this.configureSsl(curl);
             
             Curl.curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
             

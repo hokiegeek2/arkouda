@@ -32,6 +32,8 @@ spec:
           - containerPort: 22
             hostPort: 25
           volumeMounts:
+          - name: ssl
+            mountPath: "/etc/ssl/arkouda"
           - name: ssh
             mountPath: "/home/ubuntu/ssh-keys"
           env:
@@ -41,6 +43,12 @@ spec:
                   fieldPath: status.podIP
             - name: NUM_LOCALES
               value: {{ .Values.server.numLocales | quote }}
+            - name: CERT_FILE
+              value: {{ .Values.server.certFile | quote }}
+            - name: KEY_FILE
+              value: {{ .Values.server.keyFile | quote }}
+            - name: K8S_HOST
+              value: {{ .Values.server.k8sHost | quote }}
             - name: AUTHENTICATE
               value: {{ .Values.server.authenticate | quote }} 
             - name: VERBOSE
@@ -50,6 +58,10 @@ spec:
             - name: CHPL_RT_NUM_THREADS_PER_LOCALE
               value: {{ .Values.server.threadsPerLocale | quote }}         
       volumes:
+      volumes:
+        - name: ssl
+          secret:
+            secretName: arkouda-server
         - name: ssh
           secret:
             secretName: arkouda-ssh

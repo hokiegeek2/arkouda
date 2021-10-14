@@ -1,10 +1,5 @@
 FROM hokiegeek2/udp-arkouda-server-base:0.2.0
 
-ADD src/ /opt/src
-ADD Makefile /opt/Makefile
-ADD dep/ /opt/dep
-WORKDIR /opt
-
 ARG ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 

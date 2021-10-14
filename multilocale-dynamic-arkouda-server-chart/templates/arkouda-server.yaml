@@ -22,6 +22,10 @@ spec:
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           #command: [ "sh", "/opt/start-arkouda-server.sh" ]
           command: ['/bin/bash', '-c', '--', 'while true; do sleep 600; done;']
+          lifecycle:
+            postStart:
+              exec:
+                command: ["/bin/sh", "-c", "echo created pod > /tmp/pod.txt"]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
