@@ -20,12 +20,12 @@ spec:
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          #command: [ "sh", "/opt/start-arkouda-server.sh" ]
-          command: ['/bin/bash', '-c', '--', 'while true; do sleep 600; done;']
+          command: [ "sh", "/opt/start-arkouda-server.sh" ]
+          #command: ['/bin/bash', '-c', '--', 'while true; do sleep 600; done;']
           lifecycle:
-            postStart:
+            preStop:
               exec:
-                command: ["/bin/sh", "-c", "echo created pod > /tmp/pod.txt"]
+                command: ["python3", "-c", "import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['NAMESPACE'],os.environ['EXTERNAL_SERVICE_NAME'])); ak.shutdown()"]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
