@@ -197,9 +197,14 @@ module ExternalSystem {
                 esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                     "Successfully executed Http request with payload %s".format(payload));
             } else {
-                throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
-                    "Http request with payload %s returned error code %i".format(payload,ret),
-                    "ExternalSystemError");
+                if ret == 22 {
+                   esLogger.warn(getModuleName(),getRoutineName(),getLineNumber(),
+                        "The payload %s was previously written to the external system".format(payload));
+                } else { 
+                    throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
+                       "Http request with payload %s returned error code %i".format(payload,ret),
+                       "ExternalSystemError");
+                }
             }
 
             args.free();
