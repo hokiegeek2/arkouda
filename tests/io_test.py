@@ -1,6 +1,8 @@
 import os, shutil, glob
+import tempfile
+
 import numpy as np
-from pytest import warns
+import pytest
 from typing import List, Mapping, Union
 from base_test import ArkoudaTest
 from context import arkouda as ak
@@ -310,7 +312,7 @@ class IOTest(ArkoudaTest):
                                              f'{IOTest.io_test_dir}/iotest_single_column_dupe_LOCALE0000'])
 
         # Run the same test with missing file, but this time with the warning flag for read_all
-        with warns(RuntimeWarning, match=r"There were .* errors reading files on the server.*"):
+        with pytest.warns(RuntimeWarning, match=r"There were .* errors reading files on the server.*"):
             dataset = ak.read_all(filenames=[f'{IOTest.io_test_dir}/iotest_MISSING_single_column_LOCALE0000',
                                          f'{IOTest.io_test_dir}/iotest_single_column_dupe_LOCALE0000'],
                               strictTypes=False,
@@ -568,6 +570,25 @@ class IOTest(ArkoudaTest):
         n_empty_ones = empty_ones.to_ndarray()
         new_empty_ones = ak.array(n_empty_ones)
         self.assertTrue((empty_ones.to_ndarray() == new_empty_ones.to_ndarray()).all())
+
+    def testSmallArrayToHDF5(self):
+        a1 = ak.array([1])
+        with tempfile.TemporaryDirectory(dir=IOTest.io_test_dir) as tmp_dirname:
+            a1.save(f"{tmp_dirname}/small_numeric", dataset="a1")
+            # Now load it back in
+            a2 = ak.load(f"{tmp_dirname}/small_numeric", dataset="a1")
+            self.assertEqual(str(a1), str(a2))
+
+    # This currently breaks on 4 or greater locales.  Since it is such a rare corner case
+    # we are going to remove it for now.
+    @pytest.mark.skip(reason="Breaks nightly testing and this is an extremely rare corner case.")
+    def testSmallStringArrayToHDF5(self):
+        a1 = ak.array(["ab", "cd"])
+        with tempfile.TemporaryDirectory(dir=IOTest.io_test_dir) as tmp_dirname:
+            a1.save(f"{tmp_dirname}/small_numeric", dataset="a1")
+            # Now load it back in
+            a2 = ak.load(f"{tmp_dirname}/small_numeric", dataset="a1")
+            self.assertEqual(str(a1), str(a2))
 
     def tearDown(self):
         super(IOTest, self).tearDown()
