@@ -10,7 +10,7 @@ module ExternalSystem {
     private config const logLevel = ServerConfig.logLevel;
     const esLogger = new Logger(logLevel);
     
-    private config const verbose = false;
+    private config const serviceType = ServiceType.INTERNAL;
     
     /*
      * libcurl C constants required to configure the Curl core
@@ -32,9 +32,10 @@ module ExternalSystem {
     extern const CURLOPT_CUSTOMREQUEST:CURLoption;  
     extern const CURLOPT_FAILONERROR:CURLoption;
     extern const CURLINFO_RESPONSE_CODE:CURLoption;
+    extern const CURLOPT_SSL_VERIFYPEER:CURLoption;
 
     /*
-     * Enum specifying the type of external system Arkouda will connect to.
+     * Enum specifies the type of external system Arkouda will connect to.
      */
     enum SystemType{KUBERNETES,REDIS,CONSUL,NONE};
 
@@ -43,16 +44,23 @@ module ExternalSystem {
      * external system.
      */
     enum ChannelType{STDOUT,FILE,HTTP};
+       
+    /*
+     * Enum specifies if the service endpoint is internal (Arkouda is 
+     * within the external system) or external (Arkouda is deployed outside 
+     * of the external system
+     */
+    enum ServiceType{INTERNAL,EXTERNAL};
     
     /*
-     * Enum describing the request type used to write to an
-     * external system via HTTP.
+     * Enum specifies the request type used to write to an external system 
+     * via HTTP.
      */
     enum HttpRequestType{POST,PUT,PATCH,DELETE};
 
     /*
-     * Enum describing the request format used to write to an
-     * external system via HTTP.
+     * Enum specifies the request format used to write to an external system 
+     * via HTTP.
      */
     enum HttpRequestFormat{TEXT,JSON,MULTIPART};    
 
@@ -73,7 +81,7 @@ module ExternalSystem {
     class FileChannel : Channel {
         var path: string;
         var append: bool;
-        
+       
         proc init(params: FileChannelParams) {
             super.init();
             this.path = params.path;
@@ -126,8 +134,10 @@ module ExternalSystem {
             Curl.setopt(channel, CURLOPT_SSLCERT, this.sslCert);
             Curl.setopt(channel, CURLOPT_SSLKEY, this.sslKey);
             Curl.setopt(channel, CURLOPT_KEYPASSWD, this.sslKeyPasswd);
-            Curl.setopt(channel, CURLOPT_CAINFO, this.sslCacert);
-            Curl.setopt(channel, CURLOPT_CAPATH, this.sslCapath);        
+            Curl.setopt(channel, CURLOPT_SSL_VERIFYPEER, 0);   
+            if logLevel == LogLevel.DEBUG {      
+                Curl.setopt(channel, CURLOPT_VERBOSE, true);
+            }
         }
         
         proc generateHeader(channel) throws {
@@ -164,14 +174,8 @@ module ExternalSystem {
             var curl = Curl.curl_easy_init();
 
             Curl.curl_easy_setopt(curl, CURLOPT_URL, this.url);
-            
-            if verbose {
-                Curl.curl_easy_setopt(curl, CURLOPT_VERBOSE, true);
-            }
-
-            if this.ssl {
-                configureSsl(curl);
-            } 
+           
+            this.configureSsl(curl);
             
             Curl.curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1);
             
@@ -193,10 +197,16 @@ module ExternalSystem {
                 esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                     "Successfully executed Http request with payload %s".format(payload));
             } else {
-                throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
-                    "Http request with payload %s returned error code %i".format(payload,ret),
-                    "ExternalSystemError");
+                if ret == 22 {
+                   esLogger.warn(getModuleName(),getRoutineName(),getLineNumber(),
+                        "The payload %s was previously written to the external system".format(payload));
+                } else {
+                    throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
+                       "Http request with payload %s returned error code %i".format(payload,ret),
+                       "ExternalSystemError");
+                }
             }
+
 
             args.free();
             Curl.curl_easy_cleanup(curl);     
@@ -282,43 +292,55 @@ module ExternalSystem {
         }
     }
     
-    private proc generateEndpointCreateUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
-    }
-    
-    private proc generateEndpointUpdateUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        var name = ServerConfig.getEnv('ENDPOINT_NAME');
-        return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
-    }
-
-    private proc generateExternalServiceCreateUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
-    }
-
-    private proc generateExternalServiceDeleteUrl() : string throws {
-        var k8sHost = ServerConfig.getEnv('K8S_HOST');
-        var namespace = ServerConfig.getEnv('NAMESPACE');
-        var name = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
-        return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,name);
-    }
-    
     /*
-     * Registers Arkouda with Kubernetes by creating a Kubernetes Service and Endpoint 
-     * which together enable service discovery of an Arkouda instance deployed outside
-     * of Kubernetes from applications deployed within Kubernetes.
+     * Registers Arkouda with Kubernetes by creating a Kubernetes Service--and an Endpoints 
+     * if Arkouda is deployed outside of Kubernetes--to enable service discovery of Arkouda 
+     * from applications deployed within Kubernetes.
      */
-    proc registerWithKubernetes() throws {
-        var serviceUrl = generateExternalServiceCreateUrl();
-        
-        var channel = getExternalChannel(new HttpChannelParams(
+    proc registerWithKubernetes(appName: string) throws {
+        if serviceType == ServiceType.INTERNAL {
+            registerAsInternalService(appName);
+        } else {
+            registerAsExternalService();
+        }
+
+        proc generateEndpointCreateUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv('NAMESPACE');
+            return '%s/api/v1/namespaces/%s/endpoints'.format(k8sHost,namespace);
+        }
+    
+        proc generateEndpointUpdateUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv('NAMESPACE');
+            var name = ServerConfig.getEnv('ENDPOINT_NAME');
+            return '%s/api/v1/namespaces/%s/endpoints/%s'.format(k8sHost,namespace,name);
+        }
+
+        proc generateServiceCreateUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv(name='NAMESPACE',default='default');
+            return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
+        }
+
+        proc registerAsInternalService(appName) throws {
+            var serviceUrl = generateServiceCreateUrl();
+            var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
+                                         '{"name": "%s"},"spec": {"ports": [{"port": %i,' ,
+                                         '"protocol": "TCP","targetPort": %i}],"selector":',
+                                         ' {"app":"%s"}}}').format(
+                                    ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
+                                    ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
+                                    ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int,
+                                    appName);
+
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registering internal service via payload %s and url %s".format(
+                                         servicePayload,serviceUrl));
+
+            var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=generateExternalServiceCreateUrl(),
+                                         url=serviceUrl,
                                          requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
                                          ssl=true,
@@ -328,34 +350,34 @@ module ExternalSystem {
                                          sslCapath='',
                                          sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
 
-        var servicePayload = '{"apiVersion": "v1","kind": "Service","metadata": \
-                             {"name": "%s"},"spec": {"ports": [{"port": %i,"protocol": \
-                             "TCP","targetPort": %i}]}}'.format(
-                                          ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
-                                          ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
-                                          ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
+            channel.write(servicePayload);
+        
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registered internal service via payload %s and url %s".format(
+                                         servicePayload,serviceUrl));  
+        }
 
-        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Registering service via payload %s and url %s".format(
+        /*
+         * Registers Arkouda with Kubernetes by creating a Kubernetes Service and 
+         * Endpoints which together enable service discovery of an Arkouda instance 
+         * deployed outside of Kubernetes from applications deployed within Kubernetes.
+         */        
+        proc registerAsExternalService() throws {
+            // Create Kubernetes Service
+            var serviceUrl = generateServiceCreateUrl();
+            var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
+                                             '{"name": "%s"},"spec": {"ports": [{"port": %i,',
+                                             '"protocol": "TCP","targetPort": %i}]}}').format(
+                                    ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
+                                    ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
+                                    ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registering external service via payload %s and url %s".format(
                                          servicePayload,serviceUrl));
 
-        channel.write(servicePayload);
-        
-        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Registered service via payload %s and url %s".format(
-                                         servicePayload,serviceUrl));
-                                              
-        var endpointUrl = generateEndpointCreateUrl();                                 
-        var endpointPayload = '{"kind": "Endpoints","apiVersion": "v1","metadata": {"name": "%s"}, \
-                                "subsets": [{"addresses": [{"ip": "%s"}],"ports": [\
-                                {"port": %i, "protocol": "TCP"}]}]}'.format(
-                                                    ServerConfig.getEnv('ENDPOINT_NAME'),
-                                                    ServerConfig.getConnectHostIp(),
-                                                    ServerConfig.getEnv('ENDPOINT_PORT'):int);
-        
-        channel = getExternalChannel(new HttpChannelParams(
+            var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=generateEndpointCreateUrl(),
+                                         url=serviceUrl,
                                          requestType=HttpRequestType.POST,
                                          requestFormat=HttpRequestFormat.JSON,
                                          ssl=true,
@@ -365,25 +387,61 @@ module ExternalSystem {
                                          sslCapath='',
                                          sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
 
-        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+            channel.write(servicePayload);
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Registered external service via payload %s and url %s".format(
+                                         servicePayload,serviceUrl));       
+            
+            // Create Kubernetes Endpoints  
+            var endpointUrl = generateEndpointCreateUrl();                                                                                     
+            var endpointPayload = "".join('{"kind": "Endpoints","apiVersion": "v1",',
+                                          ' "metadata": {"name": "%s"}, "subsets": ',
+                                          '[{"addresses": [{"ip": "%s"}],"ports": ',
+                                          '[{"port": %i, "protocol": "TCP"}]}]}').format(
+                                                ServerConfig.getEnv('ENDPOINT_NAME'),
+                                                ServerConfig.getConnectHostIp(),
+                                                ServerConfig.getEnv('ENDPOINT_PORT'):int);
+        
+            channel = getExternalChannel(new HttpChannelParams(
+                                         channelType=ChannelType.HTTP,
+                                         url=endpointUrl,
+                                         requestType=HttpRequestType.POST,
+                                         requestFormat=HttpRequestFormat.JSON,
+                                         ssl=true,
+                                         sslKey=ServerConfig.getEnv('KEY_FILE'),
+                                         sslCert=ServerConfig.getEnv('CERT_FILE'),
+                                         sslCacert=ServerConfig.getEnv('CACERT_FILE'),
+                                         sslCapath='',
+                                         sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
+
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                      "Registering endpoint via payload %s and url %s".format(
                                          endpointPayload,endpointUrl));
 
-        channel.write(endpointPayload);
-        
-        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+            channel.write(endpointPayload);      
+            esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                      "Registered endpoint via payload %s and endpointUrl %s".format(
-                                         endpointPayload,endpointUrl));
+                                         endpointPayload,endpointUrl)); 
+        }
     }
     
     /*
-     * Removes the external service endpoint that enables access to Arkouda deployed outside
-     * of Kubernetes from applications deployed within Kubernetes
+     * Removes the Kubernetes Service and, if applicable, Endpoints that compose the
+     * service endpoint that enables access to Arkouda deployed within or outside of 
+     * Kubernetes from applications deployed within Kubernetes
      */
     proc deregisterFromKubernetes() throws {
+        proc generateServiceDeleteUrl() : string throws {
+            var k8sHost = ServerConfig.getEnv('K8S_HOST');
+            var namespace = ServerConfig.getEnv(name='NAMESPACE',default='default');
+            var name = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
+            return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,name);
+        }
+        
+        var url = generateServiceDeleteUrl();
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
-                                         url=generateExternalServiceDeleteUrl(),
+                                         url=url,
                                          requestType=HttpRequestType.DELETE,
                                          requestFormat=HttpRequestFormat.JSON,
                                          ssl=true,
@@ -393,5 +451,7 @@ module ExternalSystem {
                                          sslCapath='',
                                          sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
         channel.write('{}');
+        esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                     "Deregistered service from Kubernetes via url %s".format(url));
     }
 }
