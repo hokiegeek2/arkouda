@@ -264,7 +264,7 @@ proc main() {
                        "Metrics Server initialized and listening in port %i".format(port));	
         while true {
             asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
-                               "awaiting message on port 5556");	
+                                   "awaiting message on port 5556");	
             var req = socket.recv(bytes).decode();
 
             var msg: RequestMsg = extractRequest(req);
@@ -309,9 +309,9 @@ proc main() {
         while !shutdownServer {
             // receive message on the zmq socket
             asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
-                               "awaiting message on port 5555");		    
+                            "awaiting message on port 5555");		    
             var reqMsgRaw = socket.recv(bytes);
-		
+
             var s0 = t1.elapsed();
 
             /*
@@ -323,7 +323,7 @@ proc main() {
             var payload = if reqMsgRaw.endsWith(b"BINARY_PAYLOAD") then socket.recv(bytes) else b"";
             var user, token, cmd: string;
             var responseTime: real;
-		
+
             // parse requests, execute requests, format responses
             try {
                 /*
@@ -365,7 +365,7 @@ proc main() {
                 if authenticate {
                     authenticateUser(token);
                 }
-		
+
                 if (trace) {
                     try {
                          if (cmd != "array") {
@@ -501,7 +501,7 @@ proc main() {
                         asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),repTuple.msg);
                     }
                 }
-	
+
                 /*
                  * If the reply message is a string send it now
                  */          
