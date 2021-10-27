@@ -28,6 +28,10 @@ spec:
               cpu: {{ .Values.server.resources.limits.cpu }}
               memory: {{ .Values.server.resources.limits.memory }}
           command: [ "sh", "/opt/start-arkouda-locale.sh" ]
+          lifecycle:
+            preStop:
+              exec:
+                command: ["python3","-c","import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['NAMESPACE'],os.environ['EXTERNAL_SERVICE_NAME'])), ak.shutdown()]"]
           ports:
           - containerPort: 22
             hostPort: 25
@@ -36,6 +40,10 @@ spec:
             mountPath: "/etc/ssl/arkouda"
           - name: ssh
             mountPath: "/home/ubuntu/ssh-keys"
+          {{- if eq .Values.external.persistence.enabled true }}
+          - name: locale
+            mountPath: "/opt/locale"
+          {{- end }}
           env:
             - name: MY_IP
               valueFrom:
@@ -43,12 +51,6 @@ spec:
                   fieldPath: status.podIP
             - name: NUM_LOCALES
               value: {{ .Values.server.numLocales | quote }}
-            - name: CERT_FILE
-              value: {{ .Values.server.certFile | quote }}
-            - name: KEY_FILE
-              value: {{ .Values.server.keyFile | quote }}
-            - name: K8S_HOST
-              value: {{ .Values.server.k8sHost | quote }}
             - name: AUTHENTICATE
               value: {{ .Values.server.authenticate | quote }} 
             - name: VERBOSE
@@ -56,8 +58,17 @@ spec:
             - name: MEMTRACK
               value: {{ .Values.server.memTrack | quote }}
             - name: CHPL_RT_NUM_THREADS_PER_LOCALE
-              value: {{ .Values.server.threadsPerLocale | quote }}         
-      volumes:
+              value: {{ .Values.server.threadsPerLocale | quote }} 
+            - name: CERT_FILE
+              value: {{ .Values.external.certFile | quote }}
+            - name: KEY_FILE
+              value: {{ .Values.external.keyFile | quote }}
+            - name: K8S_HOST
+              value: {{ .Values.external.k8sHost | quote }}
+            - name: NAMESPACE
+              value: {{ .Values.external.namespace }}
+            - name: EXTERNAL_SERVICE_NAME
+              value: {{ .Values.external.externalServiceName }}        
       volumes:
         - name: ssl
           secret:
@@ -65,4 +76,8 @@ spec:
         - name: ssh
           secret:
             secretName: arkouda-ssh
-       
+        {{- if eq .Values.external.persistence.enabled true }}
+        - name: locale
+          hostPath:
+            path: "/mnt/data/arkouda"
+        {{- end }}  

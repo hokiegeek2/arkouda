@@ -25,7 +25,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["python3", "-c", "import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['NAMESPACE'],os.environ['EXTERNAL_SERVICE_NAME'])); ak.shutdown()"]
+                command: ["python3","-c","import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['NAMESPACE'],os.environ['EXTERNAL_SERVICE_NAME'])), ak.shutdown()]"]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
@@ -43,6 +43,10 @@ spec:
             mountPath: "/etc/ssl/arkouda"
           - name: ssh
             mountPath: "/home/ubuntu/ssh-keys"
+          {{- if eq .Values.external.persistence.enabled true }}
+          - name: locale
+            mountPath: "/opt/locale"
+          {{- end }}
           env:
             - name: MY_IP
               valueFrom:
@@ -64,16 +68,16 @@ spec:
               value: {{ .Values.server.verbose | quote }}   
             - name: MEMTRACK
               value: {{ .Values.server.memTrack | quote }}
-            - name: CERT_FILE
-              value: {{ .Values.server.certFile | quote }}
-            - name: KEY_FILE
-              value: {{ .Values.server.keyFile | quote }}   
-            - name: K8S_HOST
-              value: {{ .Values.server.k8sHost | quote }}   
             - name: CHPL_RT_NUM_THREADS_PER_LOCALE
               value: {{ .Values.server.threadsPerLocale | quote }}
             - name: GASNET_SUPERNODE_MAXSIZE
-              value: '1'  
+              value: '1' 
+            - name: CERT_FILE
+              value: {{ .Values.external.certFile | quote }}
+            - name: KEY_FILE
+              value: {{ .Values.external.keyFile | quote }}
+            - name: K8S_HOST
+              value: {{ .Values.external.k8sHost | quote }} 
             - name: NAMESPACE
               value: {{ .Values.external.namespace }}
             - name: EXTERNAL_SERVICE_NAME
@@ -88,4 +92,9 @@ spec:
             secretName: arkouda-server 
         - name: ssh
           secret:
-            secretName: arkouda-ssh          
+            secretName: arkouda-ssh
+        {{- if eq .Values.external.persistence.enabled true }}
+        - name: locale
+          hostPath:
+            path: "/mnt/data/arkouda"         
+        {{- end }}
