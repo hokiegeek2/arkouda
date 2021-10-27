@@ -261,10 +261,10 @@ proc main() {
 
         try! socket.bind("tcp://*:%t".format(port));
         asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
-                       "Metrics Server initialized and listening in port %i".format(port));	
+            "Metrics Server initialized and listening in port %i".format(port));
         while true {
             asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
-                                   "awaiting message on port 5556");	
+                                   "awaiting message on port 5556");
             var req = socket.recv(bytes).decode();
 
             var msg: RequestMsg = extractRequest(req);
@@ -309,7 +309,7 @@ proc main() {
         while !shutdownServer {
             // receive message on the zmq socket
             asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
-                            "awaiting message on port 5555");		    
+                            "awaiting message on port 5555");
             var reqMsgRaw = socket.recv(bytes);
 
             var s0 = t1.elapsed();
