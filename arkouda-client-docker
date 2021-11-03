@@ -1,14 +1,17 @@
 FROM python:3.7.7-slim-buster
 
-RUN mkdir /opt/install
-WORKDIR /opt/install
-ADD README.md /opt/install/README.md
-ADD VERSION /opt/install/VERSION
-ADD installers.py /opt/install/installers.py
-ADD setup.py /opt/install/setup.py
-ADD arkouda /opt/install/arkouda
+# Add Arkouda files
+ARG ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
+ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 
+ADD arkouda.tar.gz /opt/
+RUN mv -v /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
+WORKDIR /opt/arkouda
+
+# Execute Arkouda pip install and remove src folder
 RUN pip install --upgrade pip
 RUN pip install .[dev]
 
-RUN rm -rf /opt/install
+WORKDIR /opt
+
+RUN rm -rf /opt/arkouda
