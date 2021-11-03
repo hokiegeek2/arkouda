@@ -8,10 +8,13 @@ ADD arkouda.tar.gz /opt/
 RUN mv -v /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
 WORKDIR /opt/arkouda
 
-# Execute Arkouda pip install and remove src folder
+# Execute Arkouda and ipython pip install and remove src folder
 RUN pip install --upgrade pip
 RUN pip install .[dev]
-
 WORKDIR /opt
-
 RUN rm -rf /opt/arkouda
+
+# Install ipython and set as entrypoint
+RUN pip install ipython
+
+ENTRYPOINT ipython
