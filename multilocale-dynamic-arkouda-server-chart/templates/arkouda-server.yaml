@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: arkouda-server
-  namespace: arkouda
 spec:
   replicas: {{ .Values.numServers }}
   selector:

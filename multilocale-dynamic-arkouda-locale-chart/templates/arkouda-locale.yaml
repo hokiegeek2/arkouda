@@ -2,7 +2,6 @@ apiVersion: apps/v1
 kind: ReplicaSet
 metadata:
   name: arkouda-locale
-  namespace: arkouda
 spec:
   replicas: {{ .Values.server.numLocales }}
   selector:
@@ -13,8 +12,6 @@ spec:
       labels:
         app: arkouda-locale
         name: arkouda-locale
-        #annotations:
-        #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
       containers:
         - name: arkouda-locale
