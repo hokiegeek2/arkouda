@@ -1,18 +1,17 @@
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: arkouda-server
-  namespace: arkouda
+  name: {{ .Values.deployment.appName }}
 spec:
   replicas: {{ .Values.numServers }}
   selector:
     matchLabels:
-      app: arkouda-server
+      app: {{ .Values.deployment.appName }}
   template:
     metadata:
       labels:
-        app: arkouda-server
-        name: arkouda-server
+        app: {{ .Values.deployment.appName }}
+        name: {{ .Values.deployment.appName }}
     spec:
       containers:
         - name: arkouda-server

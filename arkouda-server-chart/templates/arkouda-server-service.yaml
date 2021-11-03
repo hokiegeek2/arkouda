@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: Service
 metadata:
-  name: arkouda
+  name: {{ .Values.deployment.serviceName }}
 spec:
   type: LoadBalancer
   ports:
-    - port: 5566
-      targetPort: 5555
+    - port: {{ .Values.server.port }}
+      targetPort: {{ .Values.server.port }}
       protocol: TCP
   selector:
-    app: arkouda-server
+    app: {{ .Values.deployment.appName }}
