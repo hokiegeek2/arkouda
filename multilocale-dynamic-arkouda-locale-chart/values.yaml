@@ -91,9 +91,11 @@ server:
 external:
   persistence: 
     enabled: true
+    path: /opt/locale
+    hostPath: /mnt/data/arkouda/
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
   k8sHost:
   namespace: arkouda
   externalServiceName: arkouda
- 
+  externalServicePort: 5555 

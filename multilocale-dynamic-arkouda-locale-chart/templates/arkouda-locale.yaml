@@ -39,7 +39,7 @@ spec:
             mountPath: "/home/ubuntu/ssh-keys"
           {{- if eq .Values.external.persistence.enabled true }}
           - name: locale
-            mountPath: "/opt/locale"
+            mountPath: {{ .Values.external.persistence.path }}
           {{- end }}
           env:
             - name: MY_IP
@@ -76,5 +76,5 @@ spec:
         {{- if eq .Values.external.persistence.enabled true }}
         - name: locale
           hostPath:
-            path: "/mnt/data/arkouda"
+            path: {{ .Values.external.persistence.hostPath }}
         {{- end }}  
