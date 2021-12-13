@@ -82,7 +82,7 @@ class KubernetesDao():
         :rtype: bool
         '''
         return pod.metadata.labels.get('app') == app_name
-     
+
     def get_pod_ips(self, namespace : str, app_name : str=None,
                                 pretty_print=False) -> Union[List[str],str]:
         '''
@@ -142,6 +142,15 @@ class KubernetesDao():
         except ApiException as ae:
             raise DaoError(ae)
         except Exception as e:
+            raise DaoError(e)
+
+    def delete_service(self, service_name : str, namespace : str='default') -> None:
+
+        try:
+
+            self.core_client.delete_namespaced_service(name=service_name, 
+                                                       namespace=namespace)
+        except ApiException as e:
             raise DaoError(e)
 
 def main():
