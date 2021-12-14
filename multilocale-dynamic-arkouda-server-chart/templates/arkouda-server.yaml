@@ -1,30 +1,20 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: v1
+kind: Pod
 metadata:
   name: arkouda-server
-spec:
-  replicas: {{ .Values.numServers }}
-  selector:
-    matchLabels:
-      app: arkouda-server
-  template:
-    metadata:
-      labels:
-        app: arkouda-server
-        name: arkouda-server
-        #annotations:
-        #k8s.v1.cni.cncf.io/networks: host-device-conf
-    spec:
+  labels: 
+    app: arkouda-server
+spec:      
+      restartPolicy: Never
       containers:
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
           command: [ "sh", "/opt/start-arkouda-server.sh" ]
-          #command: ['/bin/bash', '-c', '--', 'while true; do sleep 600; done;']
           lifecycle:
             preStop:
               exec:
-                command: ["python3","-c","import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['NAMESPACE'],os.environ['EXTERNAL_SERVICE_NAME'])), ak.shutdown()]"]
+                command: ["python3","-c","import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['EXTERNAL_SERVICE_NAME'],os.environ['NAMESPACE'])); ak.shutdown()"]
           resources:
             requests:
               cpu: {{ .Values.server.resources.requests.cpu }}
@@ -84,7 +74,9 @@ spec:
             - name: EXTERNAL_SERVICE_PORT
               value: {{ .Values.external.externalServicePort | quote}}
             - name: EXTERNAL_SERVICE_TARGET_PORT
-              value: {{ .Values.external.externalServiceTargetPort | quote}}       
+              value: {{ .Values.external.externalServiceTargetPort | quote}}
+            - name: LOG_LEVEL  
+              value: {{ .Values.server.logLevel }}     
       volumes:              
         - name: ssl
           secret:

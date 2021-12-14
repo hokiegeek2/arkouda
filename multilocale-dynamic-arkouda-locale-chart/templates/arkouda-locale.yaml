@@ -1,5 +1,5 @@
 apiVersion: apps/v1
-kind: ReplicaSet
+kind: Deployment
 metadata:
   name: arkouda-locale
 spec:
@@ -28,7 +28,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                command: ["python3","-c","import os; import arkouda as ak; ak.connect('{}.{}'.format(os.environ['NAMESPACE'],os.environ['EXTERNAL_SERVICE_NAME'])), ak.shutdown()]"]
+                 command: ["python3","-c","import os; from arkouda.integration import KubernetesDao; dao = KubernetesDao(); dao.delete_service(os.environ['EXTERNAL_SERVICE_NAME'],os.environ['NAMESPACE'])"]
           ports:
           - containerPort: 22
             hostPort: 25
