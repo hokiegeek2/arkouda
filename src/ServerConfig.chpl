@@ -42,7 +42,7 @@ module ServerConfig
     /*
     Arkouda version
     */
-    config param arkoudaVersion:string;
+    config param arkoudaVersion:string = "Please set during compilation";
 
     /*
     Write the server `hostname:port` to this file.
@@ -83,9 +83,15 @@ module ServerConfig
         var hostip: string;
         on Locales[0] {
             var ipString = getLineFromFile('/etc/hosts',getConnectHostname());
-            var splits = ipString.split();
-            hostip = splits[0]:string;
-            hostip.split();
+            try {
+                var splits = ipString.split();
+                hostip = splits[0]:string;
+                hostip.split();
+            } catch (e: Error) {
+                throw new IllegalArgumentError(
+                         "invalid hostname -> ip address entry in /etc/hosts %t".format(
+                                               e));
+            }
         }
         return hostip;
     }
@@ -94,6 +100,14 @@ module ServerConfig
     Indicates whether token authentication is being used for Akrouda server requests
     */
     config const authenticate : bool = false;
+
+    /*
+    Determines the maximum number of capture groups returned by Regex.matches
+    */
+    config param regexMaxCaptures = 20;
+
+    /* Whether the server was built with parquet support */
+    config param hasParquetSupport = false;
 
     private config const lLevel = ServerConfig.logLevel;
     const scLogger = new Logger(lLevel);
@@ -133,6 +147,7 @@ module ServerConfig
             const LocaleConfigs: [LocaleSpace] owned LocaleConfig;
             const authenticate: bool;
             const logLevel: LogLevel;
+            const regexMaxCaptures: int;
             const byteorder: string;
             const connectHostname: string;
             const connectHostIp: string;
@@ -155,7 +170,8 @@ module ServerConfig
             LocaleConfigs = [loc in LocaleSpace] new owned LocaleConfig(loc),
             authenticate = authenticate,
             logLevel = logLevel,
-            byteorder = try! getByteorder(),
+            regexMaxCaptures = regexMaxCaptures,
+            byteorder = try! getByteorder(),    
             connectHostname = try! getConnectHostname(),
             connectHostIp = try! getConnectHostIp()
         );
@@ -180,7 +196,7 @@ module ServerConfig
     Get the physical memory available on this locale
     */ 
     proc getPhysicalMemHere() {
-        use MemDiagnostics;
+        use Memory.Diagnostics;
         return here.physicalMemory();
     }
 
@@ -200,7 +216,7 @@ module ServerConfig
     Get the memory used on this locale
     */
     proc getMemUsed() {
-        use MemDiagnostics;
+        use Memory.Diagnostics;
         return memoryUsed();
     }
 

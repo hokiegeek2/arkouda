@@ -418,6 +418,8 @@ proc main() {
                     when "segmentedFindLoc"  {repTuple = segmentedFindLocMsg(cmd, args, st);}
                     when "segmentedFindAll"  {repTuple = segmentedFindAllMsg(cmd, args, st);}
                     when "segmentedPeel"     {repTuple = segmentedPeelMsg(cmd, args, st);}
+                    when "segmentedSub"      {repTuple = segmentedSubMsg(cmd, args, st);}
+                    when "segmentedSplit"    {repTuple = segmentedSplitMsg(cmd, args, st);}
                     when "segmentedIndex"    {repTuple = segmentedIndexMsg(cmd, args, st);}
                     when "segmentedBinopvv"  {repTuple = segBinopvvMsg(cmd, args, st);}
                     when "segmentedBinopvs"  {repTuple = segBinopvsMsg(cmd, args, st);}
@@ -427,6 +429,8 @@ proc main() {
 		            when "lshdf"             {repTuple = lshdfMsg(cmd, args, st);}
 		            when "readAllHdf"        {repTuple = readAllHdfMsg(cmd, args, st);}
 		            when "tohdf"             {repTuple = tohdfMsg(cmd, args, st);}
+                    when "readAllParquet"    {repTuple = readAllParquetMsg(cmd, args, st);}
+                    when "writeParquet"      {repTuple = toparquetMsg(cmd, args, st);}		            
 		            when "create"            {repTuple = createMsg(cmd, args, st);}
 		            when "delete"            {repTuple = deleteMsg(cmd, args, st);}
 		            when "binopvv"           {repTuple = binopvvMsg(cmd, args, st);}
@@ -475,8 +479,7 @@ proc main() {
 		            when "register"          {repTuple = registerMsg(cmd, args, st);}
 		            when "attach"            {repTuple = attachMsg(cmd, args, st);}
 		            when "unregister"        {repTuple = unregisterMsg(cmd, args, st);}
-		            when "clear"             {repTuple = clearMsg(cmd, args, st);}       
-		            //when "metrics"           {repTuple = metricsMsg(cmd, args, st);}        
+		            when "clear"             {repTuple = clearMsg(cmd, args, st);}              
 		            when "connect" {
 		                serverMetrics.increment('num_connections',1);
 		                if authenticate {
@@ -563,7 +566,7 @@ proc main() {
 
     deleteServerConnectionInfo();
     
-    on Locales[0] {
+    on Locales[here.id] {
          deregisterFromExternalSystem();
     }
 

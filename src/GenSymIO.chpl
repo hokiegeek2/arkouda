@@ -3,11 +3,13 @@ module GenSymIO {
     use Time only;
     use IO;
     use CPtr;
+    use SysCTypes;
     use Path;
     use MultiTypeSymbolTable;
     use MultiTypeSymEntry;
     use ServerErrorStrings;
     use FileSystem;
+    use FileIO;
     use Sort;
     use CommAggregation;
     use NumPyDType;
@@ -23,6 +25,8 @@ module GenSymIO {
     use Search;
     use IndexingMsg;
 
+    require "c_helpers/help_h5ls.h", "c_helpers/help_h5ls.c";
+
     private config const logLevel = ServerConfig.logLevel;
     const gsLogger = new Logger(logLevel);
 
@@ -32,6 +36,15 @@ module GenSymIO {
     config const NULL_STRINGS_VALUE = 0:uint(8);
     config const TRUNCATE: int = 0;
     config const APPEND: int = 1;
+
+    // Constants etc. related to intenral HDF5 file metadata
+    const ARKOUDA_HDF5_FILE_METADATA_GROUP = "/_arkouda_metadata";
+    const ARKOUDA_HDF5_ARKOUDA_VERSION_KEY = "arkouda_version"; // see ServerConfig.arkoudaVersion
+    type ARKOUDA_HDF5_ARKOUDA_VERSION_TYPE = c_string;
+    const ARKOUDA_HDF5_FILE_VERSION_KEY = "file_version";
+    const ARKOUDA_HDF5_FILE_VERSION_VAL = 1.0:real(32);
+    type ARKOUDA_HDF5_FILE_VERSION_TYPE = real(32);
+
 
     /*
      * Creates a pdarray server-side and returns the SymTab name used to
@@ -199,14 +212,12 @@ module GenSymIO {
     }
 
     /*
-     * Spawns a separate Chapel process that executes and returns the 
-     * result of the h5ls command
+     * Simulates the output of h5ls for top level datasets or groups
+     * :returns: string formatted as json list
+     * i.e. ["_arkouda_metadata", "pda1", "s1"]
      */
-    proc lshdfMsg(cmd: string, payload: string,
-                                st: borrowed SymTab): MsgTuple throws {
+    proc lshdfMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
         // reqMsg: "lshdf [<json_filename>]"
-        use Spawn;
-        const tmpfile = "/tmp/arkouda.lshdf.output";
         var repMsg: string;
         var (jsonfile) = payload.splitMsgToTuple(1);
 
@@ -247,48 +258,106 @@ module GenSymIO {
             gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg,MsgType.ERROR);
         } 
+
+        if !isHdf5File(filename) {
+            var errorMsg = "File %s is not an HDF5 file".format(filename);
+            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+            return new MsgTuple(errorMsg,MsgType.ERROR);
+        }
         
-        var exitCode: int;
-
         try {
-            if exists(tmpfile) {
-                remove(tmpfile);
+
+            var file_id = C_HDF5.H5Fopen(filename.c_str(), C_HDF5.H5F_ACC_RDONLY, C_HDF5.H5P_DEFAULT);
+            defer { C_HDF5.H5Fclose(file_id); } // ensure file is closed
+            repMsg = simulate_h5ls(file_id);
+            var items = new list(repMsg.split(",")); // convert to json
+
+            // TODO: There is a bug with json formatting of lists in Chapel 1.24.x fixed in 1.25
+            //       See: https://github.com/chapel-lang/chapel/issues/18156
+            //       Below works in 1.25, but until we are fully off of 1.24 we should format json manually for lists
+            // repMsg = "%jt".format(items); // Chapel >= 1.25.0
+            repMsg = "[";  // Manual json building Chapel <= 1.24.1
+            var first = true;
+            for i in items {
+                i = i.replace(Q, ESCAPED_QUOTES, -1);
+                if first {
+                    first = false;
+                } else {
+                    repMsg += ",";
+                }
+                repMsg += Q + i + Q;
             }
-
-            var cmd = try! "h5ls \"%s\" > \"%s\"".format(filename, tmpfile);
-            var sub = spawnshell(cmd);
-
-            sub.wait();
-
-            // Use new-style exitCode if available --
-            // https://github.com/chapel-lang/chapel/pull/18352
-            if hasField(sub.type, "exitCode") {
-                exitCode = sub.exitCode;
-            } else {
-                exitCode = sub.exit_status;
-            }
-
-            var f = open(tmpfile, iomode.r);
-            defer {  // This will ensure we try to close f when we exit the proc scope.
-                ensureClose(f);
-                try { remove(tmpfile); } catch {}
-            }
-            var r = f.reader(start=0);
-            r.readstring(repMsg);
-            r.close();
+            repMsg += "]";
         } catch e : Error {
-            var errorMsg = "failed to spawn process and execute ls: %t".format(e.message());
+            var errorMsg = "Failed to process HDF5 file %t".format(e.message());
             gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
-        if exitCode != 0 {
-            var errorMsg = "could not execute ls on %s, check file permissions or format".format(filename);
-            gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-            return new MsgTuple(errorMsg, MsgType.ERROR);
-        } else {
-            return new MsgTuple(repMsg, MsgType.NORMAL);
+        return new MsgTuple(repMsg, MsgType.NORMAL);
+    }
+
+    private extern proc c_get_HDF5_obj_type(loc_id:C_HDF5.hid_t, name:c_string, obj_type:c_ptr(C_HDF5.H5O_type_t)):C_HDF5.herr_t;
+    private extern proc c_strlen(s:c_ptr(c_char)):size_t;
+    private extern proc c_incrementCounter(data:c_void_ptr);
+    private extern proc c_append_HDF5_fieldname(data:c_void_ptr, name:c_string);
+
+    /**
+     * Simulate h5ls call by using HDF5 API (top level datasets and groups only, not recursive)
+     * This uses both internal call back functions as well as exter c functions defined above to
+     * work with the HDF5 API and handle the the data objects it passes between calls as opaque void*
+     * which can't be used directly in chapel code.
+     */
+    proc simulate_h5ls(fid:C_HDF5.hid_t):string throws {
+        /** Note: I tried accessing a list inside my inner procs but it leads to segfaults.
+         * It only works if the thing you are trying to access is a global.  This is some type
+         * of strange interplay between C & chapel as straight chapel didn't cause problems.
+         * var items = new list(string);  
+         */
+
+        /**
+         * This is an H5Literate call-back function, c_helper funcs are used to process data in void*
+         * this proc counts the number of of HDF5 groups/datasets under the root, non-recursive
+         */
+        proc _get_item_count(loc_id:C_HDF5.hid_t, name:c_void_ptr, info:c_void_ptr, data:c_void_ptr) {
+            var obj_name = name:c_string;
+            var obj_type:C_HDF5.H5O_type_t;
+            var status:C_HDF5.H5O_type_t = c_get_HDF5_obj_type(loc_id, obj_name, c_ptrTo(obj_type));
+            if (obj_type == C_HDF5.H5O_TYPE_GROUP || obj_type == C_HDF5.H5O_TYPE_DATASET) {
+                c_incrementCounter(data);
+            }
+            return 0; // to continue iteration
         }
+
+        /**
+         * This is an H5Literate call-back function, c_helper funcs are used to process data in void*
+         * this proc builds string of HDF5 group/dataset objects names under the root, non-recursive
+         */
+        proc _simulate_h5ls(loc_id:C_HDF5.hid_t, name:c_void_ptr, info:c_void_ptr, data:c_void_ptr) {
+            var obj_name = name:c_string;
+            var obj_type:C_HDF5.H5O_type_t;
+            var status:C_HDF5.H5O_type_t = c_get_HDF5_obj_type(loc_id, obj_name, c_ptrTo(obj_type));
+            if (obj_type == C_HDF5.H5O_TYPE_GROUP || obj_type == C_HDF5.H5O_TYPE_DATASET) {
+                // items.append(obj_name:string); This doesn't work unless items is global
+                c_append_HDF5_fieldname(data, obj_name);
+            }
+            return 0; // to continue iteration
+        }
+        
+        var idx_p:C_HDF5.hsize_t; // This is the H5Literate index counter
+        
+        // First iteration to get the item count so we can ballpark the char* allocation
+        var nfields:c_int = 0:c_int;
+        C_HDF5.H5Literate(fid, C_HDF5.H5_INDEX_NAME, C_HDF5.H5_INDEX_NAME, idx_p, c_ptrTo(_get_item_count), c_ptrTo(nfields));
+        
+        // Allocate space for array of strings
+        var c_field_names = c_calloc(c_char, 255 * nfields);
+        idx_p = 0:C_HDF5.hsize_t; // reset our iteration counter
+        C_HDF5.H5Literate(fid, C_HDF5.H5_INDEX_NAME, C_HDF5.H5_INDEX_NAME, idx_p, c_ptrTo(_simulate_h5ls), c_field_names);
+        var pos = c_strlen(c_field_names):int;
+        var items = createStringWithNewBuffer(c_field_names, pos, pos+1);
+        c_free(c_field_names);
+        return items;
     }
 
     /*
@@ -368,11 +437,8 @@ module GenSymIO {
             return new MsgTuple(errorMsg, MsgType.ERROR);
         }
 
-        var dsetdom = dsetlist.domain;
         var filedom = filelist.domain;
-        var dsetnames: [dsetdom] string;
         var filenames: [filedom] string;
-        dsetnames = dsetlist;
 
         if filelist.size == 1 {
             if filelist[0].strip().size == 0 {
@@ -403,7 +469,11 @@ module GenSymIO {
         var fileErrors: list(string);
         var fileErrorCount:int = 0;
         var fileErrorMsg:string = "";
-        for dsetName in dsetnames do {
+        const AK_META_GROUP = ARKOUDA_HDF5_FILE_METADATA_GROUP(1..ARKOUDA_HDF5_FILE_METADATA_GROUP.size-1); // strip leading slash
+        for dsetName in dsetlist do {
+            if dsetName == AK_META_GROUP { // Always skip internal metadata group if present
+                continue;
+            }
             for (i, fname) in zip(filedom, filenames) {
                 var hadError = false;
                 try {
@@ -575,6 +645,168 @@ module GenSymIO {
         return new MsgTuple(repMsg,MsgType.NORMAL);
     }
 
+    proc readAllParquetMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+        if !hasParquetSupport {
+            throw getErrorWithContext(
+                   msg="Arkouda has been built without Parquet support",
+                   lineNumber=getLineNumber(),
+                   routineName=getRoutineName(), 
+                   moduleName=getModuleName(),
+                   errorClass="ParquetBuildError");
+        } else {
+            use Parquet;
+            var repMsg: string;
+            // May need a more robust delimiter then " | "
+            var (strictFlag, ndsetsStr, nfilesStr, allowErrorsFlag, arraysStr) = payload.splitMsgToTuple(5);
+            var strictTypes: bool = true;
+            if (strictFlag.toLower().strip() == "false") {
+              strictTypes = false;
+            }
+
+            var allowErrors: bool = "true" == allowErrorsFlag.toLower(); // default is false
+            if allowErrors {
+                gsLogger.warn(getModuleName(), getRoutineName(), getLineNumber(), "Allowing file read errors");
+            }
+
+            // Test arg casting so we can send error message instead of failing
+            if (!checkCast(ndsetsStr, int)) {
+                var errMsg = "Number of datasets:`%s` could not be cast to an integer".format(ndsetsStr);
+                gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errMsg);
+                return new MsgTuple(errMsg, MsgType.ERROR);
+            }
+            if (!checkCast(nfilesStr, int)) {
+              var errMsg = "Number of files:`%s` could not be cast to an integer".format(nfilesStr);
+              gsLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errMsg);
+              return new MsgTuple(errMsg, MsgType.ERROR);
+            }
+
+            var (jsondsets, jsonfiles) = arraysStr.splitMsgToTuple(" | ",2);
+            var ndsets = ndsetsStr:int; // Error checked above
+            var nfiles = nfilesStr:int; // Error checked above
+            var dsetlist: [0..#ndsets] string;
+            var filelist: [0..#nfiles] string;
+
+            try {
+                dsetlist = jsonToPdArray(jsondsets, ndsets);
+            } catch {
+                var errorMsg = "Could not decode json dataset names via tempfile (%i files: %s)".format(
+                                                   1, jsondsets);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
+
+            try {
+                filelist = jsonToPdArray(jsonfiles, nfiles);
+            } catch {
+                var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
+                gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
+
+            var dsetdom = dsetlist.domain;
+            var filedom = filelist.domain;
+            var dsetnames: [dsetdom] string;
+            var filenames: [filedom] string;
+            dsetnames = dsetlist;
+
+            if filelist.size == 1 {
+                if filelist[0].strip().size == 0 {
+                    var errorMsg = "filelist was empty.";
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                }
+                var tmp = glob(filelist[0]);
+                gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                                      "glob expanded %s to %i files".format(filelist[0], tmp.size));
+                if tmp.size == 0 {
+                    var errorMsg = "The wildcarded filename %s either corresponds to files inaccessible to Arkouda or files of an invalid format".format(filelist[0]);
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                }
+                // Glob returns filenames in weird order. Sort for consistency
+                sort(tmp);
+                filedom = tmp.domain;
+                filenames = tmp;
+            } else {
+                filenames = filelist;
+            }
+
+            var fileErrors: list(string);
+            var fileErrorCount:int = 0;
+            var fileErrorMsg:string = "";
+            var sizes: [filedom] int;
+            var ty = getArrType(filenames[filedom.low],
+                                dsetlist[dsetdom.low]);
+            var rnames: list((string, string, string)); // tuple (dsetName, item type, id)
+
+            for dsetname in dsetnames do {
+                for (i, fname) in zip(filedom, filenames) {
+                    var hadError = false;
+                    try {
+                        // not using the type for now since it is only implemented for ints
+                        // also, since Parquet files have a `numRows` that isn't specifc
+                        // to dsetname like for HDF5, we only need to get this once per
+                        // file, regardless of how many datasets we are reading
+                        sizes[i] = getArrSize(fname);
+                    } catch e: FileNotFoundError {
+                        fileErrorMsg = "File %s not found".format(fname);
+                        gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                        hadError = true;
+                        if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                    } catch e: PermissionError {
+                        fileErrorMsg = "Permission error %s opening %s".format(e.message(),fname);
+                        gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                        hadError = true;
+                        if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                    } catch e: DatasetNotFoundError {
+                        fileErrorMsg = "Dataset %s not found in file %s".format(dsetname,fname);
+                        gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                        hadError = true;
+                        if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                    } catch e: SegArrayError {
+                        fileErrorMsg = "SegmentedArray error: %s".format(e.message());
+                        gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                        hadError = true;
+                        if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                    } catch e : Error {
+                        fileErrorMsg = "Other error in accessing file %s: %s".format(fname,e.message());
+                        gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),fileErrorMsg);
+                        hadError = true;
+                        if !allowErrors { return new MsgTuple(fileErrorMsg, MsgType.ERROR); }
+                    }
+
+                    // This may need to be adjusted for this all-in-one approach
+                    if hadError {
+                      // Keep running total, but we'll only report back the first 10
+                      if fileErrorCount < 10 {
+                        fileErrors.append(fileErrorMsg.replace("\n", " ").replace("\r", " ").replace("\t", " ").strip());
+                      }
+                      fileErrorCount += 1;
+                    }
+                }
+                // This is handled in the readFilesByName() function
+                var subdoms: [filedom] domain(1);
+                var len: int;
+                var nSeg: int;
+                len = + reduce sizes;
+
+                // Only integer is implemented for now, do nothing if the Parquet
+                // file has a different type
+                if ty == ArrowTypes.int64 || ty == ArrowTypes.int32 {
+                  var entryVal = new shared SymEntry(len, int);
+                  readFilesByName(entryVal.a, filenames, sizes, dsetname);
+                  var valName = st.nextName();
+                  st.addEntry(valName, entryVal);
+                  rnames.append((dsetname, "pdarray", valName));
+                }
+            }
+
+            repMsg = _buildReadAllHdfMsgJson(rnames, false, 0, fileErrors, st);
+            gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg,MsgType.NORMAL);
+        }
+    }
+    
     /**
      * Construct json object to be returned from readAllHdfMsg
      * :arg rnames: List of (DataSetName, arkouda_type, id of SymEntry) for items read from HDF5 files
@@ -617,6 +849,7 @@ module GenSymIO {
         var items: list(string);
         for rname in rnames {
             var (dsetName, akType, id) = rname;
+            dsetName = dsetName.replace(Q, ESCAPED_QUOTES, -1); // sanitize dsetName with respect to double quotes
             var item = "{" + Q + "dataset_name"+ QCQ + dsetName + Q +
                        "," + Q + "arkouda_type" + QCQ + akType + Q;
             select (akType) {
@@ -1166,6 +1399,71 @@ module GenSymIO {
         }
     }
 
+    proc toparquetMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+        if !hasParquetSupport {
+            throw getErrorWithContext(
+                   msg="Arkouda has been built without Parquet support",
+                   lineNumber=getLineNumber(),
+                   routineName=getRoutineName(), 
+                   moduleName=getModuleName(),
+                   errorClass="ParquetBuildError");
+        } else {
+            use Parquet;
+            var (arrayName, dsetname,  jsonfile, dataType)= payload.splitMsgToTuple(4);
+            var filename: string;
+            var entry = st.lookup(arrayName);
+
+            try {
+              filename = jsonToPdArray(jsonfile, 1)[0];
+            } catch {
+              var errorMsg = "Could not decode json filenames via tempfile " +
+                "(%i files: %s)".format(1, jsonfile);
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
+
+            var warnFlag: bool;
+
+            try {
+              select entry.dtype {
+                  when DType.Int64 {
+                    var e = toSymEntry(entry, int);
+                    warnFlag = write1DDistArrayParquet(filename, dsetname, e.a);
+                  }
+                  otherwise {
+                    var errorMsg = "Writing Parquet files is only supported for int arrays";
+                    gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                    return new MsgTuple(errorMsg, MsgType.ERROR);
+                  }
+                }
+            } catch e: FileNotFoundError {
+              var errorMsg = "Unable to open %s for writing: %s".format(filename,e.message());
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
+            } catch e: MismatchedAppendError {
+              var errorMsg = "Mismatched append %s".format(e.message());
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
+            } catch e: WriteModeError {
+              var errorMsg = "Write mode error %s".format(e.message());
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
+            } catch e: Error {
+              var errorMsg = "problem writing to file %s".format(e);
+              gsLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+              return new MsgTuple(errorMsg, MsgType.ERROR);
+            }
+            if warnFlag {
+              var warnMsg = "Warning: possibly overwriting existing files matching filename pattern";
+              return new MsgTuple(warnMsg, MsgType.WARNING);
+            } else {
+              var repMsg = "wrote array to file";
+              gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+              return new MsgTuple(repMsg, MsgType.NORMAL);
+            }
+        }
+    }
+    
     /*
      * Writes out the two pdarrays composing a Strings object to hdf5.
      */
@@ -1296,13 +1594,13 @@ module GenSymIO {
                  * slice is the null uint(8) character. If it is not, this means the last string 
                  * in the current locale (idx) spans the current AND next locale.
                  */
-                if A.localSlice(locDom).back() != NULL_STRINGS_VALUE { 
+                var charArray = A.localSlice(locDom);
+                if charArray[charArray.domain.high] != NULL_STRINGS_VALUE {
                     /*
                      * Retrieve the chars array slice from this locale and populate the charList
                      * that will be updated per left and/or right shuffle operations until the 
                      * final char list is assembled
                      */ 
-                    var charArray = A.localSlice(locDom);
                     var charList : list(uint(8)) = new list(charArray);
 
                     gsLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
@@ -1811,6 +2109,9 @@ module GenSymIO {
                   C_HDF5.H5Fclose(file_id);
               }
 
+              // Prepare file versioning metadata
+              addArkoudaHdf5VersioningMetadata(file_id);
+
               if (!group.isEmpty()) {
                   prepareGroup(file_id, group);
               }
@@ -1915,7 +2216,7 @@ module GenSymIO {
                 * string on the locale completes within the locale. Otherwise,
                 * the last string spans to the next locale.
                 */
-                if charArray.back() == NULL_STRINGS_VALUE {
+                if charArray[charArray.domain.high] == NULL_STRINGS_VALUE {
                     endsWithCompleteString[idx] = true;
                 } else {
                     endsWithCompleteString[idx] = false;
@@ -1927,14 +2228,15 @@ module GenSymIO {
 
                 /*
                 * If the first locale (locale 0), the first segment is retrieved
-                * via segsArray.front(), corresponding to 0. Otherwise, find the 
-                * first occurrence of the null uint(8) char and the firstSeg is the
-                * next non-null char. The lastSeg in all cases is the final segsArray
-                * element retrieved via segsArray.back()
+                * via segsArray[segsArray.domain.low], corresponding to 0.
+                * Otherwise, find the first occurrence of the null uint(8) char
+                * and the firstSeg is the next non-null char. The lastSeg in
+                * all cases is the final segsArray element retrieved via
+                * segsArray[segsArray.domain.high]
                 */
                 if idx == 0 {
-                    firstSeg = segsArray.front();
-                    lastSeg = segsArray.back();
+                    firstSeg = segsArray[segsArray.domain.low];
+                    lastSeg = segsArray[segsArray.domain.high];
                     gsLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
                     "Locale idx:%t firstSeg:%t, lastSeg:%t".format(idx, firstSeg, lastSeg));
                 } else {
@@ -1942,7 +2244,7 @@ module GenSymIO {
                     if nullString {
                         firstSeg = fSeg + 1;
                     }
-                    lastSeg = segsArray.back();
+                    lastSeg = segsArray[segsArray.domain.high];
                 }
 
                 /*
@@ -2093,9 +2395,84 @@ module GenSymIO {
      * attempting the group create.
      */
     private proc prepareGroup(fileId: int, group: string) throws {
-        var groupId = C_HDF5.H5Gcreate2(fileId, "/%s".format(group).c_str(),
+        var groupId:C_HDF5.hid_t = C_HDF5.H5Gcreate2(fileId, "/%s".format(group).c_str(),
               C_HDF5.H5P_DEFAULT, C_HDF5.H5P_DEFAULT, C_HDF5.H5P_DEFAULT);
         C_HDF5.H5Gclose(groupId);
+    }
+
+    /**
+     * Add internal metadata to HDF5 file
+     * Group - /_arkouda_metadata (see ARKOUDA_HDF5_FILE_METADATA_GROUP)
+     * Attrs - See constants for attribute names and associated values
+
+     * :arg fileId: HDF5 H5Fopen identifer (hid_t)
+     * :type int:
+     *
+     * This adds both the arkoudaVersion from ServerConfig as well as an internal file_version
+     * In the future we may remove the file_version if the server version string proves sufficient.
+     * Internal metadata related to the HDF5 API / capabilities / etc. can be added to this group.
+     * Data specific metadata should be attached directly to the dataset / group itself.
+     */
+    proc addArkoudaHdf5VersioningMetadata(fileId:int) throws {
+        // Note: can't write attributes to a closed group, easier to encapsulate here than call prepareGroup
+        var metaGroupId:C_HDF5.hid_t = C_HDF5.H5Gcreate2(fileId,
+                                                         ARKOUDA_HDF5_FILE_METADATA_GROUP.c_str(),
+                                                         C_HDF5.H5P_DEFAULT,
+                                                         C_HDF5.H5P_DEFAULT,
+                                                         C_HDF5.H5P_DEFAULT);
+        // Build the "file_version" attribute
+        var attrSpaceId = C_HDF5.H5Screate(C_HDF5.H5S_SCALAR);
+        var attrFileVersionType = getHDF5Type(ARKOUDA_HDF5_FILE_VERSION_TYPE);
+        var attrId = C_HDF5.H5Acreate2(metaGroupId,
+                          ARKOUDA_HDF5_FILE_VERSION_KEY.c_str(),
+                          attrFileVersionType,
+                          attrSpaceId,
+                          C_HDF5.H5P_DEFAULT,
+                          C_HDF5.H5P_DEFAULT);
+        
+        // H5Awrite requires a pointer and we have a const, so we need a variable ref we can turn into a pointer
+        var fileVersion = ARKOUDA_HDF5_FILE_VERSION_VAL;
+        C_HDF5.H5Awrite(attrId, attrFileVersionType, c_ptrTo(fileVersion));
+        
+        // release "file_version" HDF5 resources
+        C_HDF5.H5Aclose(attrId);
+        C_HDF5.H5Sclose(attrSpaceId);
+        // getHDF5Type returns an immutable type so we don't / can't actually close this one.
+        // C_HDF5.H5Tclose(attrFileVersionType);
+
+        // Repeat for "ArkoudaVersion" which is a string
+        // Need to allocate fixed size string type, docs say to copy from pre-defined type & modify
+        // Chapel getHDF5Type only returns a variable length version for string/c_string
+        var attrStringType = C_HDF5.H5Tcopy(C_HDF5.H5T_C_S1): C_HDF5.hid_t;
+        C_HDF5.H5Tset_size(attrStringType, arkoudaVersion.size:uint(64) + 1); // ensure space for NULL terminator
+        C_HDF5.H5Tset_strpad(attrStringType, C_HDF5.H5T_STR_NULLTERM);
+        
+        attrSpaceId = C_HDF5.H5Screate(C_HDF5.H5S_SCALAR);
+        
+        attrId = C_HDF5.H5Acreate2(metaGroupId,
+                            ARKOUDA_HDF5_ARKOUDA_VERSION_KEY.c_str(),
+                            attrStringType,
+                            attrSpaceId,
+                            C_HDF5.H5P_DEFAULT,
+                            C_HDF5.H5P_DEFAULT);
+
+        // For the value, we need to build a ptr to a char[]; c_string doesn't work because it is a const char*        
+        var akVersion = c_calloc(c_char, arkoudaVersion.size);
+        for (c, i) in zip(arkoudaVersion.codepoints(), 0..<arkoudaVersion.size) {
+            akVersion[i] = c:c_char;
+        }
+        akVersion[arkoudaVersion.size] = 0:c_char; // ensure NULL termination
+
+        C_HDF5.H5Awrite(attrId, attrStringType, akVersion);
+
+        // release ArkoudaVersion HDF5 resources
+        C_HDF5.H5Aclose(attrId);
+        c_free(akVersion);
+        C_HDF5.H5Sclose(attrSpaceId);
+        C_HDF5.H5Tclose(attrStringType);
+
+        // Release the group resource
+        C_HDF5.H5Gclose(metaGroupId);
     }
     
     /*
