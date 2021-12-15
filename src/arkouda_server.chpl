@@ -561,9 +561,9 @@ proc main() {
     t1.stop();
 
     deleteServerConnectionInfo();
-    
-    on Locales[0] {
-         deregisterFromExternalSystem();
+
+    on Locales[here.id] { 
+        deregisterFromExternalSystem();
     }
 
     asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
