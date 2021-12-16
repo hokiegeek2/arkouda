@@ -17,6 +17,8 @@ ENV GASNET_MASTERIP=0.0.0.0
 RUN ssh-keygen -t rsa -N '' -f ~/.ssh/id_rsa
 RUN cat ~/.ssh/id_rsa.pub > ~/.ssh/authorized_keys
 
+RUN sudo apt-get update && sudo apt install cmake -y
+
 RUN make install-deps
 RUN sudo chown -R ubuntu:ubuntu /opt
 RUN sudo service ssh start && make
