@@ -68,11 +68,15 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.0.5
+releaseVersion: 0.0.7
 imagePullPolicy: IfNotPresent
 numServers: 1
 
 ################ Arkouda Server Configuration ################
+
+deployment:
+  appName: arkouda-server-smp
+  serviceName: arkouda-single-locale
 
 server: 
   host: 0.0.0.0

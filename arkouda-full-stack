@@ -14,15 +14,19 @@ ADD arkouda.tar.gz /opt/
 RUN mv -v /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
 WORKDIR /opt/arkouda
 
-# Install Arkouda pre-reqs
-RUN apt-get update && apt install hdf5-tools libcurl4-openssl-dev -y
+RUN apt-get update && apt install libcurl4-openssl-dev -y
 
-# Install deps and build Arkouda 
 RUN make install-deps && make
 
+# Install python client
+RUN pip3 install -e .[dev]
+
+# Install jupyterlab
+RUN pip3 install jupyterlab
+
 # Add startup script and set as entrypoint
-ADD start-smp-arkouda-server.sh /opt/start-arkouda-server.sh
-ENTRYPOINT sh /opt/start-arkouda-server.sh
+ADD start-smp-arkouda-full-stack.sh /opt/start-arkouda-full-stack.sh
+ENTRYPOINT sh /opt/start-arkouda-full-stack.sh
 
 EXPOSE 5555
 

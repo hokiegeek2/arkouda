@@ -198,11 +198,13 @@ module ExternalSystem {
                     "Successfully executed Http request with payload %s".format(payload));
             } else {
                 if ret == 22 {
-                   esLogger.warn(getModuleName(),getRoutineName(),getLineNumber(),
-                        "The payload %s was previously written to the external system".format(payload));
+                    throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
+                       "invalid request to overwrite existing entry with payload %s. Delete the existing entry first".format(payload),
+                       "ExternalSystemError");
+
                 } else { 
                     throw getErrorWithContext(getLineNumber(),getRoutineName(),getModuleName(),
-                       "Http request with payload %s returned error code %i".format(payload,ret),
+                       "request with payload %s returned error code %i".format(payload,ret),
                        "ExternalSystemError");
                 }
             }
