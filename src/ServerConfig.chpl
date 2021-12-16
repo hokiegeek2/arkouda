@@ -136,6 +136,7 @@ module ServerConfig
             const arkoudaVersion: string;
             const ZMQVersion: string;
             const HDF5Version: string;
+            const arrowVersion: string;
             const serverHostname: string;
             const ServerPort: int;
             const MetricsServerPort: int;
@@ -155,10 +156,26 @@ module ServerConfig
         var (Zmajor, Zminor, Zmicro) = ZMQ.version;
         var H5major: c_uint, H5minor: c_uint, H5micro: c_uint;
         H5get_libversion(H5major, H5minor, H5micro);
+
+        var arrowVNum = "Unsupported";
+        if hasParquetSupport {
+          use SysCTypes, CPtr;
+          extern proc c_getVersionInfo(): c_string;
+          extern proc strlen(str): c_int;
+          extern proc c_free_string(ptr);
+          var cVersionString = c_getVersionInfo();
+          defer {
+            c_free_string(cVersionString: c_void_ptr);
+          }
+          arrowVNum = try! createStringWithNewBuffer(cVersionString,
+                                                     strlen(cVersionString));
+        }
+        
         const cfg = new owned Config(
             arkoudaVersion = (ServerConfig.arkoudaVersion:string),
             ZMQVersion = try! "%i.%i.%i".format(Zmajor, Zminor, Zmicro),
             HDF5Version = try! "%i.%i.%i".format(H5major, H5minor, H5micro),
+            arrowVersion = arrowVNum,
             serverHostname = serverHostname,
             ServerPort = ServerPort,
             MetricsServerPort = MetricsServerPort,
@@ -175,14 +192,13 @@ module ServerConfig
             connectHostname = try! getConnectHostname(),
             connectHostIp = try! getConnectHostIp()
         );
+        return try! "%jt".format(cfg);
 
-        return cfg;
     }
-    private const cfg = createConfig();
+    private const cfgStr = createConfig();
 
     proc getConfig(): string {
-        var res: string = try! "%jt".format(cfg);
-        return res;
+        return cfgStr;
     }
 
     proc getEnv(name: string, default=""): string {
