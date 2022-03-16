@@ -14,7 +14,7 @@ ARKOUDA_HDF5_FILE_METADATA_GROUP = "_arkouda_metadata"
 
 
 @typechecked
-def ls_hdf(filename : str) -> List[str]:
+def ls_hdf(filename : str, is_parquet=False) -> List[str]:
     """
     This function calls the h5ls utility on a filename visible to the
     arkouda server.
@@ -23,6 +23,8 @@ def ls_hdf(filename : str) -> List[str]:
     ----------
     filename : str
         The name of the file to pass to h5ls
+    is_parquet : bool
+        Is filename a Parquet file; false by default
 
     Returns
     -------
@@ -41,7 +43,8 @@ def ls_hdf(filename : str) -> List[str]:
     if not (filename and filename.strip()):
         raise ValueError("filename cannot be an empty string")
 
-    return json.loads(cast(str,generic_msg(cmd="lshdf", args="{}".format(json.dumps([filename])))))
+    cmd = 'lshdf' if not is_parquet else 'lspq'
+    return json.loads(cast(str,generic_msg(cmd=cmd, args="{}".format(json.dumps([filename])))))
 
 @typechecked
 def read_hdf(dsetName : str, filenames : Union[str,List[str]],
@@ -114,7 +117,7 @@ def read_hdf(dsetName : str, filenames : Union[str,List[str]],
                          calc_string_offsets=calc_string_offsets))
 
 def read_parquet(filenames : Union[str, List[str]],
-                 dsetname : Union[str, List[str]]  = 'array',
+                 datasets : Union[str, List[str]]=None,
                  strictTypes: bool=True, allow_errors:bool = False)\
              -> Union[pdarray, Strings, Mapping[str,Union[pdarray,Strings]]]:
     """
@@ -125,9 +128,9 @@ def read_parquet(filenames : Union[str, List[str]],
     ----------
     filenames : list or str
         Either a list of filenames or shell expression
-    dsetName : str
-        The name of the dataset (must be the same across all files).
-        Defaults to 'array'.
+    datasets : str
+        The names of datasets to be read (must be the same across all files).
+        Defaults to all supported columns.
     strictTypes: bool
         If True (default), require all dtypes in all files to have the
         same precision and sign. If False, allow dtypes of different
@@ -169,11 +172,18 @@ def read_parquet(filenames : Union[str, List[str]],
     """
     if isinstance(filenames, str):
         filenames = [filenames]
-    if isinstance(dsetname, str):
-        dsetname = [dsetname]
+    if datasets is None:
+        datasets = get_datasets_allow_errors(filenames, True) if allow_errors else get_datasets(filenames[0], True)
+    if isinstance(datasets, str):
+        datasets = [datasets]
+
+    nonexistent = set(datasets) - \
+        (set(get_datasets_allow_errors(filenames, True)) if allow_errors else set(get_datasets(filenames[0], True)))
+    if len(nonexistent) > 0:
+        raise ValueError("Dataset(s) not found: {}".format(nonexistent))
 
     rep_msg = generic_msg(cmd="readAllParquet", args=
-                          f"{strictTypes} {len(dsetname)} {len(filenames)} {allow_errors} {json.dumps(dsetname)} | {json.dumps(filenames)}")
+                          f"{strictTypes} {len(datasets)} {len(filenames)} {allow_errors} {json.dumps(datasets)} | {json.dumps(filenames)}")
     rep = json.loads(rep_msg)  # See GenSymIO._buildReadAllHdfMsgJson for json structure
     items = rep["items"] if "items" in rep else []
     file_errors = rep["file_errors"] if "file_errors" in rep else []
@@ -186,7 +196,7 @@ def read_parquet(filenames : Union[str, List[str]],
         d: Dict[str, Union[pdarray, Strings]] = {}
         for item in items:
             if "seg_string" == item["arkouda_type"]:
-                d[item["dataset_name"]] = Strings(*item["created"].split("+"))
+                d[item["dataset_name"]] = Strings.from_return_msg(item["created"])
             elif "pdarray" == item["arkouda_type"]:
                 d[item["dataset_name"]] = create_pdarray(item["created"])
             else:
@@ -198,7 +208,7 @@ def read_parquet(filenames : Union[str, List[str]],
         if "pdarray" == item["arkouda_type"]:
             return create_pdarray(item["created"])
         elif "seg_string" == item["arkouda_type"]:
-            return Strings(*item["created"].split("+"))
+            return Strings.from_return_msg(item["created"])
         else:
             raise TypeError(f"Unknown arkouda type:{item['arkouda_type']}")
     else:
@@ -379,14 +389,16 @@ def load(path_prefix : str, dataset : str='array', calc_string_offsets:bool = Fa
             
 
 @typechecked
-def get_datasets(filename : str) -> List[str]:
+def get_datasets(filename : str, is_parquet=False) -> List[str]:
     """
     Get the names of datasets in an HDF5 file.
 
     Parameters
     ----------
     filename : str
-        Name of an HDF5 file visible to the arkouda server
+        Name of an HDF5/Parquet file visible to the arkouda server
+    is_parquet : bool
+        Is filename a Parquet file; false by default
 
     Returns
     -------
@@ -406,14 +418,14 @@ def get_datasets(filename : str) -> List[str]:
     --------
     ls_hdf
     """
-    datasets = ls_hdf(filename)
+    datasets = ls_hdf(filename, is_parquet)
     # We can skip/remove the _arkouda_metadata group since it is an internal only construct
     if ARKOUDA_HDF5_FILE_METADATA_GROUP in datasets:
         datasets.remove(ARKOUDA_HDF5_FILE_METADATA_GROUP)
     return datasets
 
 @typechecked
-def get_datasets_allow_errors(filenames: List[str]) -> List[str]:
+def get_datasets_allow_errors(filenames: List[str], is_parquet=False) -> List[str]:
     """
     Get the names of datasets in an HDF5 file
     Allow file read errors until success
@@ -422,6 +434,8 @@ def get_datasets_allow_errors(filenames: List[str]) -> List[str]:
     ----------
     filenames : List[str]
         A list of HDF5 files visible to the arkouda server
+    is_parquet : bool
+        Is filename a Parquet file; false by default
 
     Returns
     -------
@@ -442,7 +456,7 @@ def get_datasets_allow_errors(filenames: List[str]) -> List[str]:
     datasets = []
     for filename in filenames:
         try:
-            datasets = get_datasets(filename)
+            datasets = get_datasets(filename, is_parquet)
             break
         except RuntimeError:
             pass

@@ -1,6 +1,6 @@
 module SegmentedArray {
   use AryUtil;
-  use CPtr;
+  use CTypes;
   use MultiTypeSymbolTable;
   use MultiTypeSymEntry;
   use CommAggregation;
@@ -1044,6 +1044,11 @@ module SegmentedArray {
                            moduleName = getModuleName(),
                            errorClass="ArgumentError");
     }
+    if useHash {
+      const lh = lss.hash();
+      const rh = rss.hash();
+      return if polarity then (lh == rh) else (lh != rh);
+    }
     ref oD = lss.offsets.aD;
     // Start by assuming all elements differ, then correct for those that are equal
     // This translates to an initial value of false for == and true for !=
@@ -1091,157 +1096,58 @@ module SegmentedArray {
 
   /* Test an array of strings for equality against a constant string. Return a boolean
      vector the same size as the array. */
-  operator ==(ss:SegString, testStr: string) {
-    return compare(ss, testStr, true);
+  operator ==(ss:SegString, testStr: string) throws {
+    return compare(ss, testStr, SegFunction.StringCompareLiteralEq);
   }
   
   /* Test an array of strings for inequality against a constant string. Return a boolean
      vector the same size as the array. */
-  operator !=(ss:SegString, testStr: string) {
-    return compare(ss, testStr, false);
+  operator !=(ss:SegString, testStr: string) throws {
+    return compare(ss, testStr, SegFunction.StringCompareLiteralNeq);
   }
 
+  inline proc stringCompareLiteralEq(values, rng, testStr) {
+    if rng.size == (testStr.numBytes + 1) {
+      const s = interpretAsString(values, rng);
+      return (s == testStr);
+    } else {
+      return false;
+    }
+  }
+
+  inline proc stringCompareLiteralNeq(values, rng, testStr) {
+    if rng.size == (testStr.numBytes + 1) {
+      const s = interpretAsString(values, rng);
+      return (s != testStr);
+    } else {
+      return true;
+    }
+  }
+  
   /* Element-wise comparison of an arrays of string against a target string. 
      The polarity parameter determines whether the comparison checks for 
      equality (polarity=true, result is true where elements equal target) 
      or inequality (polarity=false, result is true where elements differ from 
      target). */
-  proc compare(ss:SegString, testStr: string, param polarity: bool) {
-    ref oD = ss.offsets.aD;
-    // Initially assume all elements equal the target string, then correct errors
-    // For ==, this means everything starts true; for !=, everything starts false
-    var truth: [oD] bool = polarity;
-    // Early exit for zero-length result
-    if (ss.size == 0) {
-      return truth;
+  proc compare(ss:SegString, const testStr: string, param function: SegFunction) throws {
+    if testStr.numBytes == 0 {
+      // Comparing against the empty string is a quick check for zero length
+      const lengths = ss.getLengths() - 1;
+      return (lengths == 0);
     }
-    ref values = ss.values.a;
-    ref vD = ss.values.aD;
-    ref offsets = ss.offsets.a;
-    // Use a whole-array strategy, where the ith byte from every segment is checked simultaneously
-    // This will do len(testStr) parallel loops, but loops will have low overhead
-    for (b, i) in zip(testStr.chpl_bytes(), 0..) {
-      forall (t, o, idx) in zip(truth, offsets, oD) with (var agg = newDstAggregator(bool)) {
-        if ((o+i > vD.high) || (b != values[o+i])) {
-          // Strings are not equal, so change the output
-          // For ==, output is now false; for !=, output is now true
-          agg.copy(t, !polarity);
-        }
-      }
-    }
-    // Check the length by checking that the next byte is null
-    forall (t, o, idx) in zip(truth, offsets, oD) with (var agg = newDstAggregator(bool)) {
-      if ((o+testStr.size > vD.high) || (0 != values[o+testStr.size])) {
-        // Strings are not equal, so change the output
-        // For ==, output is now false; for !=, output is now true
-        agg.copy(t, !polarity);
-      }
-    }
-    return truth;
+    return computeOnSegments(ss.offsets.a, ss.values.a, function, bool, testStr);
   }
-
-  private config const in1dAssocSortThreshold = 10**6;
 
   /* Test array of strings for membership in another array (set) of strings. Returns
      a boolean vector the same size as the first array. */
-  proc in1d(mainStr: SegString, testStr: SegString, invert=false, forceSort=false) throws where useHash {
-    var truth: [mainStr.offsets.aD] bool;
+  proc in1d(mainStr: SegString, testStr: SegString, invert=false) throws where useHash {
+    use In1d;
     // Early exit for zero-length result
     if (mainStr.size == 0) {
+      var truth: [mainStr.offsets.aD] bool;
       return truth;
     }
-    // Hash all strings for fast comparison
-    var t = new Timer();
-    saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),"Hashing strings");
-    if logLevel == LogLevel.DEBUG { t.start(); }
-    const hashes = mainStr.hash();
-    if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                                                "%t seconds".format(t.elapsed())); 
-        t.clear();
-    }
-
-    if (testStr.size <= in1dAssocSortThreshold) && !forceSort {
-      if logLevel == LogLevel.DEBUG {
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                       "Making associative domains for test set on each locale");
-        t.start();
-      }
-      // On each locale, make an associative domain with the hashes of the second array
-      // parSafe=false because we are adding in serial and it's faster
-      var localTestHashes: [PrivateSpace] domain(2*uint(64), parSafe=false);
-      coforall loc in Locales {
-        on loc {
-          // Local hashes of second array
-          ref mySet = localTestHashes[here.id];
-          mySet.requestCapacity(testStr.size);
-          var testHashes: [{0..#testStr.size}] 2*uint(64);
-          testHashes = testStr.hash();
-          for h in testHashes {
-            mySet += h;
-          }
-          /* // Check membership of hashes in this locale's chunk of the array */
-          /* [i in truth.localSubdomain()] truth[i] = mySet.contains(hashes[i]); */
-        }
-      }
-      if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                       "%t seconds".format(t.elapsed())); 
-        t.clear();
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),      
-                       "Testing membership"); 
-        t.start();
-      }
-      [i in truth.domain] truth[i] = localTestHashes[here.id].contains(hashes[i]);
-      if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                       "%t seconds".format(t.elapsed()));
-      }
-    } else {
-      if logLevel == LogLevel.DEBUG {
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                       "Using sort-based strategy");
-        t.start();
-      }
-      const testHashes = testStr.hash();
-      // Unique the hashes of each array, preserving reverse index for main
-      var (umain, cmain, revIdx) = uniqueSortWithInverse(hashes);
-      var utest = uniqueSort(testHashes, needCounts=false);
-      // Concat unique hashes
-      var combinedDom = makeDistDom(umain.size + utest.size);
-      var combined: [combinedDom] 2*uint(64);
-      combined[combinedDom.interior(-umain.size)] = umain;
-      combined[combinedDom.interior(utest.size)] = utest;
-      // Sort
-      var sorted: [combinedDom] 2*uint(64);
-      var iv: [combinedDom] int;
-      forall (s, i, si) in zip(sorted, iv, radixSortLSD(combined)) {
-        (s, i) = si;
-      }
-      // Find duplicates
-      // Dupe parallels unique hashes of mainStr and is true when value is in testStr
-      var dupe: [combinedDom] bool = false;
-      forall (sortedIdx, origIdx, s) in zip(combinedDom, iv, sorted) with (var agg = newDstAggregator(bool)){
-        // When next hash is same as current, string exists in both arrays
-        if sortedIdx < combinedDom.high && (s == sorted[sortedIdx+1]){
-          // Use the iv to scatter back to pre-sorted order
-          agg.copy(dupe[origIdx], true);
-        }
-      }
-      // Use revIdx to broadcast dupe to original non-unique domain
-      forall (t, ri) in zip(truth, revIdx) with (var agg = newSrcAggregator(bool)) {
-        agg.copy(t, dupe[ri]);
-      }
-      if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                       "%t seconds".format(t.elapsed()));
-      }
-    }
-    return truth;
+    return in1d(mainStr.hash(), testStr.hash(), invert);
   }
 
   proc concat(s1: [] int, v1: [] uint(8), s2: [] int, v2: [] uint(8)) throws {
@@ -1259,16 +1165,17 @@ module SegmentedArray {
 
   private config const in1dSortThreshold = 64;
   
-  proc in1d(mainStr: SegString, testStr: SegString, invert=false, forceSort=false) throws where !useHash {
+  proc in1d(mainStr: SegString, testStr: SegString, invert=false) throws where !useHash {
     var truth: [mainStr.offsets.aD] bool;
     // Early exit for zero-length result
     if (mainStr.size == 0) {
       return truth;
     }
-    if (testStr.size <= in1dSortThreshold) && !forceSort {
+    if (testStr.size <= in1dSortThreshold) {
       for i in 0..#testStr.size {
         truth |= (mainStr == testStr[i]);
       }
+      if invert { truth = !truth; }
       return truth;
     } else {
       // This is inspired by numpy in1d

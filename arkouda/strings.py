@@ -55,7 +55,7 @@ class Strings:
     -----
     Strings is composed of two pdarrays: (1) offsets, which contains the
     starting indices for each string and (2) bytes, which contains the 
-    raw bytes of all strings, delimited by nulls.    
+    raw bytes of all strings, delimited by nulls.
     """
 
     BinOps = frozenset(["==", "!="])
@@ -176,6 +176,13 @@ class Strings:
         self._regex_dict: Dict = dict()
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
+    """
+    NOTE:
+         The Strings.__del__() method should NOT be implemented. Python will invoke the __del__() of any components by default.
+         Overriding this default behavior with an explicitly specified Strings.__del__() method may introduce errors in the event that additional components are added to Strings and the method is not updated.
+         By allowing Python's garbage collecting to handle this automatically, we avoid extra maintenance
+    """
+     
     def __iter__(self):
         raise NotImplementedError('Strings does not support iteration. To force data transfer from server, use to_ndarray')
 
@@ -231,21 +238,19 @@ class Strings:
                 raise ValueError("Strings: size mismatch {} {}".\
                                  format(self.size, other.size))
             cmd = "segmentedBinopvv"
-            args = "{} {} {} {} {} {} {}".format(op,
-                                                 self.objtype,
-                                                 self.entry.name,
-                                                 "legacy_placeholder",
-                                                 other.objtype,
-                                                 other.entry.name,
-                                                 other.entry.name)
+            args = "{} {} {} {} {} {}".format(op,
+                                              self.objtype,
+                                              self.entry.name,
+                                              other.objtype,
+                                              other.entry.name,
+                                              other.entry.name)
         elif resolve_scalar_dtype(other) == 'str':
             cmd = "segmentedBinopvs"
-            args = "{} {} {} {} {} {}".format(op,
-                                                              self.objtype,
-                                                              self.entry.name,
-                                                              "legacy_placeholder",
-                                                              self.objtype,
-                                                              json.dumps([other]))
+            args = "{} {} {} {} {}".format(op,
+                                           self.objtype,
+                                           self.entry.name,
+                                           self.objtype,
+                                           json.dumps([other]))
         else:
             raise ValueError("Strings: {} not supported between Strings and {}"\
                              .format(op, other.__class__.__name__))
@@ -265,11 +270,10 @@ class Strings:
                 key += self.size
             if (key >= 0 and key < self.size):
                 cmd = "segmentedIndex"
-                args = " {} {} {} {} {}".format('intIndex',
-                                                self.objtype,
-                                                self.entry.name,
-                                                "legacy_placeholder",
-                                                key)
+                args = " {} {} {} {}".format('intIndex',
+                                             self.objtype,
+                                             self.entry.name,
+                                             key)
                 repMsg = generic_msg(cmd=cmd,args=args)
                 _, value = repMsg.split(maxsplit=1)
                 return parse_single_value(value)
@@ -280,13 +284,12 @@ class Strings:
             (start,stop,stride) = key.indices(self.size)
             self.logger.debug('start: {}; stop: {}; stride: {}'.format(start,stop,stride))
             cmd = "segmentedIndex"
-            args = " {} {} {} {} {} {} {}".format('sliceIndex',
-                                                  self.objtype,
-                                                  self.entry.name,
-                                                  "legacy_placeholder",
-                                                  start,
-                                                  stop,
-                                                  stride)
+            args = " {} {} {} {} {} {}".format('sliceIndex',
+                                               self.objtype,
+                                               self.entry.name,
+                                               start,
+                                               stop,
+                                               stride)
             repMsg = generic_msg(cmd=cmd, args=args)
             return Strings.from_return_msg(repMsg)
         elif isinstance(key, pdarray):
@@ -296,11 +299,10 @@ class Strings:
             if kind == "bool" and self.size != key.size:
                 raise ValueError("size mismatch {} {}".format(self.size,key.size))
             cmd = "segmentedIndex"
-            args = "{} {} {} {} {}".format('pdarrayIndex',
-                                                         self.objtype,
-                                                         self.entry.name,
-                                                         "legacy_placeholder",
-                                                         key.name)
+            args = "{} {} {} {}".format('pdarrayIndex',
+                                        self.objtype,
+                                        self.entry.name,
+                                        key.name)
             repMsg = generic_msg(cmd=cmd,args=args)
             return Strings.from_return_msg(repMsg)
         else:
@@ -321,7 +323,7 @@ class Strings:
             Raised if there is a server-side error thrown
         """
         cmd = "segmentLengths"
-        args = "{} {} {}".format(self.objtype, self.entry.name, "legacy_placeholder")
+        args = "{} {}".format(self.objtype, self.entry.name)
         return create_pdarray(generic_msg(cmd=cmd,args=args))
 
     @typechecked
@@ -687,11 +689,10 @@ class Strings:
         if matcher is not None:
             return matcher.get_match(MatchType.SEARCH, self).matched()
         cmd = "segmentedSearch"
-        args = "{} {} {} {} {}".format(self.objtype,
-                                       self.entry.name,
-                                       "legacy_placeholder",
-                                       "str",
-                                       json.dumps([substr]))
+        args = "{} {} {} {}".format(self.objtype,
+                                    self.entry.name,
+                                    "str",
+                                    json.dumps([substr]))
         return create_pdarray(generic_msg(cmd=cmd, args=args))
 
     @typechecked
@@ -850,12 +851,11 @@ class Strings:
             return self.split(delimiter, return_segments=return_segments)
         else:
             cmd = "segmentedFlatten"
-            args = "{}+{} {} {} {} {}".format(self.entry.name,
-                                              "legacy_placeholder",
-                                              self.objtype,
-                                              return_segments,
-                                              regex,
-                                              json.dumps([delimiter]))
+            args = "{} {} {} {} {}".format(self.entry.name,
+                                           self.objtype,
+                                           return_segments,
+                                           regex,
+                                           json.dumps([delimiter]))
             repMsg = cast(str, generic_msg(cmd=cmd, args=args))
             if return_segments:
                 arrays = repMsg.split('+', maxsplit=2)
@@ -944,17 +944,16 @@ class Strings:
         if times < 1:
             raise ValueError("times must be >= 1")
         cmd = "segmentedPeel"
-        args = "{} {} {} {} {} {} {} {} {} {} {}".format("peel",
-                                                         self.objtype,
-                                                         self.entry.name,
-                                                         "legacy_placeholder",
-                                                         "str",
-                                                         NUMBER_FORMAT_STRINGS['int64'].format(times),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(includeDelimiter),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(keepPartial),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(not fromRight),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(regex),
-                                                         json.dumps([delimiter]))
+        args = "{} {} {} {} {} {} {} {} {} {}".format("peel",
+                                                      self.objtype,
+                                                      self.entry.name,
+                                                      "str",
+                                                      NUMBER_FORMAT_STRINGS['int64'].format(times),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(includeDelimiter),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(keepPartial),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(not fromRight),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(regex),
+                                                      json.dumps([delimiter]))
         repMsg = generic_msg(cmd=cmd, args=args)
         arrays = cast(str, repMsg).split('+', maxsplit=3)
         # first two created are left Strings, last two are right strings
@@ -1069,16 +1068,14 @@ class Strings:
         if isinstance(delimiter, bytes):
             delimiter = delimiter.decode()
         cmd = "segmentedBinopvv"
-        args = "{} {} {} {} {} {} {} {} {}".\
-                            format("stick",
-                            self.objtype,
-                            self.entry.name,
-                            "legacy_placeholder",
-                            other.objtype,
-                            other.entry.name,
-                            "legacy_placeholder",
-                            NUMBER_FORMAT_STRINGS['bool'].format(toLeft),
-                            json.dumps([delimiter]))
+        args = "{} {} {} {} {} {} {}". \
+            format("stick",
+                   self.objtype,
+                   self.entry.name,
+                   other.objtype,
+                   other.entry.name,
+                   NUMBER_FORMAT_STRINGS['bool'].format(toLeft),
+                   json.dumps([delimiter]))
         rep_msg = generic_msg(cmd=cmd,args=args)
         return Strings.from_return_msg(cast(str, rep_msg))
 
@@ -1147,7 +1144,7 @@ class Strings:
         """
         # TODO fix this to return a single pdarray of hashes
         cmd = "segmentedHash"
-        args = "{} {} {}".format(self.objtype, self.entry.name, "legacy_placeholder")
+        args = "{} {}".format(self.objtype, self.entry.name)
         repMsg = generic_msg(cmd=cmd,args=args)
         h1, h2 = cast(str,repMsg).split('+')
         return create_pdarray(h1), create_pdarray(h2)
@@ -1183,9 +1180,18 @@ class Strings:
             creating the pdarray encapsulating the return message
         """
         cmd = "segmentedGroup"
-        args = "{} {} {}".format(self.objtype, self.entry.name, "legacy_placeholder")
+        args = "{} {}".format(self.objtype, self.entry.name)
         return create_pdarray(generic_msg(cmd=cmd,args=args))
 
+    def _get_grouping_keys(self) -> List[pdarray]:
+        ''' 
+        Private method for generating grouping keys used by GroupBy.
+
+        API: this method must be defined by all groupable arrays, and it
+        must return a list of arrays that can be (co)argsorted.
+        '''
+        return list(self.hash())
+    
     def to_ndarray(self) -> np.ndarray:
         """
         Convert the array to a np.ndarray, transferring array data from the
@@ -1289,6 +1295,28 @@ class Strings:
         else:
             dt = dt.newbyteorder('<')
         return np.frombuffer(rep_msg, dt).copy()
+
+    def astype(self, dtype) -> pdarray:
+        """
+        Cast values of Strings object to provided dtype
+
+        Parameters
+        __________
+        dtype: np.dtype or str
+            Dtype to cast to
+
+        Returns
+        _______
+        ak.pdarray
+            An arkouda pdarray with values converted to the specified data type
+
+        Notes
+        _____
+        This is essentially shorthand for ak.cast(x, '<dtype>') where x is a pdarray.
+        """
+        from arkouda.numeric import cast as akcast
+
+        return akcast(self, dtype)
 
     @typechecked
     def save(self, prefix_path : str, dataset : str='strings_array', 
@@ -1540,3 +1568,4 @@ class Strings:
         register, unregister, attach, is_registered
         """
         unregister_pdarray_by_name(user_defined_name)
+        

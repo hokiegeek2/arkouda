@@ -32,33 +32,66 @@ class PdarrayCreationTest(ArkoudaTest):
         self.assertEqual(int, pda.dtype)         
 
         with self.assertRaises(RuntimeError) as cm:          
-            ak.array({range(0,100)})         
-        self.assertEqual("Only rank-1 pdarrays or ndarrays supported", 
-                         cm.exception.args[0])  
+            ak.array({range(0,100)})
         
         with self.assertRaises(RuntimeError) as cm:          
-            ak.array(np.array([[0,1],[0,1]]))         
-        self.assertEqual("Only rank-1 pdarrays or ndarrays supported", 
-                         cm.exception.args[0])  
+            ak.array(np.array([[0,1],[0,1]]))
 
         with self.assertRaises(RuntimeError) as cm:          
-            ak.array('not an iterable')          
-        self.assertEqual("Only rank-1 pdarrays or ndarrays supported", 
-                         cm.exception.args[0]) 
+            ak.array('not an iterable')
         
         with self.assertRaises(TypeError) as cm:          
-            ak.array(list(list(0)))          
-        self.assertEqual("'int' object is not iterable", 
-                         cm.exception.args[0])       
+            ak.array(list(list(0)))
 
     def test_arange(self):
         self.assertTrue((ak.array([0, 1, 2, 3, 4]) == ak.arange(0, 5, 1)).all())
-
         self.assertTrue((ak.array([5, 4, 3, 2, 1]) == ak.arange(5, 0, -1)).all())
-        
         self.assertTrue((ak.array([-5, -6, -7, -8, -9]) == ak.arange(-5, -10, -1)).all())
-
         self.assertTrue((ak.array([0, 2, 4, 6, 8]) == ak.arange(0, 10, 2)).all())
+
+    def test_arange_dtype(self):
+        # test dtype works with optional start/stride
+        expected_stop = ak.array([0, 1, 2])
+        uint_stop = ak.arange(3, dtype=ak.uint64)
+        self.assertListEqual(expected_stop.to_ndarray().tolist(), uint_stop.to_ndarray().tolist())
+        self.assertEqual(ak.uint64, uint_stop.dtype)
+
+        expected_start_stop = ak.array([3, 4, 5, 6])
+        uint_start_stop = ak.arange(3, 7, dtype=ak.uint64)
+        self.assertListEqual(expected_start_stop.to_ndarray().tolist(), uint_start_stop.to_ndarray().tolist())
+        self.assertEqual(ak.uint64, uint_start_stop.dtype)
+
+        expected_start_stop_stride = ak.array([3, 5])
+        uint_start_stop_stride = ak.arange(3, 7, 2, dtype=ak.uint64)
+        self.assertListEqual(expected_start_stop_stride.to_ndarray().tolist(), uint_start_stop_stride.to_ndarray().tolist())
+        self.assertEqual(ak.uint64, uint_start_stop_stride.dtype)
+
+        # test uint64 handles negatives correctly
+        np_arange_uint = np.arange(-5, -10, -1, dtype=np.uint64)
+        ak_arange_uint = ak.arange(-5, -10, -1, dtype=ak.uint64)
+        # np_arange_uint = array([18446744073709551611, 18446744073709551610, 18446744073709551609,
+        #        18446744073709551608, 18446744073709551607], dtype=uint64)
+        self.assertListEqual(np_arange_uint.tolist(), ak_arange_uint.to_ndarray().tolist())
+        self.assertEqual(ak.uint64, ak_arange_uint.dtype)
+
+        # test correct conversion to float64
+        np_arange_float = np.arange(-5, -10, -1, dtype=np.float64)
+        ak_arange_float = ak.arange(-5, -10, -1, dtype=ak.float64)
+        # array([-5., -6., -7., -8., -9.])
+        self.assertListEqual(np_arange_float.tolist(), ak_arange_float.to_ndarray().tolist())
+        self.assertEqual(ak.float64, ak_arange_float.dtype)
+
+        # test correct conversion to bool
+        expected_bool = ak.array([False, True, True, True, True])
+        ak_arange_bool = ak.arange(0, 10, 2, dtype=ak.bool)
+        self.assertListEqual(expected_bool.to_ndarray().tolist(), ak_arange_bool.to_ndarray().tolist())
+        self.assertEqual(ak.bool, ak_arange_bool.dtype)
+
+        # test uint64 input works
+        expected = ak.array([0, 1, 2])
+        uint_input = ak.arange(3, dtype=ak.uint64)
+        self.assertListEqual(expected.to_ndarray().tolist(), uint_input.to_ndarray().tolist())
+        self.assertEqual(ak.uint64, uint_input.dtype)
 
     def test_randint(self):
         testArray = ak.randint(0, 10, 5)
@@ -83,7 +116,7 @@ class PdarrayCreationTest(ArkoudaTest):
         
         for value in test_ndarray:
             self.assertTrue(0 <= value <= 10)
-                          
+
         test_array = ak.randint(0, 1, 3, dtype=ak.float64)
         self.assertEqual(ak.float64, test_array.dtype)
         
@@ -106,18 +139,12 @@ class PdarrayCreationTest(ArkoudaTest):
 
         with self.assertRaises(ValueError) as cm:
             ak.randint(low=0, high=1, size=-1, dtype=ak.float64)
-        self.assertEqual("size must be > 0 and high > low", 
-                         cm.exception.args[0])    
  
         with self.assertRaises(ValueError) as cm:
-            ak.randint(low=1, high=0, size=1, dtype=ak.float64)  
-        self.assertEqual("size must be > 0 and high > low", 
-                         cm.exception.args[0])             
+            ak.randint(low=1, high=0, size=1, dtype=ak.float64)
 
         with self.assertRaises(TypeError) as cm:              
             ak.randint(0,1,'1000')
-        self.assertEqual('type of argument "size" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0])    
 
         with self.assertRaises(TypeError):              
             ak.randint('0',1,1000)
@@ -223,13 +250,9 @@ class PdarrayCreationTest(ArkoudaTest):
         
         with self.assertRaises(TypeError) as cm:
             ak.ones(5, dtype=ak.uint8)
-        self.assertEqual('unsupported dtype uint8', 
-                         cm.exception.args[0])  
                     
         with self.assertRaises(TypeError) as cm:
             ak.ones(5, dtype=str)
-        self.assertEqual('unsupported dtype <U0', 
-                         cm.exception.args[0])     
         
     def test_ones_like(self):      
         intOnes = ak.ones(5, dtype=ak.int64)
@@ -246,9 +269,64 @@ class PdarrayCreationTest(ArkoudaTest):
         boolOnes = ak.ones(5, dtype=ak.bool)
         boolOnesLike = ak.ones_like(boolOnes)
         
-        self.assertEqual(ak.bool,boolOnesLike.dtype)        
-        
-    def test_eros_like(self):      
+        self.assertEqual(ak.bool,boolOnesLike.dtype)
+
+    def test_full(self):
+        int_full = ak.full(5, 5, dtype=int)
+        self.assertIsInstance(int_full, ak.pdarray)
+        self.assertEqual(int, int_full.dtype)
+        self.assertEqual(int_full[0], 5)
+
+        int_full = ak.full(5, 5, dtype=ak.int64)
+        self.assertEqual(ak.int64, int_full.dtype)
+
+        uint_full = ak.full(5, 7, dtype=ak.uint64)
+        self.assertIsInstance(uint_full, ak.pdarray)
+        self.assertEqual(ak.uint64, uint_full.dtype)
+        self.assertEqual(uint_full[0], 7)
+
+        float_full = ak.full(5, 0, dtype=float)
+        self.assertEqual(float, float_full.dtype)
+        self.assertEqual(float_full[0], 0)
+
+        float_full = ak.full(5, 0, dtype=ak.float64)
+        self.assertEqual(ak.float64, float_full.dtype)
+
+        bool_full = ak.full(5, -1, dtype=bool)
+        self.assertEqual(bool, bool_full.dtype)
+        self.assertEqual(bool_full[0], True)
+
+        bool_full = ak.full(5, False, dtype=ak.bool)
+        self.assertEqual(ak.bool, bool_full.dtype)
+        self.assertEqual(bool_full[0], False)
+
+        string_len_full = ak.full('5', 5)
+        self.assertEqual(5, len(string_len_full))
+
+        with self.assertRaises(TypeError) as cm:
+            ak.full(5, 1, dtype=ak.uint8)
+
+        with self.assertRaises(TypeError) as cm:
+            ak.full(5, 8, dtype=str)
+
+    def test_full_like(self):
+        int_full = ak.full(5, 6, dtype=ak.int64)
+        int_full_like = ak.full_like(int_full, 6)
+        self.assertIsInstance(int_full_like, ak.pdarray)
+        self.assertEqual(ak.int64, int_full_like.dtype)
+        self.assertEqual(int_full_like[0], 6)
+
+        float_full = ak.full(5, 4, dtype=ak.float64)
+        float_full_like = ak.full_like(float_full, 4)
+        self.assertEqual(ak.float64, float_full_like.dtype)
+        self.assertEqual(float_full_like[0], 4)
+
+        bool_full = ak.full(5, True, dtype=ak.bool)
+        bool_full_like = ak.full_like(bool_full, True)
+        self.assertEqual(ak.bool, bool_full_like.dtype)
+        self.assertEqual(bool_full_like[0], True)
+
+    def test_zeros_like(self):
         intZeros = ak.zeros(5, dtype=ak.int64)
         intZerosLike = ak.zeros_like(intZeros)
 
@@ -287,18 +365,12 @@ class PdarrayCreationTest(ArkoudaTest):
         
         with self.assertRaises(TypeError) as cm:        
             ak.linspace(0,'100', 1000)
-        self.assertEqual(('both start and stop must be an int, np.int64, float, or np.float64'), 
-                         cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:        
             ak.linspace('0',100, 1000)
-        self.assertEqual(('both start and stop must be an int, np.int64, float, or np.float64'), 
-                         cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:          
-            ak.linspace(0,100,'1000')           
-        self.assertEqual('type of argument "length" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0])            
+            ak.linspace(0,100,'1000')
 
     def test_standard_normal(self):
         pda = ak.standard_normal(100)
@@ -323,19 +395,13 @@ class PdarrayCreationTest(ArkoudaTest):
         
 
         with self.assertRaises(TypeError) as cm:          
-            ak.standard_normal('100')          
-        self.assertEqual('type of argument "size" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0]) 
+            ak.standard_normal('100')
    
         with self.assertRaises(TypeError) as cm:          
-            ak.standard_normal(100.0)          
-        self.assertEqual('type of argument "size" must be one of (int, int64, uint64); got float instead', 
-                         cm.exception.args[0])   
+            ak.standard_normal(100.0)
     
         with self.assertRaises(ValueError) as cm:          
-            ak.standard_normal(-1)          
-        self.assertEqual("The size parameter must be > 0", 
-                         cm.exception.args[0])  
+            ak.standard_normal(-1)
 
     def test_random_strings_uniform(self):
         pda = ak.random_strings_uniform(minlen=1, maxlen=5, size=100)
@@ -359,34 +425,22 @@ class PdarrayCreationTest(ArkoudaTest):
             self.assertTrue(string.isupper())
         
         with self.assertRaises(ValueError) as cm:          
-            ak.random_strings_uniform(maxlen=1,minlen=5, size=100)          
-        self.assertEqual("Incompatible arguments: minlen < 0, maxlen <= minlen, or size < 0", 
-                         cm.exception.args[0])
+            ak.random_strings_uniform(maxlen=1,minlen=5, size=100)
         
         with self.assertRaises(ValueError) as cm:          
-            ak.random_strings_uniform(maxlen=5,minlen=1, size=-1)          
-        self.assertEqual("Incompatible arguments: minlen < 0, maxlen <= minlen, or size < 0", 
-                         cm.exception.args[0])
+            ak.random_strings_uniform(maxlen=5,minlen=1, size=-1)
 
         with self.assertRaises(ValueError) as cm:          
-            ak.random_strings_uniform(maxlen=5, minlen=5, size=10)          
-        self.assertEqual("Incompatible arguments: minlen < 0, maxlen <= minlen, or size < 0", 
-                         cm.exception.args[0])
+            ak.random_strings_uniform(maxlen=5, minlen=5, size=10)
         
         with self.assertRaises(TypeError) as cm:          
-            ak.random_strings_uniform(minlen='1', maxlen=5, size=10)          
-        self.assertEqual('type of argument "minlen" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0])  
+            ak.random_strings_uniform(minlen='1', maxlen=5, size=10)
         
         with self.assertRaises(TypeError) as cm:          
-            ak.random_strings_uniform( minlen=1, maxlen='5', size=10)          
-        self.assertEqual('type of argument "maxlen" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0])     
+            ak.random_strings_uniform( minlen=1, maxlen='5', size=10)
         
         with self.assertRaises(TypeError) as cm:          
-            ak.random_strings_uniform(minlen=1, maxlen=5, size='10')          
-        self.assertEqual('type of argument "size" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0])              
+            ak.random_strings_uniform(minlen=1, maxlen=5, size='10')
 
     def test_random_strings_uniform_with_seed(self):
         pda = ak.random_strings_uniform(minlen=1, maxlen=5, seed=1, size=10)
@@ -440,19 +494,13 @@ class PdarrayCreationTest(ArkoudaTest):
         self.assertEqual(str, pda.dtype)
         
         with self.assertRaises(TypeError) as cm:          
-            ak.random_strings_lognormal('2', 0.25, 100)          
-        self.assertEqual('both logmean and logstd must be an int, np.int64, float, or np.float64', 
-                         cm.exception.args[0])   
+            ak.random_strings_lognormal('2', 0.25, 100)
                 
         with self.assertRaises(TypeError) as cm:          
-            ak.random_strings_lognormal(2, 0.25, '100')          
-        self.assertEqual('type of argument "size" must be one of (int, int64, uint64); got str instead', 
-                         cm.exception.args[0])       
+            ak.random_strings_lognormal(2, 0.25, '100')
         
         with self.assertRaises(TypeError) as cm:          
-            ak.random_strings_lognormal(2, 0.25, 100, 1000000)          
-        self.assertEqual('type of argument "characters" must be str; got int instead', 
-                         cm.exception.args[0])  
+            ak.random_strings_lognormal(2, 0.25, 100, 1000000)
         
     def test_random_strings_lognormal_with_seed(self):
         pda = ak.random_strings_lognormal(2, 0.25, 10, seed=1)
@@ -484,9 +532,6 @@ class PdarrayCreationTest(ArkoudaTest):
     def test_mulitdimensional_array_creation(self):
         with self.assertRaises(RuntimeError) as cm:
             ak.array([[0,0],[0,1],[1,1]])
-            
-        self.assertEqual('Only rank-1 pdarrays or ndarrays supported', 
-                         cm.exception.args[0])
         
     def test_from_series(self):
         strings = ak.from_series(pd.Series(['a', 'b', 'c', 'd', 'e'], dtype="string"))
@@ -554,16 +599,10 @@ class PdarrayCreationTest(ArkoudaTest):
         self.assertEqual(np.int64, p_array.dtype)  
   
         with self.assertRaises(TypeError) as cm:          
-            ak.from_series(np.ones(100))        
-        self.assertEqual(('type of argument "series" must be pandas.core.series.Series; ' +
-                         'got numpy.ndarray instead'), 
-                         cm.exception.args[0])    
+            ak.from_series(np.ones(100))
 
         with self.assertRaises(ValueError) as cm:          
-            ak.from_series(pd.Series(np.random.randint(0,10,10), dtype=np.int8))      
-        self.assertEqual(('dtype int8 is unsupported. Supported dtypes are bool, ' +
-                          'float64, int64, string, datetime64[ns], and timedelta64[ns]'), 
-                         cm.exception.args[0])
+            ak.from_series(pd.Series(np.random.randint(0,10,10), dtype=np.int8))
         
     def test_fill(self):
         ones = ak.ones(100)

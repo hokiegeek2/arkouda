@@ -210,7 +210,14 @@ class pdarray:
             repMsg = generic_msg(cmd=cmd,args=args)
             return create_pdarray(repMsg)
         # pdarray binop scalar
-        dt = resolve_scalar_dtype(other)
+        if np.can_cast(other, self.dtype):
+            # If scalar can be losslessly cast to array dtype, 
+            # do the cast so that return array will have same dtype
+            dt = self.dtype.name
+            other = self.dtype.type(other)
+        else:
+            # If scalar cannot be safely cast, server will infer the return dtype
+            dt = resolve_scalar_dtype(other)
         if dt not in DTypes:
             raise TypeError("Unhandled scalar type: {} ({})".format(other, 
                                                                     type(other)))
@@ -250,7 +257,14 @@ class pdarray:
         if op not in self.BinOps:
             raise ValueError("bad operator {}".format(op))
         # pdarray binop scalar
-        dt = resolve_scalar_dtype(other)
+        if np.can_cast(other, self.dtype):
+            # If scalar can be losslessly cast to array dtype, 
+            # do the cast so that return array will have same dtype
+            dt = self.dtype.name
+            other = self.dtype.type(other)
+        else:
+            # If scalar cannot be safely cast, server will infer the return dtype
+            dt = resolve_scalar_dtype(other)
         if dt not in DTypes:
             raise TypeError("Unhandled scalar type: {} ({})".format(other, 
                                                                     type(other)))
@@ -840,6 +854,28 @@ class pdarray:
         Rotate bits right by <other>.
         """
         return rotr(self, other)
+
+    def astype(self, dtype) -> pdarray:
+        """
+        Cast values of pdarray to provided dtype
+
+        Parameters
+        __________
+        dtype: np.dtype or str
+            Dtype to cast to
+
+        Returns
+        _______
+        ak.pdarray
+            An arkouda pdarray with values converted to the specified data type
+
+        Notes
+        _____
+        This is essentially shorthand for ak.cast(x, '<dtype>') where x is a pdarray.
+        """
+        from arkouda.numeric import cast as akcast
+
+        return akcast(self, dtype)
     
     def to_ndarray(self) -> np.ndarray:
         """
@@ -1261,6 +1297,18 @@ class pdarray:
         >>> b.unregister()
         """
         return attach_pdarray(user_defined_name)
+
+    def _get_grouping_keys(self) -> List[pdarray]:
+        ''' 
+        Private method for generating grouping keys used by GroupBy.
+
+        API: this method must be defined by all groupable arrays, and it
+        must return a list of arrays that can be (co)argsorted.
+        '''
+        if self.dtype not in (akint64, akuint64):
+            raise TypeError("Grouping numeric data is only supported on integral types.")
+        # Integral pdarrays are their own grouping keys
+        return [self]
 
 #end pdarray class def
     

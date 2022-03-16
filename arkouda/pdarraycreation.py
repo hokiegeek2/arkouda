@@ -12,7 +12,7 @@ from arkouda.dtypes import dtype as akdtype
 from arkouda.pdarrayclass import pdarray, create_pdarray
 from arkouda.strings import Strings
 
-__all__ = ["array", "zeros", "ones", "zeros_like", "ones_like", 
+__all__ = ["array", "zeros", "ones", "full", "zeros_like", "ones_like", "full_like",
            "arange", "linspace", "randint", "uniform", "standard_normal",
            "random_strings_uniform", "random_strings_lognormal", 
            "from_series"
@@ -317,6 +317,59 @@ def ones(size : int_scalars, dtype=float64) -> pdarray:
     a.fill(1)
     return a
 
+
+def full(size: int_scalars, fill_value: int_scalars, dtype=float64) -> pdarray:
+    """
+    Create a pdarray filled with fill_value.
+
+    Parameters
+    ----------
+    size: int_scalars
+        Size of the array (only rank-1 arrays supported)
+    fill_value: int_scalars
+        Value with which the array will be filled
+    dtype: all_scalars
+        Resulting array type, default float64
+
+    Returns
+    -------
+    pdarray
+        array of the requested size and dtype filled with fill_value
+
+    Raises
+    ------
+    TypeError
+        Raised if the supplied dtype is not supported or if the size
+        parameter is neither an int nor a str that is parseable to an int.
+
+    See Also
+    --------
+    zeros, ones
+
+    Examples
+    --------
+    >>> ak.full(5, 7, dtype=ak.int64)
+    array([7, 7, 7, 7, 7])
+
+    >>> ak.full(5, 9, dtype=ak.float64)
+    array([9, 9, 9, 9, 9])
+
+    >>> ak.full(5, 5, dtype=ak.bool)
+    array([True, True, True, True, True])
+    """
+    if not np.isscalar(size):
+        raise TypeError(f"size must be a scalar, not {size.__class__.__name__}")
+    dtype = akdtype(dtype)  # normalize dtype
+    # check dtype for error
+    if cast(np.dtype, dtype).name not in NumericDTypes:
+        raise TypeError(f"unsupported dtype {dtype}")
+    repMsg = generic_msg(cmd="create", args="{} {}".format(
+        cast(np.dtype, dtype).name, size))
+    a = create_pdarray(repMsg)
+    a.fill(fill_value)
+    return a
+
+
 @typechecked
 def zeros_like(pda : pdarray) -> pdarray:
     """
@@ -404,14 +457,66 @@ def ones_like(pda : pdarray) -> pdarray:
     """
     return ones(pda.size, pda.dtype)
 
-def arange(*args) -> pdarray:
+
+@typechecked
+def full_like(pda: pdarray, fill_value: int_scalars) -> pdarray:
     """
-    arange([start,] stop[, stride])
+    Create a pdarray filled with fill_value of the same size and dtype as an existing
+    pdarray.
+
+    Parameters
+    ----------
+    pda: pdarray
+        Array to use for size and dtype
+    fill_value: int_scalars
+        Value with which the array will be filled
+
+    Returns
+    -------
+    pdarray
+        Equivalent to ak.full(pda.size, fill_value, pda.dtype)
+
+    Raises
+    ------
+    TypeError
+        Raised if the pda parameter is not a pdarray.
+
+    See Also
+    --------
+    ones_like, zeros_like
+
+    Notes
+    -----
+    Logic for generating the pdarray is delegated to the ak.full method.
+    Accordingly, the supported dtypes match are defined by the ak.full method.
+
+    Examples
+    --------
+    >>> full = ak.full(5, 7, dtype=ak.int64)
+    >>> ak.full_like(full)
+    array([7, 7, 7, 7, 7])
+
+    >>> full = ak.full(5, 9, dtype=ak.float64)
+    >>> ak.full_like(full)
+    array([9, 9, 9, 9, 9])
+
+    >>> full = ak.full(5, 5, dtype=ak.bool)
+    >>> ak.full_like(full)
+    array([True, True, True, True, True])
+    """
+    return full(pda.size, fill_value, pda.dtype)
+
+
+def arange(*args, **kwargs) -> pdarray:
+    """
+    arange([start,] stop[, stride,] dtype=int64)
 
     Create a pdarray of consecutive integers within the interval [start, stop).
     If only one arg is given then arg is the stop parameter. If two args are
     given, then the first arg is start and second is stop. If three args are
     given, then the first arg is start, second is stop, third is stride.
+
+    The return value is cast to type dtype
 
     Parameters
     ----------
@@ -425,7 +530,7 @@ def arange(*args) -> pdarray:
 
     Returns
     -------
-    pdarray, int64
+    pdarray, dtype
         Integers from start (inclusive) to stop (exclusive) by stride
         
     Raises
@@ -459,21 +564,21 @@ def arange(*args) -> pdarray:
     >>> ak.arange(-5, -10, -1)
     array([-5, -6, -7, -8, -9])
     """
-   
-    #if one arg is given then arg is stop
+    from arkouda.numeric import cast
+    # if one arg is given then arg is stop
     if len(args) == 1:
         start = 0
         stop = args[0]
         stride = 1
 
-    #if two args are given then first arg is start and second is stop
+    # if two args are given then first arg is start and second is stop
     if len(args) == 2:
         start = args[0]
         stop = args[1]
         stride = 1
 
-    #if three args are given then first arg is start,
-    #second is stop, third is stride
+    # if three args are given then first arg is start,
+    # second is stop, third is stride
     if len(args) == 3:
         start = args[0]
         stop = args[1]
@@ -482,14 +587,16 @@ def arange(*args) -> pdarray:
     if stride == 0:
         raise ZeroDivisionError("division by zero")
 
+    dtype = int64 if 'dtype' not in kwargs.keys() else kwargs['dtype']
+
     if isSupportedInt(start) and isSupportedInt(stop) and isSupportedInt(stride):
         if stride < 0:
             stop = stop + 2
         repMsg = generic_msg(cmd='arange', args="{} {} {}".format(start, stop, stride))
-        return create_pdarray(repMsg)
+        return create_pdarray(repMsg) if dtype == int64 else cast(create_pdarray(repMsg), dtype)
     else:
-        raise TypeError("start,stop,stride must be type int or np.int64 {} {} {}".\
-                                    format(start,stop,stride))
+        raise TypeError(f"start,stop,stride must be type int, np.int64, or np.uint64 {start} {stop} {stride}")
+
 
 @typechecked
 def linspace(start : numeric_scalars, 

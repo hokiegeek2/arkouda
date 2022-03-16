@@ -13,7 +13,7 @@ from arkouda.pdarraycreation import array, zeros, arange
 from arkouda.pdarraysetops import concatenate
 from arkouda.numeric import cumsum
 from arkouda.logger import getArkoudaLogger
-from arkouda.dtypes import int64
+from arkouda.dtypes import int64, uint64
 
 __all__ = ["GroupBy", "broadcast", "GROUPBY_REDUCTION_TYPES"]
 
@@ -59,7 +59,7 @@ class GroupBy:
 
     Parameters
     ----------
-    keys : (list of) pdarray, int64, Strings, or Categorical
+    keys : (list of) pdarray, Strings, or Categorical
         The array to group by value, or if list, the column arrays to group by row
     assume_sorted : bool
         If True, assume keys is already sorted (Default: False)
@@ -88,7 +88,17 @@ class GroupBy:
 
     Notes
     -----
-    Only accepts (list of) pdarrays of int64 dtype, Strings, or Categorical.
+    Integral pdarrays, Strings, and Categoricals are natively supported, but
+    float64 and bool arrays are not. 
+
+    For a user-defined class to be groupable, it must inherit from pdarray
+    and define or overload the grouping API:
+      1) a ._get_grouping_keys() method that returns a list of pdarrays
+         that can be (co)argsorted.
+      2) (Optional) a .group() method that returns the permutation that 
+         groups the array
+    If the input is a single array with a .group() method defined, method 2
+    will be used; otherwise, method 1 will be used.
 
     """
     Reductions = GROUPBY_REDUCTION_TYPES
@@ -100,38 +110,45 @@ class GroupBy:
         self.assume_sorted = assume_sorted
         self.hash_strings = hash_strings
         self.keys : groupable
+        self.permutation : pdarray
 
-        if isinstance(keys, pdarray):
-            if keys.dtype != int64:
-                raise TypeError('GroupBy only supports pdarrays with a dtype int64')
-            self.keys = cast(pdarray, keys)
+        # Get all grouping keys, even if not required for finding permutation
+        # They will be required later for finding segment boundaries
+        if hasattr(keys, "_get_grouping_keys"):
+            # Single groupable array
             self.nkeys = 1
-            self.size = cast(int, keys.size)
-            if assume_sorted:
-                self.permutation = cast(pdarray, arange(self.size))
-            else:
-                self.permutation = cast(pdarray, argsort(keys))
-        elif hasattr(keys, "group"): # for Strings or Categorical
-            self.nkeys = 1
-            self.keys = cast(Union[Strings,Categorical],keys)
-            self.size = cast(int, self.keys.size) # type: ignore
-            if assume_sorted:
-                self.permutation = cast(pdarray,arange(self.size))
-            else:
-                self.permutation = cast(Union[Strings, Categorical],keys).group()
+            self.keys = cast(groupable_element_type, keys)
+            self.size = cast(int, self.keys.size)
+            self._grouping_keys = self.keys._get_grouping_keys()
         else:
-            self.keys = cast(Sequence[groupable_element_type],keys)
-            self.nkeys = len(keys)
-            self.size = cast(int,keys[0].size) # type: ignore
-            for k in keys:
+            # Sequence of groupable arrays
+            # Because of type checking, this is the only other possibility
+            self.keys = cast(Sequence[groupable_element_type], keys)
+            self.nkeys = len(self.keys)
+            self.size = cast(int, self.keys[0].size)
+            self._grouping_keys = []
+            for k in self.keys:
                 if k.size != self.size:
                     raise ValueError("Key arrays must all be same size")
-            if assume_sorted:
-                self.permutation = cast(pdarray, arange(self.size))
-            else:
-                self.permutation = cast(pdarray, coargsort(cast(Sequence[pdarray],keys)))
-            
-        # self.permuted_keys = self.keys[self.permutation]
+                if not hasattr(k, "_get_grouping_keys"):
+                    # Type checks should ensure we never get here
+                    raise TypeError("{} does not support grouping".format(type(k)))
+                self._grouping_keys.extend(cast(list, k._get_grouping_keys()))
+        # Get permutation
+        if assume_sorted:
+            # Permutation is identity
+            self.permutation = cast(pdarray, arange(self.size))
+        elif hasattr(self.keys, "group"):
+            # If an object wants to group itself (e.g. Categoricals),
+            # let it set the permutation
+            perm = self.keys.group() # type: ignore
+            self.permutation = cast(pdarray, perm)
+        elif len(self._grouping_keys) == 1:
+            self.permutation = cast(pdarray, argsort(self._grouping_keys[0]))
+        else:
+            self.permutation = cast(pdarray, coargsort(self._grouping_keys))
+                
+        # Finally, get segment offsets and unique keys 
         self.find_segments()       
             
     def find_segments(self) -> None:
@@ -140,41 +157,17 @@ class GroupBy:
 
         if self.nkeys == 1:
             # for Categorical
+            # Most categoricals already store segments and unique keys
             if hasattr(self.keys, 'segments') and cast(Categorical, 
                                                        self.keys).segments is not None:
                 self.unique_keys = cast(Categorical, self.keys).categories
                 self.segments = cast(pdarray, cast(Categorical, self.keys).segments)
                 self.ngroups = self.unique_keys.size
                 return
-            else:
-                mykeys = [self.keys]            
-        else:
-            mykeys = cast(List[pdarray], self.keys) # type: ignore
-        keyobjs : List[groupable_element_type] = [] # needed to maintain obj refs esp for h1 and h2 in the strings case
-        keynames = []
-        keytypes = []
-        effectiveKeys = self.nkeys
-        for k in mykeys:
-            if isinstance(k, Strings):
-                if self.hash_strings:
-                    h1, h2 = k.hash()
-                    keyobjs.extend([h1,h2])
-                    keynames.extend([h1.name, h2.name])
-                    keytypes.extend([h1.objtype, h2.objtype])
-                    effectiveKeys += 1
-                else:
-                    keyobjs.append(k)
-                    keynames.append('{}+{}'.format(k.entry.name, "legacy_placeholder"))
-                    keytypes.append(k.objtype)
-            # for Categorical
-            elif hasattr(k, 'codes'):
-                keyobjs.append(cast(Categorical, k))
-                keynames.append(cast(Categorical,k).codes.name)
-                keytypes.append(cast(Categorical,k).codes.objtype)
-            elif isinstance(k, pdarray):
-                keyobjs.append(k)
-                keynames.append(k.name)
-                keytypes.append(k.objtype)
+
+        keynames = [k.name for k in self._grouping_keys]
+        keytypes = [k.objtype for k in self._grouping_keys]
+        effectiveKeys = len(self._grouping_keys)
         args = "{} {:n} {} {}".format(self.permutation.name,
                                            effectiveKeys,
                                            ' '.join(keynames),
@@ -192,6 +185,8 @@ class GroupBy:
             self.unique_keys = cast(groupable, 
                                     [k[unique_key_indices] for k in self.keys])
             self.ngroups = self.unique_keys[0].size
+        # Free up memory, because _grouping_keys are not user-facing and no longer needed
+        del self._grouping_keys
 
 
     def count(self) -> Tuple[groupable,pdarray]:
@@ -494,7 +489,7 @@ class GroupBy:
         (array([2, 3, 4]), array([1, 1, 3]))
         """
         if values.dtype == bool:
-            raise TypeError('min is only supported for pdarrays of dtype float64 and int64')
+            raise TypeError('min is only supported for pdarrays of dtype float64, uint64, and int64')
         return self.aggregate(values, "min", skipna)
     
     def max(self, values : pdarray, skipna : bool=True) \
@@ -542,7 +537,7 @@ class GroupBy:
         (array([2, 3, 4]), array([4, 4, 3]))
         """
         if values.dtype == bool:
-            raise TypeError('max is only supported for pdarrays of dtype float64 and int64')
+            raise TypeError('max is only supported for pdarrays of dtype float64, uint64, and int64')
         return self.aggregate(values, "max", skipna)
     
     def argmin(self, values : pdarray) \
@@ -595,7 +590,7 @@ class GroupBy:
         (array([2, 3, 4]), array([5, 4, 2]))       
         """
         if values.dtype == bool:
-            raise TypeError('argmin is only supported for pdarrays of dtype float64 and int64')
+            raise TypeError('argmin is only supported for pdarrays of dtype float64, uint64, and int64')
         return self.aggregate(values, "argmin")
     
     def argmax(self, values : pdarray)\
@@ -646,7 +641,7 @@ class GroupBy:
         (array([2, 3, 4]), array([9, 3, 2]))
         """
         if values.dtype == bool:
-            raise TypeError('argmax is only supported for pdarrays of dtype float64 and int64')
+            raise TypeError('argmax is only supported for pdarrays of dtype float64, uint64, and int64')
         return self.aggregate(values, "argmax")
     
     def nunique(self, values : groupable) -> Tuple[groupable, pdarray]:
@@ -703,14 +698,14 @@ class GroupBy:
         # or Categorical (the last two have a .group() method).
         # Can't directly test Categorical due to circular import.
         if isinstance(values, pdarray):
-            if cast(pdarray, values).dtype != int64:
+            if cast(pdarray, values).dtype != int64 and cast(pdarray, values).dtype != uint64:
                 raise TypeError("nunique unsupported for this dtype")
             togroup = [ukidx, values]
         elif hasattr(values, "group"):
             togroup = [ukidx, values]
         else:
             for v in values:
-                if isinstance(values, pdarray) and cast(pdarray, values).dtype != int64:
+                if isinstance(values, pdarray) and cast(pdarray, values).dtype != int64 and cast(pdarray, values).dtype != uint64:
                     raise TypeError("nunique unsupported for this dtype")
             togroup = [ukidx] + list(values)
         # Find unique pairs of (key, val)
@@ -820,8 +815,8 @@ class GroupBy:
         RuntimeError
             Raised if all is not supported for the values dtype
         """
-        if values.dtype != int64:
-            raise TypeError('OR is only supported for pdarrays of dtype int64')
+        if values.dtype != int64 and values.dtype != uint64:
+            raise TypeError('OR is only supported for pdarrays of dtype int64 or uint64')
 
         return self.aggregate(values, "or")  # type: ignore
 
@@ -857,8 +852,8 @@ class GroupBy:
         RuntimeError
             Raised if all is not supported for the values dtype
         """
-        if values.dtype != int64:
-            raise TypeError('AND is only supported for pdarrays of dtype int64')
+        if values.dtype != int64 and values.dtype != uint64:
+            raise TypeError('AND is only supported for pdarrays of dtype int64 or uint64')
 
         return self.aggregate(values, "and")  # type: ignore
 
@@ -894,8 +889,8 @@ class GroupBy:
         RuntimeError
             Raised if all is not supported for the values dtype
         """
-        if values.dtype != int64:
-            raise TypeError('XOR is only supported for pdarrays of dtype int64')
+        if values.dtype != int64 and values.dtype != uint64:
+            raise TypeError('XOR is only supported for pdarrays of dtype int64 or uint64')
 
         return self.aggregate(values, "xor")  # type: ignore
 

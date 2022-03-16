@@ -17,8 +17,11 @@ extern "C" {
 #define ARROWINT32 1
 #define ARROWUINT64 2
 #define ARROWUINT32 3
+#define ARROWBOOLEAN 4
+#define ARROWFLOAT 5
+#define ARROWDOUBLE 7
 #define ARROWTIMESTAMP ARROWINT64
-#define ARROWUNDEFINED -1
+#define ARROWSTRING 6
 #define ARROWERROR -1
 
   // Each C++ function contains the actual implementation of the
@@ -29,11 +32,16 @@ extern "C" {
   int64_t cpp_getNumRows(const char*, char** errMsg);
 
   int c_readColumnByName(const char* filename, void* chpl_arr,
-                         const char* colname, int64_t numElems, int64_t batchSize,
-                         char** errMsg);
+                         const char* colname, int64_t numElems, int64_t startIdx,
+                         int64_t batchSize, char** errMsg);
   int cpp_readColumnByName(const char* filename, void* chpl_arr,
-                           const char* colname, int64_t numElems, int64_t batchSize,
-                           char** errMsg);
+                           const char* colname, int64_t numElems, int64_t startIdx,
+                           int64_t batchSize, char** errMsg);
+
+  int cpp_getStringColumnNumBytes(const char* filename, const char* colname,
+                                  void* chpl_offsets, int64_t numElems, int64_t startIdx, char** errMsg);
+  int c_getStringColumnNumBytes(const char* filename, const char* colname,
+                                void* chpl_offsets, int64_t numElems, int64_t startIdx, char** errMsg);
 
   int c_getType(const char* filename, const char* colname, char** errMsg);
   int cpp_getType(const char* filename, const char* colname, char** errMsg);
@@ -48,6 +56,9 @@ extern "C" {
     
   const char* c_getVersionInfo(void);
   const char* cpp_getVersionInfo(void);
+
+  int c_getDatasetNames(const char* filename, char** dsetResult, char** errMsg);
+  int cpp_getDatasetNames(const char* filename, char** dsetResult, char** errMsg);
 
   void c_free_string(void* ptr);
   void cpp_free_string(void* ptr);
