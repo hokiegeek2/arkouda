@@ -68,7 +68,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.3.5
+releaseVersion: 0.4.0
 imagePullPolicy: IfNotPresent
 
 ################ Arkouda Server Configuration ################
@@ -87,15 +87,22 @@ server:
       cpu: 2000m
       memory: 2048Mi
   threadsPerLocale: 4
+  metrics:
+    collectMetrics: false
+    service:
+      name: arkouda-metrics
+      port: 5556
+      targetPort: 5556
 
 external:
   persistence: 
-    enabled: false
+    enabled: true
     path: /opt/locale
     hostPath: /mnt/data/arkouda
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
-  k8sHost:  
+  k8sHost: https://ace:6443 
   namespace: arkouda
   externalServiceName: arkouda
-  externalServicePort: 5555 
+  externalServicePort: 5555
+  externalServiceTargetPort: 5555 
