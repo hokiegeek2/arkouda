@@ -36,6 +36,9 @@ spec:
           - name: locale
             mountPath: {{ .Values.external.persistence.path }}
           {{- end }}
+          - name: arkouda-server-launch-script
+            mountPath: /opt/start-arkouda-server.sh
+            subPath: start-arkouda-server.sh
           env:
             - name: MY_IP
               valueFrom:
@@ -76,7 +79,17 @@ spec:
             - name: EXTERNAL_SERVICE_TARGET_PORT
               value: {{ .Values.external.externalServiceTargetPort | quote}}
             - name: LOG_LEVEL  
-              value: {{ .Values.server.logLevel }}     
+              value: {{ .Values.server.logLevel }}    
+            {{- if eq .Values.server.metrics.collectMetrics true }}
+            - name: COLLECT_METRICS
+              value: {{ .Values.server.metrics.collectMetrics | quote}}
+            - name: METRICS_SERVICE_NAME
+              value: {{ .Values.server.metrics.service.name }}
+            - name: METRICS_SERVICE_PORT
+              value: {{ .Values.server.metrics.service.port | quote}}
+            - name: METRICS_SERVICE_TARGET_PORT
+              value: {{ .Values.server.metrics.service.targetPort | quote}}
+            {{- end }}
       volumes:              
         - name: ssl
           secret:
@@ -89,3 +102,10 @@ spec:
           hostPath:
             path: {{ .Values.external.persistence.hostPath }}
         {{- end }}
+        - name: arkouda-server-launch-script
+          configMap:
+            name: arkouda-server-launch-script
+            items:
+             - key: script
+               path: start-arkouda-server.sh
+

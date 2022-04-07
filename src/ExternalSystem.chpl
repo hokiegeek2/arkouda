@@ -50,7 +50,7 @@ module ExternalSystem {
      * within the external system) or external (Arkouda is deployed outside 
      * of the external system
      */
-    enum ServiceType{INTERNAL,EXTERNAL};
+    enum ServiceType{INTERNAL,EXTERNAL,METRICS};
     
     /*
      * Enum specifies the request type used to write to an external system 
@@ -298,9 +298,10 @@ module ExternalSystem {
      * if Arkouda is deployed outside of Kubernetes--to enable service discovery of Arkouda 
      * from applications deployed within Kubernetes.
      */
-    proc registerWithKubernetes(appName: string) throws {
+    proc registerWithKubernetes(appName: string, serviceName: string, 
+                                         servicePort: int, targetServicePort: int) throws {
         if serviceType == ServiceType.INTERNAL {
-            registerAsInternalService(appName);
+            registerAsInternalService(appName, serviceName, servicePort, targetServicePort);
         } else {
             registerAsExternalService();
         }
@@ -324,7 +325,8 @@ module ExternalSystem {
             return '%s/api/v1/namespaces/%s/services'.format(k8sHost,namespace);
         }
 
-        proc registerAsInternalService(appName) throws {
+        proc registerAsInternalService(appName: string, serviceName: string, servicePort: int, 
+                                       targetPort: int) throws {
             var serviceUrl = generateServiceCreateUrl();
             var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
                                          '{"name": "%s"},"spec": {"ports": [{"port": %i,' ,

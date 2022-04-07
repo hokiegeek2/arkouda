@@ -212,10 +212,11 @@ proc main() {
     /*
      * Registers Arkouda with an external system on startup, defaulting to none.
      */
-    proc registerWithExternalSystem(appName: string) throws {   
+    proc registerWithExternalSystem(appName: string, serviceName: string, 
+                                           servicePort: int, targetServicePort: int) throws {   
         select externalSystem {
-            when SystemType.KUBERNETES {     
-                registerWithKubernetes(appName);
+            when SystemType.KUBERNETES {
+                registerWithKubernetes(appName, serviceName, servicePort, targetServicePort);
                 asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                         "Registered Arkouda with Kubernetes");
             }
@@ -242,16 +243,47 @@ proc main() {
     }
     
     if externalSystem != SystemType.NONE {
-
         on Locales[0] {
+            var appName: string;
+
             if serverHostname.count('arkouda-locale') > 0 {
-                registerWithExternalSystem('arkouda-locale');
+                appName = 'arkouda-locale';
             } else {
-                registerWithExternalSystem('arkouda-server');
+                appName = 'arkouda-server';
+            }
+
+            var params: (string,int,int) = getKubernetesServiceParameters(ServiceType.EXTERNAL);
+
+            registerWithExternalSystem(appName, params(0), params(1), 
+                                        params(2));
+            if collectMetrics {
+                var params: (string,int,int) = getKubernetesServiceParameters(ServiceType.METRICS);
+                registerWithExternalSystem(appName, params(0), params(1),
+                                        params(2));
             }
         }
     }
-    
+
+    proc getKubernetesServiceParameters(serviceType: ServiceType) {
+        var serviceName: string;
+        var servicePort: int;
+        var targetServicePort: int;
+
+        if serviceType == ServiceType.METRICS {
+            serviceName = ServerConfig.getEnv('METRICS_SERVICE_NAME');
+            servicePort = ServerConfig.getEnv('METRICS_SERVICE_PORT'):int;
+            targetServicePort =
+                           ServerConfig.getEnv('METRICS_SERVICE_TARGET_PORT'):int;
+        } else {
+            serviceName = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
+            servicePort = ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int;
+            targetServicePort =
+                           ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int;
+        }
+        asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),"THE SERVICE PARAMETERS %t".format((serviceName,servicePort,targetServicePort))); 
+        return (serviceName,servicePort,targetServicePort);
+    } 
+
     proc runMetricsServer() throws {
         var context: ZMQ.Context;
         var socket: ZMQ.Socket = context.socket(ZMQ.REP);
