@@ -280,7 +280,6 @@ proc main() {
             targetServicePort =
                            ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int;
         }
-        asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),"THE SERVICE PARAMETERS %t".format((serviceName,servicePort,targetServicePort))); 
         return (serviceName,servicePort,targetServicePort);
     } 
 

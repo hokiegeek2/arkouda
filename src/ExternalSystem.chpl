@@ -332,9 +332,9 @@ module ExternalSystem {
                                          '{"name": "%s"},"spec": {"ports": [{"port": %i,' ,
                                          '"protocol": "TCP","targetPort": %i}],"selector":',
                                          ' {"app":"%s"}}}').format(
-                                    ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
-                                    ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
-                                    ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int,
+                                    serviceName,
+                                    servicePort,
+                                    targetPort,
                                     appName);
 
             esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
