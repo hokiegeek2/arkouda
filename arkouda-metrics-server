@@ -1,0 +1,20 @@
+FROM python:3.7.7-slim-buster
+  
+# Add Arkouda files
+ARG ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
+ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
+
+ADD arkouda.tar.gz /opt/
+RUN mv -v /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
+WORKDIR /opt/arkouda
+
+# Execute Arkouda pip install
+RUN pip install --upgrade pip
+RUN pip install .
+WORKDIR /opt
+
+# Remove unneeded files
+RUN rm -rf /opt/arkouda/src
+RUN rm -rf arkouda-tar.gz
+
+ENTRYPOINT python3 arkouda/arkouda/monitoring.py

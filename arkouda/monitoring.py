@@ -153,12 +153,15 @@ class ServerInfo():
 
 class ArkoudaMetrics:
     
-    __slots__ = ('serverName', 'exportPort', 'pollingInterval','totalNumberOfRequests',
+    __slots__ = ('arkoudaMetricsHost', 'arkoudaMetricsPort', 'serverName', 'exportPort', 
+                 'pollingInterval','totalNumberOfRequests',
                  'numberOfRequestsPerCommand','numberOfConnections', '_updateMetric', 
                  'responseTimesPerCommand', 'memoryUsedPerLocale', 'pctMemoryUsedPerLocale',
                  'systemMemoryPerLocale', 'systemProcessingUnitsPerLocale', 'reportedTimestamp',
                  'arkoudaServerInfo')
     
+    arkoudaMetricsHost: str
+    arkoudaMetricsPort: int
     serverName: str
     exportPort: int
     pollingInterval: int 
@@ -173,8 +176,10 @@ class ArkoudaMetrics:
     reportedTimestamp: Gauge
     arkoudaServerInfo: Info
 
-    def __init__(self, serverName : str, exportPort : int=5080, 
-                 pollingInterval : int=5) -> None:
+    def __init__(self, arkoudaMetricsHost : str, arkoudaMetricsPort : int, exportPort : int=5080, 
+                 serverName : str='arkouda-metrics', pollingInterval : int=5) -> None:
+        self.arkoudaMetricsHost = arkoudaMetricsHost
+        self.arkoudaMetricsPort = arkoudaMetricsPort
         self.serverName =  serverName 
         self.exportPort = exportPort
         self.pollingInterval = pollingInterval
@@ -229,7 +234,7 @@ class ArkoudaMetrics:
         }
 
         try:
-            ak.connect('localhost',5556)
+            ak.connect(self.arkoudaMetricsHost,self.arkoudaMetricsPort)
         except Exception as e:
             raise EnvironmentError(e)
 
@@ -237,7 +242,7 @@ class ArkoudaMetrics:
             raise EnvironmentError('Not connected to Arkouda server')
 
         self._initializeServerInfo()
-        print('Completed Initialization of Arkouda Exporter')        
+        print('Completed Initialization of Arkouda Metrics Exporter')        
 
     def asMetric(self, value : Dict[str,Union[float,int]]) -> Metric:
         scope = MetricScope(value ['scope'])
@@ -337,16 +342,21 @@ class ArkoudaMetrics:
                 metrics[0].timestamp.timestamp())        
 
 def main():
-    os.environ['ARKOUDA_SERVER_NAME']='hokiegeek2'
+
+    arkoudaMetricsHost = os.getenv("METRICS_SERVICE_NAME", "localhost")
+    arkoudaMetricsPort = int(os.getenv("METRICS_SERVICE_PORT", "5556"))
     pollingInterval = int(os.getenv("POLLING_INTERVAL_SECONDS", "5"))
     exportPort = int(os.getenv("EXPORT_PORT", "5080"))
-    serverName = os.environ["ARKOUDA_SERVER_NAME"]
+    serverName = os.getenv("ARKOUDA_SERVER_NAME","arkouda-metrics")
 
     metrics = ArkoudaMetrics(
+        arkoudaMetricsHost=arkoudaMetricsHost,
+        arkoudaMetricsPort=arkoudaMetricsPort,
+        serverName=serverName,
         exportPort=exportPort,
-        pollingInterval=pollingInterval,
-        serverName=serverName
+        pollingInterval=pollingInterval
     )
+
     start_http_server(exportPort)
     metrics.run_metrics_loop()
 
