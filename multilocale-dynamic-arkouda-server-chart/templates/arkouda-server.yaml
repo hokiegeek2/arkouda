@@ -7,6 +7,26 @@ metadata:
 spec:      
       restartPolicy: Never
       containers:
+        {{- if eq .Values.server.metrics.collectMetrics true }}
+        - name: arkouda-metrics-server
+          image: hokiegeek2/arkouda-metrics-server:{{ .Values.releaseVersion }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [ "python3", "arkouda/arkouda/monitoring.py" ]
+          ports:
+          - containerPort: {{ .Values.metricsServer.port }}
+            hostPort: 5080
+          env:
+            - name: EXPORT_PORT
+              value: {{ .Values.metricsServer.port | quote}}
+            - name: POLLING_INTERVAL_SECONDS
+              value: {{ .Values.metricsServer.pollingIntervalSeconds | quote}}
+            - name: ARKOUDA_SERVER_NAME
+              value: {{ .Values.metricsServer.arkoudaServerName | quote}}
+            - name: METRICS_SERVICE_NAME
+              value: {{ .Values.server.metrics.service.name | quote}}
+            - name: METRICS_SERVICE_PORT
+              value: {{ .Values.server.metrics.service.port | quote}}
+        {{- end }}
         - name: arkouda-server
           image: hokiegeek2/udp-arkouda-server:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
