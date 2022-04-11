@@ -28,7 +28,7 @@ spec:
           lifecycle:
             preStop:
               exec:
-                 command: ["python3","-c","import os; from arkouda.integration import KubernetesDao; dao = KubernetesDao(); dao.delete_service(os.environ['EXTERNAL_SERVICE_NAME'],os.environ['NAMESPACE'])"]
+                 command: ["python3","-c","import os; from arkouda.integration import KubernetesDao; dao = KubernetesDao(); dao.delete_service(os.environ['EXTERNAL_SERVICE_NAME'],os.environ['NAMESPACE']); dao.delete_service(os.environ['METRICS_SERVICE_NAME'],os.environ['NAMESPACE'])"]
           ports:
           - containerPort: 22
             hostPort: 25
@@ -65,7 +65,9 @@ spec:
             - name: NAMESPACE
               value: {{ .Values.external.namespace }}
             - name: EXTERNAL_SERVICE_NAME
-              value: {{ .Values.external.externalServiceName }}        
+              value: {{ .Values.external.externalServiceName }} 
+            - name: METRICS_SERVICE_NAME
+              value: {{ .Values.server.metrics.service.name }} 
       volumes:
         - name: ssl
           secret:
