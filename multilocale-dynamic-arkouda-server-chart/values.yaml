@@ -89,7 +89,7 @@ server:
   threadsPerLocale: 4
   logLevel: LogLevel.DEBUG
   metrics:
-    collectMetrics: false
+    collectMetrics: true
     service:
       name: arkouda-metrics
       port: 5556
@@ -102,8 +102,13 @@ external:
     hostPath: /mnt/data/arkouda
   certFile: /etc/ssl/arkouda/tls.crt
   keyFile: /etc/ssl/arkouda/tls.key
-  k8sHost: https://ace:6443 
+  k8sHost:   
   namespace: arkouda
   externalServiceName: arkouda
   externalServicePort: 5555
   externalServiceTargetPort: 5555
+
+metricsServer:
+  port: 5080
+  arkoudaServerName: arkouda-metrics
+  pollingIntervalSeconds: 5

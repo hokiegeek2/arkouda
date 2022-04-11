@@ -1,0 +1,12 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: arkouda-metrics-exporter
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.metricsServer.port }}
+      targetPort: {{ .Values.metricsServer.port }}
+      protocol: TCP
+  selector:
+    app: arkouda-server
