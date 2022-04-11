@@ -17,4 +17,6 @@ WORKDIR /opt
 RUN rm -rf /opt/arkouda/src
 RUN rm -rf arkouda-tar.gz
 
+EXPOSE 5080
+
 ENTRYPOINT python3 arkouda/arkouda/monitoring.py
