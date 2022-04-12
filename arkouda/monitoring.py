@@ -1,6 +1,6 @@
 import os, json, time
 from enum import Enum
-from typing import Dict, List, Optional, Union
+from typing import cast, Dict, List, Optional, Union
 import numpy as np # type: ignore
 from datetime import datetime
 from dateutil import parser # type: ignore
@@ -259,7 +259,7 @@ class ArkoudaMetrics:
                   category=MetricCategory(value['category']),
                   scope=MetricScope(value['scope']),
                   value=value['value'],
-                  timestamp=parser.parse(value['timestamp']),
+                  timestamp=parser.parse(cast(str,value['timestamp'])),
                   labels=labels)    
     
     def _updateNumberOfRequests(self, metric : Metric) -> None:

@@ -8,6 +8,9 @@ from arkouda.logger import getArkoudaLogger
 
 logger = getArkoudaLogger(name='Arkouda Integration Client') 
 
+'''
+The DaoError class wraps tech-specific errors
+'''
 class DaoError(Exception):
     pass
 
@@ -145,7 +148,14 @@ class KubernetesDao():
             raise DaoError(e)
 
     def delete_service(self, service_name : str, namespace : str='default') -> None:
+        '''
+        Deletes a service within the specified namespace
 
+        :param str service_name: name of the service
+        :param str namespace: the k8s namespace, defaults to default namespace
+        :return: None
+        :raises: DaoError if there is an error in deleting the service
+        '''
         try:
 
             self.core_client.delete_namespaced_service(name=service_name, 
