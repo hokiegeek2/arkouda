@@ -303,7 +303,7 @@ module ExternalSystem {
         if serviceType == ServiceType.INTERNAL {
             registerAsInternalService(appName, serviceName, servicePort, targetServicePort);
         } else {
-            registerAsExternalService();
+            registerAsExternalService(serviceName, servicePort, targetServicePort);
         }
 
         proc generateEndpointCreateUrl() : string throws {
@@ -365,15 +365,16 @@ module ExternalSystem {
          * Endpoints which together enable service discovery of an Arkouda instance 
          * deployed outside of Kubernetes from applications deployed within Kubernetes.
          */        
-        proc registerAsExternalService() throws {
+        proc registerAsExternalService(serviceName: string, servicePort: int, 
+                                                               serviceTargetPort: int) throws {
             // Create Kubernetes Service
             var serviceUrl = generateServiceCreateUrl();
             var servicePayload = "".join('{"apiVersion": "v1","kind": "Service","metadata": ',
                                              '{"name": "%s"},"spec": {"ports": [{"port": %i,',
                                              '"protocol": "TCP","targetPort": %i}]}}').format(
-                                    ServerConfig.getEnv('EXTERNAL_SERVICE_NAME'),
-                                    ServerConfig.getEnv('EXTERNAL_SERVICE_PORT'):int,
-                                    ServerConfig.getEnv('EXTERNAL_SERVICE_TARGET_PORT'):int);
+                                    serviceName,
+                                    servicePort,
+                                    serviceTargetPort);
             esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                      "Registering external service via payload %s and url %s".format(
                                          servicePayload,serviceUrl));
@@ -401,9 +402,9 @@ module ExternalSystem {
                                           ' "metadata": {"name": "%s"}, "subsets": ',
                                           '[{"addresses": [{"ip": "%s"}],"ports": ',
                                           '[{"port": %i, "protocol": "TCP"}]}]}').format(
-                                                ServerConfig.getEnv('ENDPOINT_NAME'),
+                                                serviceName,
                                                 ServerConfig.getConnectHostIp(),
-                                                ServerConfig.getEnv('ENDPOINT_PORT'):int);
+                                                servicePort);
         
             channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
