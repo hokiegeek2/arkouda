@@ -1,0 +1,29 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ .Values.metrics.server.appName }}
+  labels:
+    app: {{ .Values.metrics.server.appName }}
+spec:
+      restartPolicy: Never
+      containers:
+        - name: arkouda-metrics-server
+          image: hokiegeek2/arkouda-metrics-server:{{ .Values.releaseVersion }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [ "python3", "arkouda/arkouda/monitoring.py" ]
+          ports:
+          - containerPort: {{ .Values.metrics.service.port }}
+            hostPort: 5080
+          env:
+            - name: EXPORT_PORT
+              value: {{ .Values.metrics.service.port | quote }}
+            - name: ARKOUDA_SERVER_NAME
+              value: {{ .Values.arkouda.metrics.server.name | quote }}
+            - name: POLLING_INTERVAL_SECONDS
+              value: {{ .Values.metrics.server.pollingIntervalSeconds | quote }}
+            - name: METRICS_SERVICE_NAME
+              #value: {{ .Values.arkouda.metrics.server.namespace | quote }}.{{ .Values.arkouda.metrics.service.name | quote }}
+              value: {{ .Values.arkouda.metrics.service.name | quote }}
+            - name: METRICS_SERVICE_PORT
+              value: {{ .Values.arkouda.metrics.service.port | quote }}
+
