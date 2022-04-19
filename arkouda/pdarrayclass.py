@@ -10,6 +10,7 @@ from arkouda.dtypes import dtype, DTypes, resolve_scalar_dtype, \
 from arkouda.dtypes import int64 as akint64
 from arkouda.dtypes import uint64 as akuint64
 from arkouda.dtypes import str_ as akstr_
+from arkouda.dtypes import bool as akbool
 from arkouda.dtypes import bool as npbool
 from arkouda.dtypes import isSupportedInt
 from arkouda.logger import getArkoudaLogger
@@ -464,7 +465,7 @@ class pdarray:
 
     # overload a[] to treat like list
     def __getitem__(self, key):
-        if np.isscalar(key) and resolve_scalar_dtype(key) == 'int64':
+        if np.isscalar(key) and (resolve_scalar_dtype(key) == 'int64' or 'uint64'):
             orig_key = key
             if key < 0:
                 # Interpret negative key as offset from end of array
@@ -483,7 +484,7 @@ class pdarray:
             return create_pdarray(repMsg);
         if isinstance(key, pdarray):
             kind, _ = translate_np_dtype(key.dtype)
-            if kind not in ("bool", "int"):
+            if kind not in ("bool", "int", "uint"):
                 raise TypeError("unsupported pdarray index type {}".format(key.dtype))
             if kind == "bool" and self.size != key.size:
                 raise ValueError("size mismatch {} {}".format(self.size,key.size))
@@ -493,7 +494,7 @@ class pdarray:
             raise TypeError("Unhandled key type: {} ({})".format(key, type(key)))
 
     def __setitem__(self, key, value):
-        if np.isscalar(key) and resolve_scalar_dtype(key) == 'int64':
+        if np.isscalar(key) and (resolve_scalar_dtype(key) == 'int64' or 'uint64'):
             orig_key = key
             if key < 0:
                 # Interpret negative key as offset from end of array
@@ -1035,7 +1036,7 @@ class pdarray:
 
         See Also
         --------
-        save_all, load, read_hdf, read_all
+        save_all, load, read
 
         Notes
         -----
@@ -1061,9 +1062,9 @@ class pdarray:
         >>> (a == b).all()
         True
         """
-        if mode.lower() in 'append':
+        if mode.lower() in ['a', 'app', 'append']:
             m = 1
-        elif mode.lower() in 'truncate':
+        elif mode.lower() in ['t', 'trunc', 'truncate']:
             m = 0
         else:
             raise ValueError("Allowed modes are 'truncate' and 'append'")
@@ -1118,7 +1119,7 @@ class pdarray:
 
         See Also
         --------
-        save, save_all, load, read_hdf, read_all
+        save, save_all, load, read
 
         Notes
         -----
@@ -1140,21 +1141,23 @@ class pdarray:
 
         The array can be read back in as follows
 
-        >>> b = ak.read_parquet('arkouda_range')
+        >>> b = ak.read('arkouda_range')
         >>> (a == b).all()
         True
         """
-        if mode.lower() in 'truncate':
+        if mode.lower() in 'append':
+            m = 1
+        elif mode.lower() in 'truncate':
             m = 0
-        else: # TODO: add support for the append mode
-            raise ValueError("Currently only the 'truncate' mode is supported")
+        else:
+            raise ValueError("Allowed modes are 'truncate' and 'append'")
         
         try:
             json_array = json.dumps([prefix_path])
         except Exception as e:
             raise ValueError(e)
-        return cast(str, generic_msg(cmd="writeParquet", args="{} {} {} {} {}".\
-                                     format(self.name, dataset, json_array, self.dtype,
+        return cast(str, generic_msg(cmd="writeParquet", args="{} {} {} {} {} {}".\
+                                     format(self.name, dataset, m, json_array, self.dtype,
                                             compressed)))
     
     @typechecked
@@ -1305,10 +1308,15 @@ class pdarray:
         API: this method must be defined by all groupable arrays, and it
         must return a list of arrays that can be (co)argsorted.
         '''
-        if self.dtype not in (akint64, akuint64):
-            raise TypeError("Grouping numeric data is only supported on integral types.")
-        # Integral pdarrays are their own grouping keys
-        return [self]
+        if self.dtype == akbool:
+            from arkouda.numeric import cast as akcast
+            return [akcast(self, akint64)]
+        elif self.dtype in (akint64, akuint64):
+            # Integral pdarrays are their own grouping keys
+            return [self]
+        else:
+            raise TypeError("Grouping is only supported on numeric data (integral types) and bools.")
+
 
 #end pdarray class def
     
