@@ -13,6 +13,11 @@ class SortTest(ArkoudaTest):
             spda = ak.sort(pda, algo)
             maxIndex = spda.argmax()
             self.assertTrue(maxIndex > 0)
+        
+        pda = ak.randint(0,100,100,dtype=ak.uint64)
+        for algo in ak.SortingAlgorithm:
+            spda = ak.sort(pda, algo)
+            assert ak.is_sorted(spda)
 
     def testBitBoundaryHardcode(self):
 
@@ -52,13 +57,9 @@ class SortTest(ArkoudaTest):
         for algo in ak.SortingAlgorithm:
             with self.assertRaises(ValueError) as cm:
                 ak.sort(akbools, algo)
-            self.assertEqual('ak.sort supports float64 or int64, not bool',
-                             cm.exception.args[0])
         
             with self.assertRaises(ValueError) as cm:
                 ak.sort(bools, algo)
-            self.assertEqual('ak.sort supports float64 or int64, not bool', 
-                             cm.exception.args[0])        
         
             # Test TypeError from sort attempt on non-pdarray
             with self.assertRaises(TypeError):

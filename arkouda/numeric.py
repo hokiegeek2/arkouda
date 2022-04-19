@@ -9,14 +9,21 @@ from arkouda.dtypes import _as_dtype
 from arkouda.pdarrayclass import pdarray, create_pdarray
 from arkouda.pdarraysetops import unique
 from arkouda.strings import Strings
+from enum import Enum
 
 Categorical = ForwardRef('Categorical')
 
 __all__ = ["cast", "abs", "log", "exp", "cumsum", "cumprod", "sin", "cos", 
-           "hash", "where", "histogram", "value_counts", "isnan"]
+           "hash", "where", "histogram", "value_counts", "isnan", "ErrorMode"]
+
+class ErrorMode(Enum):
+    strict = 'strict'
+    ignore = 'ignore'
+    return_validity = 'return_validity'
+
 
 @typechecked
-def cast(pda : Union[pdarray, Strings], dt: Union[np.dtype,str]) -> Union[pdarray, Strings]:
+def cast(pda: Union[pdarray, Strings], dt: Union[np.dtype, type, str], errors: ErrorMode = ErrorMode.strict) -> Union[Union[pdarray, Strings], Tuple[pdarray, pdarray]]:
     """
     Cast an array to another dtype.
 
@@ -24,13 +31,26 @@ def cast(pda : Union[pdarray, Strings], dt: Union[np.dtype,str]) -> Union[pdarra
     ----------
     pda : pdarray or Strings
         The array of values to cast
-    dtype : np.dtype or str
+    dt : np.dtype, type, or str
         The target dtype to cast values to
+    errors : {strict, ignore, return_validity}
+        Controls how errors are handled when casting strings to a numeric type
+        (ignored for casts from numeric types).
+            - strict: raise RuntimeError if *any* string cannot be converted
+            - ignore: never raise an error. Uninterpretable strings get
+                converted to NaN (float64), -2**63 (int64), zero (uint64 and
+                uint8), or False (bool)
+            - return_validity: in addition to returning the same output as
+              "ignore", also return a bool array indicating where the cast
+              was successful.
 
     Returns
     -------
     pdarray or Strings
         Array of values cast to desired dtype
+    [validity : pdarray(bool)]
+        If errors="return_validity" and input is Strings, a second array is
+        returned with True where the cast succeeded and False where it failed.
 
     Notes
     -----
@@ -58,18 +78,21 @@ def cast(pda : Union[pdarray, Strings], dt: Union[np.dtype,str]) -> Union[pdarra
         objtype = "pdarray"
     elif isinstance(pda, Strings):
         name = pda.entry.name
-        objtype = "str"    
+        objtype = "str"
     # typechecked decorator guarantees no other case
 
     dt = _as_dtype(dt)
-    opt = ""
     cmd = "cast"
-    args= "{} {} {} {}".format(name, objtype, dt.name, opt)
+    args= "{} {} {} {}".format(name, objtype, dt.name, errors.name)
     repMsg = generic_msg(cmd=cmd,args=args)
     if dt.name.startswith("str"):
         return Strings.from_parts(*(type_cast(str,repMsg).split("+")))
     else:
-        return create_pdarray(type_cast(str,repMsg))
+        if errors == ErrorMode.return_validity:
+            a, b = type_cast(str, repMsg).split("+")
+            return create_pdarray(type_cast(str, a)), create_pdarray(type_cast(str, b))
+        else:
+            return create_pdarray(type_cast(str,repMsg))
 
 @typechecked
 def abs(pda : pdarray) -> pdarray:
@@ -442,10 +465,10 @@ def where(condition : pdarray, A : Union[numeric_scalars, pdarray],
             dt = dtA
         # If the dtypes are different, try casting one direction then the other
         elif dtB in DTypes and np.can_cast(A, dtB):
-            A = np.dtype(dtB).type(A)
+            A = np.dtype(dtB).type(A)  # type: ignore
             dt = dtB
         elif dtA in DTypes and np.can_cast(B, dtA):
-            B = np.dtype(dtA).type(B)
+            B = np.dtype(dtA).type(B)  # type: ignore
             dt = dtA
         # Cannot safely cast
         else:
@@ -461,7 +484,7 @@ def where(condition : pdarray, A : Union[numeric_scalars, pdarray],
     return create_pdarray(type_cast(str,repMsg))
 
 @typechecked
-def histogram(pda : pdarray, bins : int_scalars=10) -> pdarray:
+def histogram(pda : pdarray, bins : int_scalars=10) -> Tuple[np.ndarray, pdarray]:
     """
     Compute a histogram of evenly spaced bins over the range of an array.
     
@@ -475,8 +498,8 @@ def histogram(pda : pdarray, bins : int_scalars=10) -> pdarray:
 
     Returns
     -------
-    pdarray, int64 or float64
-        The number of values present in each bin
+    (pdarray[float64], Union[pdarray, int64 or float64])
+        Bin edges and The number of values present in each bin
         
     Raises
     ------
@@ -503,20 +526,20 @@ def histogram(pda : pdarray, bins : int_scalars=10) -> pdarray:
     >>> import matplotlib.pyplot as plt
     >>> A = ak.arange(0, 10, 1)
     >>> nbins = 3
-    >>> h = ak.histogram(A, bins=nbins)
+    >>> b, h = ak.histogram(A, bins=nbins)
     >>> h
     array([3, 3, 4])
-    # Recreate the bin edges in NumPy
-    >>> binEdges = np.linspace(A.min(), A.max(), nbins+1)
-    >>> binEdges
-    array([0., 3., 6., 9.])
+    >>> b
+    array([0., 3., 6.])
+
     # To plot, use only the left edges, and export the histogram to NumPy
-    >>> plt.plot(binEdges[:-1], h.to_ndarray())
+    >>> plt.plot(b, h.to_ndarray())
     """
     if bins < 1:
         raise ValueError('bins must be 1 or greater')
+    b = np.linspace(pda.min(), pda.max(), bins + 1)[:-1]
     repMsg = generic_msg(cmd="histogram", args="{} {}".format(pda.name, bins))
-    return create_pdarray(type_cast(str,repMsg))
+    return b, create_pdarray(type_cast(str, repMsg))
 
 @typechecked
 def value_counts(pda : pdarray) -> Union[Categorical, # type: ignore

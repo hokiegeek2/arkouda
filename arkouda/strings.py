@@ -55,7 +55,7 @@ class Strings:
     -----
     Strings is composed of two pdarrays: (1) offsets, which contains the
     starting indices for each string and (2) bytes, which contains the 
-    raw bytes of all strings, delimited by nulls.    
+    raw bytes of all strings, delimited by nulls.
     """
 
     BinOps = frozenset(["==", "!="])
@@ -176,6 +176,13 @@ class Strings:
         self._regex_dict: Dict = dict()
         self.logger = getArkoudaLogger(name=__class__.__name__) # type: ignore
 
+    """
+    NOTE:
+         The Strings.__del__() method should NOT be implemented. Python will invoke the __del__() of any components by default.
+         Overriding this default behavior with an explicitly specified Strings.__del__() method may introduce errors in the event that additional components are added to Strings and the method is not updated.
+         By allowing Python's garbage collecting to handle this automatically, we avoid extra maintenance
+    """
+     
     def __iter__(self):
         raise NotImplementedError('Strings does not support iteration. To force data transfer from server, use to_ndarray')
 
@@ -231,21 +238,19 @@ class Strings:
                 raise ValueError("Strings: size mismatch {} {}".\
                                  format(self.size, other.size))
             cmd = "segmentedBinopvv"
-            args = "{} {} {} {} {} {} {}".format(op,
-                                                 self.objtype,
-                                                 self.entry.name,
-                                                 "legacy_placeholder",
-                                                 other.objtype,
-                                                 other.entry.name,
-                                                 other.entry.name)
+            args = "{} {} {} {} {} {}".format(op,
+                                              self.objtype,
+                                              self.entry.name,
+                                              other.objtype,
+                                              other.entry.name,
+                                              other.entry.name)
         elif resolve_scalar_dtype(other) == 'str':
             cmd = "segmentedBinopvs"
-            args = "{} {} {} {} {} {}".format(op,
-                                                              self.objtype,
-                                                              self.entry.name,
-                                                              "legacy_placeholder",
-                                                              self.objtype,
-                                                              json.dumps([other]))
+            args = "{} {} {} {} {}".format(op,
+                                           self.objtype,
+                                           self.entry.name,
+                                           self.objtype,
+                                           json.dumps([other]))
         else:
             raise ValueError("Strings: {} not supported between Strings and {}"\
                              .format(op, other.__class__.__name__))
@@ -258,18 +263,17 @@ class Strings:
         return self._binop(cast(Strings, other), "!=")
 
     def __getitem__(self, key):
-        if np.isscalar(key) and resolve_scalar_dtype(key) == 'int64':
+        if np.isscalar(key) and (resolve_scalar_dtype(key) == 'int64' or 'uint64'):
             orig_key = key
             if key < 0:
                 # Interpret negative key as offset from end of array
                 key += self.size
             if (key >= 0 and key < self.size):
                 cmd = "segmentedIndex"
-                args = " {} {} {} {} {}".format('intIndex',
-                                                self.objtype,
-                                                self.entry.name,
-                                                "legacy_placeholder",
-                                                key)
+                args = " {} {} {} {}".format('intIndex',
+                                             self.objtype,
+                                             self.entry.name,
+                                             key)
                 repMsg = generic_msg(cmd=cmd,args=args)
                 _, value = repMsg.split(maxsplit=1)
                 return parse_single_value(value)
@@ -280,27 +284,25 @@ class Strings:
             (start,stop,stride) = key.indices(self.size)
             self.logger.debug('start: {}; stop: {}; stride: {}'.format(start,stop,stride))
             cmd = "segmentedIndex"
-            args = " {} {} {} {} {} {} {}".format('sliceIndex',
-                                                  self.objtype,
-                                                  self.entry.name,
-                                                  "legacy_placeholder",
-                                                  start,
-                                                  stop,
-                                                  stride)
+            args = " {} {} {} {} {} {}".format('sliceIndex',
+                                               self.objtype,
+                                               self.entry.name,
+                                               start,
+                                               stop,
+                                               stride)
             repMsg = generic_msg(cmd=cmd, args=args)
             return Strings.from_return_msg(repMsg)
         elif isinstance(key, pdarray):
             kind, _ = translate_np_dtype(key.dtype)
-            if kind not in ("bool", "int"):
+            if kind not in ("bool", "int", "uint"):
                 raise TypeError("unsupported pdarray index type {}".format(key.dtype))
             if kind == "bool" and self.size != key.size:
                 raise ValueError("size mismatch {} {}".format(self.size,key.size))
             cmd = "segmentedIndex"
-            args = "{} {} {} {} {}".format('pdarrayIndex',
-                                                         self.objtype,
-                                                         self.entry.name,
-                                                         "legacy_placeholder",
-                                                         key.name)
+            args = "{} {} {} {}".format('pdarrayIndex',
+                                        self.objtype,
+                                        self.entry.name,
+                                        key.name)
             repMsg = generic_msg(cmd=cmd,args=args)
             return Strings.from_return_msg(repMsg)
         else:
@@ -321,8 +323,130 @@ class Strings:
             Raised if there is a server-side error thrown
         """
         cmd = "segmentLengths"
-        args = "{} {} {}".format(self.objtype, self.entry.name, "legacy_placeholder")
+        args = "{} {}".format(self.objtype, self.entry.name)
         return create_pdarray(generic_msg(cmd=cmd,args=args))
+
+    @typechecked
+    def to_lower(self) -> Strings:
+        """
+        Returns a new Strings with all uppercase characters from the original replaced with their lowercase equivalent
+
+        Returns
+        -------
+        Strings
+            Strings with all uppercase characters from the original replaced with their lowercase equivalent
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there is a server-side error thrown
+
+        See Also
+        --------
+        Strings.to_upper
+
+        Examples
+        --------
+        >>> strings = ak.array([f'StrINgS {i}' for i in range(5)])
+        >>> strings
+        array(['StrINgS 0', 'StrINgS 1', 'StrINgS 2', 'StrINgS 3', 'StrINgS 4'])
+        >>> strings.to_lower()
+        array(['strings 0', 'strings 1', 'strings 2', 'strings 3', 'strings 4'])
+        """
+        rep_msg = generic_msg(cmd="caseChange", args=f"toLower {self.objtype} {self.entry.name}")
+        return Strings.from_return_msg(cast(str, rep_msg))
+
+    @typechecked
+    def to_upper(self) -> Strings:
+        """
+        Returns a new Strings with all lowercase characters from the original replaced with their uppercase equivalent
+
+        Returns
+        -------
+        Strings
+            Strings with all lowercase characters from the original replaced with their uppercase equivalent
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there is a server-side error thrown
+
+        See Also
+        --------
+        Strings.to_lower
+
+        Examples
+        --------
+        >>> strings = ak.array([f'StrINgS {i}' for i in range(5)])
+        >>> strings
+        array(['StrINgS 0', 'StrINgS 1', 'StrINgS 2', 'StrINgS 3', 'StrINgS 4'])
+        >>> strings.to_upper()
+        array(['STRINGS 0', 'STRINGS 1', 'STRINGS 2', 'STRINGS 3', 'STRINGS 4'])
+        """
+        rep_msg = generic_msg(cmd="caseChange", args=f"toUpper {self.objtype} {self.entry.name}")
+        return Strings.from_return_msg(cast(str, rep_msg))
+
+    @typechecked
+    def is_lower(self) -> pdarray:
+        """
+        Returns a boolean pdarray where index i indicates whether string i of the Strings is entirely lowercase
+
+        Returns
+        -------
+        pdarray, bool
+            True for elements that are entirely lowercase, False otherwise
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there is a server-side error thrown
+
+        See Also
+        --------
+        Strings.is_upper
+
+        Examples
+        --------
+        >>> lower = ak.array([f'strings {i}' for i in range(3)])
+        >>> upper = ak.array([f'STRINGS {i}' for i in range(3)])
+        >>> strings = ak.concatenate([lower, upper])
+        >>> strings
+        array(['strings 0', 'strings 1', 'strings 2', 'STRINGS 0', 'STRINGS 1', 'STRINGS 2'])
+        >>> strings.is_lower()
+        array([True True True False False False])
+        """
+        return create_pdarray(generic_msg(cmd="checkChars", args=f"isLower {self.objtype} {self.entry.name}"))
+
+    @typechecked
+    def is_upper(self) -> pdarray:
+        """
+        Returns a boolean pdarray where index i indicates whether string i of the Strings is entirely uppercase
+
+        Returns
+        -------
+        pdarray, bool
+            True for elements that are entirely uppercase, False otherwise
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there is a server-side error thrown
+
+        See Also
+        --------
+        Strings.is_lower
+
+        Examples
+        --------
+        >>> lower = ak.array([f'strings {i}' for i in range(3)])
+        >>> upper = ak.array([f'STRINGS {i}' for i in range(3)])
+        >>> strings = ak.concatenate([lower, upper])
+        >>> strings
+        array(['strings 0', 'strings 1', 'strings 2', 'STRINGS 0', 'STRINGS 1', 'STRINGS 2'])
+        >>> strings.is_upper()
+        array([False False False True True True])
+        """
+        return create_pdarray(generic_msg(cmd="checkChars", args=f"isUpper {self.objtype} {self.entry.name}"))
 
     @typechecked
     def cached_regex_patterns(self) -> List:
@@ -678,21 +802,19 @@ class Strings:
         """
         if isinstance(substr, bytes):
             substr = substr.decode()
-        if regex:
-            if re.search(substr, ''):
-                # TODO remove once changes from chapel issue #18639 are in arkouda
-                raise ValueError("regex operations with a pattern that matches the empty string are not currently supported")
-            matcher = self._get_matcher(substr, create=False)
-            if matcher is not None:
-                return matcher.get_match(MatchType.SEARCH, self).matched()
-        cmd = "segmentedEfunc"
-        args = "{} {} {} {} {} {} {}".format("contains",
-                                             self.objtype,
-                                             self.entry.name,
-                                             "legacy_placeholder",
-                                             "str",
-                                             regex,
-                                             json.dumps([substr]))
+        if not regex:
+            substr = re.escape(substr)
+        if re.search(substr, ''):
+            # TODO remove once changes from chapel issue #18639 are in arkouda
+            raise ValueError("regex operations with a pattern that matches the empty string are not currently supported")
+        matcher = self._get_matcher(substr, create=False)
+        if matcher is not None:
+            return matcher.get_match(MatchType.SEARCH, self).matched()
+        cmd = "segmentedSearch"
+        args = "{} {} {} {}".format(self.objtype,
+                                    self.entry.name,
+                                    "str",
+                                    json.dumps([substr]))
         return create_pdarray(generic_msg(cmd=cmd, args=args))
 
     @typechecked
@@ -741,22 +863,16 @@ class Strings:
         """
         if isinstance(substr, bytes):
             substr = substr.decode()
-        if regex:
-            if re.search(substr, ''):
-                # TODO remove once changes from chapel issue #18639 are in arkouda
-                raise ValueError("regex operations with a pattern that matches the empty string are not currently supported")
-            matcher = self._get_matcher(substr, create=False)
-            if matcher is not None:
-                return matcher.get_match(MatchType.MATCH, self).matched()
-        cmd = "segmentedEfunc"
-        args = "{} {} {} {} {} {} {}".format("startswith",
-                                             self.objtype,
-                                             self.entry.name,
-                                             "legacy_placeholder",
-                                             "str",
-                                             regex,
-                                             json.dumps([substr]))
-        return create_pdarray(generic_msg(cmd=cmd, args=args))
+        if not regex:
+            substr = re.escape(substr)
+        if re.search(substr, ''):
+            # TODO remove once changes from chapel issue #18639 are in arkouda
+            raise ValueError("regex operations with a pattern that matches the empty string are not currently supported")
+        matcher = self._get_matcher(substr, create=False)
+        if matcher is not None:
+            return matcher.get_match(MatchType.MATCH, self).matched()
+        else:
+            return self.contains('^'+substr, regex=True)
 
     @typechecked
     def endswith(self, substr: Union[bytes, str_scalars], regex: bool = False) -> pdarray:
@@ -804,17 +920,9 @@ class Strings:
         """
         if isinstance(substr, bytes):
             substr = substr.decode()
-        if regex:
-            return self.contains(substr + '$', regex=True)
-        cmd = "segmentedEfunc"
-        args = "{} {} {} {} {} {} {}".format("endswith",
-                                             self.objtype,
-                                             self.entry.name,
-                                             "legacy_placeholder",
-                                             "str",
-                                             regex,
-                                             json.dumps([substr]))
-        return create_pdarray(generic_msg(cmd=cmd, args=args))
+        if not regex:
+            substr = re.escape(substr)
+        return self.contains(substr+'$', regex=True)
 
     def flatten(self, delimiter: str, return_segments: bool = False, regex: bool = False) -> Union[Strings, Tuple]:
         """Unpack delimiter-joined substrings into a flat array.
@@ -865,12 +973,11 @@ class Strings:
             return self.split(delimiter, return_segments=return_segments)
         else:
             cmd = "segmentedFlatten"
-            args = "{}+{} {} {} {} {}".format(self.entry.name,
-                                              "legacy_placeholder",
-                                              self.objtype,
-                                              return_segments,
-                                              regex,
-                                              json.dumps([delimiter]))
+            args = "{} {} {} {} {}".format(self.entry.name,
+                                           self.objtype,
+                                           return_segments,
+                                           regex,
+                                           json.dumps([delimiter]))
             repMsg = cast(str, generic_msg(cmd=cmd, args=args))
             if return_segments:
                 arrays = repMsg.split('+', maxsplit=2)
@@ -959,17 +1066,16 @@ class Strings:
         if times < 1:
             raise ValueError("times must be >= 1")
         cmd = "segmentedPeel"
-        args = "{} {} {} {} {} {} {} {} {} {} {}".format("peel",
-                                                         self.objtype,
-                                                         self.entry.name,
-                                                         "legacy_placeholder",
-                                                         "str",
-                                                         NUMBER_FORMAT_STRINGS['int64'].format(times),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(includeDelimiter),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(keepPartial),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(not fromRight),
-                                                         NUMBER_FORMAT_STRINGS['bool'].format(regex),
-                                                         json.dumps([delimiter]))
+        args = "{} {} {} {} {} {} {} {} {} {}".format("peel",
+                                                      self.objtype,
+                                                      self.entry.name,
+                                                      "str",
+                                                      NUMBER_FORMAT_STRINGS['int64'].format(times),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(includeDelimiter),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(keepPartial),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(not fromRight),
+                                                      NUMBER_FORMAT_STRINGS['bool'].format(regex),
+                                                      json.dumps([delimiter]))
         repMsg = generic_msg(cmd=cmd, args=args)
         arrays = cast(str, repMsg).split('+', maxsplit=3)
         # first two created are left Strings, last two are right strings
@@ -1084,16 +1190,14 @@ class Strings:
         if isinstance(delimiter, bytes):
             delimiter = delimiter.decode()
         cmd = "segmentedBinopvv"
-        args = "{} {} {} {} {} {} {} {} {}".\
-                            format("stick",
-                            self.objtype,
-                            self.entry.name,
-                            "legacy_placeholder",
-                            other.objtype,
-                            other.entry.name,
-                            "legacy_placeholder",
-                            NUMBER_FORMAT_STRINGS['bool'].format(toLeft),
-                            json.dumps([delimiter]))
+        args = "{} {} {} {} {} {} {}". \
+            format("stick",
+                   self.objtype,
+                   self.entry.name,
+                   other.objtype,
+                   other.entry.name,
+                   NUMBER_FORMAT_STRINGS['bool'].format(toLeft),
+                   json.dumps([delimiter]))
         rep_msg = generic_msg(cmd=cmd,args=args)
         return Strings.from_return_msg(cast(str, rep_msg))
 
@@ -1162,7 +1266,7 @@ class Strings:
         """
         # TODO fix this to return a single pdarray of hashes
         cmd = "segmentedHash"
-        args = "{} {} {}".format(self.objtype, self.entry.name, "legacy_placeholder")
+        args = "{} {}".format(self.objtype, self.entry.name)
         repMsg = generic_msg(cmd=cmd,args=args)
         h1, h2 = cast(str,repMsg).split('+')
         return create_pdarray(h1), create_pdarray(h2)
@@ -1198,9 +1302,18 @@ class Strings:
             creating the pdarray encapsulating the return message
         """
         cmd = "segmentedGroup"
-        args = "{} {} {}".format(self.objtype, self.entry.name, "legacy_placeholder")
+        args = "{} {}".format(self.objtype, self.entry.name)
         return create_pdarray(generic_msg(cmd=cmd,args=args))
 
+    def _get_grouping_keys(self) -> List[pdarray]:
+        ''' 
+        Private method for generating grouping keys used by GroupBy.
+
+        API: this method must be defined by all groupable arrays, and it
+        must return a list of arrays that can be (co)argsorted.
+        '''
+        return list(self.hash())
+    
     def to_ndarray(self) -> np.ndarray:
         """
         Convert the array to a np.ndarray, transferring array data from the
@@ -1281,8 +1394,9 @@ class Strings:
         """
         from arkouda.client import maxTransferBytes
         # Total number of bytes in the array data
-        my_sz, my_dt = (self.size, arkouda.dtypes.int64) if comp == "offsets" else (self.nbytes, arkouda.dtypes.uint8)
-        array_bytes = my_sz * my_dt.itemsize
+        # my_sz, my_dt = (self.size, arkouda.dtypes.int64) if comp == "offsets" else (self.nbytes, arkouda.dtypes.uint8)
+        # array_bytes = my_sz * my_dt.itemsize
+        array_bytes = self.size * arkouda.dtypes.int64.itemsize if comp == "offsets" else self.nbytes * arkouda.dtypes.uint8.itemsize
 
         # Guard against overflowing client memory
         if array_bytes > maxTransferBytes:
@@ -1297,12 +1411,34 @@ class Strings:
 
         # The server sends us native-endian bytes so we need to account for that.
         # Since bytes are immutable, we need to copy the np array to be mutable
-        dt = np.dtype(np.int64) if comp == "offsets" else np.dtype(np.uint8)
+        dt:np.dtype = np.dtype(np.int64) if comp == "offsets" else np.dtype(np.uint8)
         if arkouda.dtypes.get_server_byteorder() == 'big':
             dt = dt.newbyteorder('>')
         else:
             dt = dt.newbyteorder('<')
         return np.frombuffer(rep_msg, dt).copy()
+
+    def astype(self, dtype) -> pdarray:
+        """
+        Cast values of Strings object to provided dtype
+
+        Parameters
+        __________
+        dtype: np.dtype or str
+            Dtype to cast to
+
+        Returns
+        _______
+        ak.pdarray
+            An arkouda pdarray with values converted to the specified data type
+
+        Notes
+        _____
+        This is essentially shorthand for ak.cast(x, '<dtype>') where x is a pdarray.
+        """
+        from arkouda.numeric import cast as akcast
+
+        return akcast(self, dtype)
 
     @typechecked
     def save(self, prefix_path : str, dataset : str='strings_array', 
@@ -1366,6 +1502,60 @@ class Strings:
         args = f"{self.entry.name} {dataset} {m} {json_array} {self.dtype} {self.entry.name} {save_offsets}"
         return cast(str, generic_msg(cmd, args))
 
+    def save_parquet(self, prefix_path : str, dataset : str='strings_array', 
+                     mode : str='truncate', compressed : bool = False) -> str:
+        """
+        Save the Strings object to Parquet. The result is a collection of Parquet files,
+        one file per locale of the arkouda server, where each filename starts
+        with prefix_path. Each locale saves its chunk of the Strings array to its
+        corresponding file.
+
+        Parameters
+        ----------
+        prefix_path : str
+            Directory and filename prefix that all output files share
+        dataset : str
+            The name of the Strings dataset to be written, defaults to strings_array
+        mode : str {'truncate'}
+            By default, truncate (overwrite) output files, if they exist.
+            Append is not supported for Parquet writing.
+        compressed : bool
+            Defaults to False. When True, files will be written with Snappy compression
+            and RLE bit packing.
+
+        Returns
+        -------
+        String message indicating result of save operation
+
+        Raises
+        ------
+        ValueError 
+            Raised if the lengths of columns and values differ, or the mode is 
+            neither 'truncate' nor 'append'
+        TypeError
+            Raised if prefix_path, dataset, or mode is not a str
+
+        See Also
+        --------
+        strings.save()
+        pdarray.save_parquet()
+        """
+        if mode.lower() in 'append':
+            m = 1
+        elif mode.lower() in 'truncate':
+            m = 0
+        else:
+            raise ValueError("Allowed modes are 'truncate' and 'append'")
+
+        try:
+            json_array = json.dumps([prefix_path])
+        except Exception as e:
+            raise ValueError(e)
+
+        cmd = "writeParquet"
+        args = f"{self.entry.name} {dataset} {m} {json_array} str {compressed}"
+        return cast(str, generic_msg(cmd, args))
+        
     def is_registered(self) -> np.bool_:
         """
         Return True iff the object is contained in the registry
@@ -1554,3 +1744,4 @@ class Strings:
         register, unregister, attach, is_registered
         """
         unregister_pdarray_by_name(user_defined_name)
+        

@@ -1,13 +1,13 @@
 module SegmentedArray {
   use AryUtil;
-  use CPtr;
+  use CTypes;
   use MultiTypeSymbolTable;
   use MultiTypeSymEntry;
   use CommAggregation;
   use UnorderedCopy;
   use SipHash;
   use SegStringSort;
-  use RadixSortLSD only radixSortLSD_ranks;
+  use RadixSortLSD;
   use PrivateDist;
   use ServerConfig;
   use Unique;
@@ -16,6 +16,7 @@ module SegmentedArray {
   use Logging;
   use ServerErrors;
   use ArkoudaRegexCompat;
+  use SegmentedComputation;
 
   private config const logLevel = ServerConfig.logLevel;
   const saLogger = new Logger(logLevel);
@@ -134,18 +135,18 @@ module SegmentedArray {
     }
 
     /* Retrieve one string from the array */
-    proc this(idx: int): string throws {
+    proc this(idx: ?t): string throws where t == int || t == uint {
       if (idx < offsets.aD.low) || (idx > offsets.aD.high) {
         throw new owned OutOfBoundsError();
       }
       // Start index of the string
-      var start = offsets.a[idx];
+      var start = offsets.a[idx:int];
       // Index of last (null) byte in string
       var end: int;
       if (idx == size - 1) {
         end = nBytes - 1;
       } else {
-        end = offsets.a[idx+1] - 1;
+        end = offsets.a[idx:int+1] - 1;
       }
       // Take the slice of the bytearray and "cast" it to a chpl string
       var s = interpretAsString(values.a, start..end);
@@ -196,7 +197,9 @@ module SegmentedArray {
 
     /* Gather strings by index. Returns arrays for the segment offsets
        and bytes of the gathered strings.*/
-    proc this(iv: [?D] int) throws {
+    proc this(iv: [?D] ?t) throws where t == int || t == uint {
+      use ChplConfig;
+      
       // Early return for zero-length result
       if (D.size == 0) {
         return (makeDistArray(0, int), makeDistArray(0, uint(8)));
@@ -222,9 +225,9 @@ module SegmentedArray {
         if (idx == high) {
           agg.copy(r, values.size);
         } else {
-          agg.copy(r, oa[idx+1]);
+          agg.copy(r, oa[idx:int+1]);
         }
-        agg.copy(l, oa[idx]);
+        agg.copy(l, oa[idx:int]);
       }
       // Lengths of segments including null bytes
       var gatheredLengths: [D] int = right - left;
@@ -279,7 +282,7 @@ module SegmentedArray {
         // Copy string data to gathered result
         forall (go, gl, idx) in zip(gatheredOffsets, gatheredLengths, iv) {
           for pos in 0..#gl {
-            gatheredVals[go+pos] = va[oa[idx]+pos];
+            gatheredVals[go+pos] = va[oa[idx:int]+pos];
           }
         }
       }
@@ -319,70 +322,12 @@ module SegmentedArray {
         }
       }
       return this[segInds];
-      
-      /* // Lengths of dest segments including null bytes */
-      /* var gatheredLengths = makeDistArray(newSize, int); */
-      /* forall (idx, present, i) in zip(D, iv, steps) { */
-      /*   if present { */
-      /*     segInds[i-1] = idx; */
-      /*     if (idx == high) { */
-      /*       gatheredLengths[i-1] = values.size - oa[high]; */
-      /*     } else { */
-      /*       gatheredLengths[i-1] = oa[idx+1] - oa[idx]; */
-      /*     } */
-      /*   } */
-      /* } */
-      /* // Make dest offsets from lengths */
-      /* var gatheredOffsets = (+ scan gatheredLengths); */
-      /* var retBytes = gatheredOffsets[newSize-1]; */
-      /* gatheredOffsets -= gatheredLengths; */
-      /* if logLevel == LogLevel.DEBUG { */
-      /*     saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                  "%i seconds".format(getCurrentTime() - t1)); */
-      /*     saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),"Copying values"));*/
-      /*     t1 = getCurrentTime(); */
-      /* } */
-      /* var gatheredVals = makeDistArray(retBytes, uint(8)); */
-      /* ref va = values.a; */
-      /* if logLevel == LogLevel.DEBUG { */
-      /*   printAry("gatheredOffsets: ", gatheredOffsets); */
-      /*   printAry("gatheredLengths: ", gatheredLengths); */
-      /*   printAry("segInds: ", segInds); */
-      /* } */
-      /* // Copy string bytes from src to dest */
-      /* forall (go, gl, idx) in zip(gatheredOffsets, gatheredLengths, segInds) { */
-      /*   gatheredVals[{go..#gl}] = va[{oa[idx]..#gl}]; */
-      /* } */
-      /* saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                     "%i seconds".format(getCurrentTime() - t1));*/
-      /* return (gatheredOffsets, gatheredVals); */
     }
 
     /* Apply a hash function to all strings. This is useful for grouping
        and set membership. The hash used is SipHash128.*/
     proc hash() throws {
-      // 128-bit hash values represented as 2-tuples of uint(64)
-      var hashes: [offsets.aD] 2*uint(64);
-      // Early exit for zero-length result
-      if (size == 0) {
-        return hashes;
-      }
-      ref oa = offsets.a;
-      ref va = values.a;
-      // Compute lengths of strings
-      var lengths = getLengths();
-      // Hash each string
-      // TO DO: test on clause with aggregator
-      forall (o, l, h) in zip(oa, lengths, hashes) {
-        const myRange = o..#l;
-        h = sipHash128(va, myRange);
-        /* // localize the string bytes */
-        /* const myBytes = va[{o..#l}]; */
-        /* h = sipHash128(myBytes, hashKey); */
-        /* // Perf Note: localizing string bytes is ~3x faster on IB multilocale than this: */
-        /* // h = sipHash128(va[{o..#l}]); */
-      }
-      return hashes;
+      return computeOnSegments(offsets.a, values.a, SegFunction.SipHash128, 2*uint(64));
     }
 
     /* Return a permutation that groups the strings. Because hashing is used,
@@ -447,6 +392,60 @@ module SegmentedArray {
       return lengths;
     }
 
+    /*
+      Given a SegString, return a new SegString with all uppercase characters from the original replaced with their lowercase equivalent
+      :returns: Strings – Substrings with uppercase characters replaced with lowercase equivalent
+    */
+    proc lower() throws {
+      ref origVals = this.values.a;
+      ref offs = this.offsets.a;
+      var lowerVals: [this.values.aD] uint(8);
+      const lengths = this.getLengths();
+      forall (off, len) in zip(offs, lengths) with (var valAgg = newDstAggregator(uint(8))) {
+        var i = 0;
+        for b in interpretAsBytes(origVals, off..#len, borrow=true).toLower() {
+          valAgg.copy(lowerVals[off+i], b:uint(8));
+          i += 1;
+        }
+      }
+      return (offs, lowerVals);
+    }
+
+    /*
+      Given a SegString, return a new SegString with all lowercase characters from the original replaced with their uppercase equivalent
+      :returns: Strings – Substrings with lowercase characters replaced with uppercase equivalent
+    */
+    proc upper() throws {
+      ref origVals = this.values.a;
+      ref offs = this.offsets.a;
+      var upperVals: [this.values.aD] uint(8);
+      const lengths = this.getLengths();
+      forall (off, len) in zip(offs, lengths) with (var valAgg = newDstAggregator(uint(8))) {
+        var i = 0;
+        for b in interpretAsBytes(origVals, off..#len, borrow=true).toUpper() {
+          valAgg.copy(upperVals[off+i], b:uint(8));
+          i += 1;
+        }
+      }
+      return (offs, upperVals);
+    }
+
+    /*
+      Returns list of bools where index i indicates whether the string i of the SegString is entirely lowercase
+      :returns: [domain] bool where index i indicates whether the string i of the SegString is entirely lowercase
+    */
+    proc isLower() throws {
+      return computeOnSegments(offsets.a, values.a, SegFunction.StringIsLower, bool);
+    }
+
+    /*
+      Returns list of bools where index i indicates whether the string i of the SegString is entirely uppercase
+      :returns: [domain] bool where index i indicates whether the string i of the SegString is entirely uppercase
+    */
+    proc isUpper() throws {
+      return computeOnSegments(offsets.a, values.a, SegFunction.StringIsUpper, bool);
+    }
+
     proc findSubstringInBytes(const substr: string) {
       // Find the start position of every occurence of substr in the flat bytes array
       // Start by making a right-truncated subdomain representing all valid starting positions for substr of given length
@@ -458,29 +457,6 @@ module SegmentedArray {
         truth &= (values.a[D.translate(i)] == b);
       }
       return truth;
-    }
-
-    /*
-      Returns Regexp.compile if pattern can be compiled without an error
-    */
-    proc checkCompile(const pattern: ?t) throws where t == bytes || t == string {
-      try {
-        return compile(pattern);
-      }
-      catch {
-        var errorMsg = "re2 could not compile pattern: %s)".format(pattern);
-        saLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-        throw new owned IllegalArgumentError(errorMsg);
-      }
-    }
-
-    proc _unsafeCompileRegex(const pattern: ?t) where t == bytes || t == string {
-      // This is a private function and should not be called to compile pattern. Use checkCompile instead
-
-      // This proc is a workaound to allow declaring regexps using a with clause in forall loops
-      // since using declarations with throws are illegal
-      // It is only called after checkCompile so the try! will not result in a server crash
-      return try! compile(pattern);
     }
 
     /*
@@ -514,19 +490,19 @@ module SegmentedArray {
                                                                                var fullMatchBoolAgg = newDstAggregator(bool),
                                                                                var numMatchAgg = newDstAggregator(int)) {
         var matchessize = 0;
-        for m in myRegex.matches(interpretAsString(origVals, off..#len, borrow=true), captures=regexMaxCaptures) {
+        for m in myRegex.matches(interpretAsString(origVals, off..#len, borrow=true), regexMaxCaptures) {
           var match = m[0]; // v1.24.x -> reMatch, v1.25.x -> regexMatch
           var group = m[groupNum];
-          if group.offset != -1 {
-            lenAgg.copy(sparseLens[off + group.offset:int], group.size);
-            startPosAgg.copy(sparseStarts[off + group.offset:int], group.offset:int);
-            startBoolAgg.copy(matchStartBool[off + group.offset:int], true);
+          if group.byteOffset != -1 {
+            lenAgg.copy(sparseLens[off + group.byteOffset:int], group.numBytes);
+            startPosAgg.copy(sparseStarts[off + group.byteOffset:int], group.byteOffset:int);
+            startBoolAgg.copy(matchStartBool[off + group.byteOffset:int], true);
             matchessize += 1;
             searchBoolAgg.copy(searchBools[i], true);
-            if match.offset == 0 {
+            if match.byteOffset == 0 {
               matchBoolAgg.copy(matchBools[i], true);
             }
-            if match.size == len-1 {
+            if match.numBytes == len-1 {
               fullMatchBoolAgg.copy(fullMatchBools[i], true);
             }
           }
@@ -664,12 +640,12 @@ module SegmentedArray {
         var replLen = 0;
         for m in myRegex.matches(interpretAsString(origVals, off..#len, borrow=true)) {
           var match = m[0];  // v1.24.x -> reMatch, v1.25.x -> regexMatch
-          for k in (off + match.offset:int)..#match.size {
+          for k in (off + match.byteOffset:int)..#match.numBytes {
             nonMatchAgg.copy(nonMatch[k], false);
           }
-          startAgg.copy(matchStartBool[off + match.offset:int], true);
+          startAgg.copy(matchStartBool[off + match.byteOffset:int], true);
           replacementCounter += 1;
-          replLen += match.size;
+          replLen += match.numBytes;
           if replacementCounter == count { break; }
         }
         numReplAgg.copy(numReplacements[i], replacementCounter);
@@ -711,108 +687,12 @@ module SegmentedArray {
       :arg pattern: regex pattern to be applied to strings in SegString
       :type pattern: string
 
-      :arg mode: mode of search being performed (contains, startsWith, endsWith, match)
-      :type mode: SearchMode enum
-
       :returns: [domain] bool where index i indicates whether the regular expression, pattern, matched string i of the SegString
     */
-    // DEPRECATED - All substringSearchRegex calls now handled by Match objects on Client
-    // TODO: Remove substringSearchRegex
-    proc substringSearchRegex(const pattern: string, mode: SearchMode) throws {
-      var hits: [offsets.aD] bool = false;  // the answer
+    proc substringSearch(const pattern: string) throws {
+      // We need to check that pattern compiles once to avoid server crash from !try in _unsafecompile
       checkCompile(pattern);
-
-      // should we do len check here? re2.compile('') is valid regex and matches everything
-      ref oa = offsets.a;
-      ref va = values.a;
-      var lengths = getLengths();
-
-      select mode {
-        when SearchMode.contains {
-          forall (o, l, h) in zip(oa, lengths, hits) with (var myRegex = _unsafeCompileRegex(pattern)) {
-            // regexp.search searches the receiving string for matches at any offset
-            h = myRegex.search(interpretAsString(va, o..#l, borrow=true)).matched;
-          }
-        }
-        when SearchMode.startsWith {
-          forall (o, l, h) in zip(oa, lengths, hits) with (var myRegex = _unsafeCompileRegex(pattern)) {
-            // regexp.match only returns a match if the start of the string matches the pattern
-            h = myRegex.match(interpretAsString(va, o..#l, borrow=true)).matched;
-          }
-        }
-        when SearchMode.endsWith {
-          forall (o, l, h) in zip(oa, lengths, hits) with (var myRegex = _unsafeCompileRegex(pattern)) {
-            var matches = myRegex.matches(interpretAsString(va, o..#l, borrow=true));
-            var lastMatch = matches[matches.size-1][0];  // v1.24.x reMatch, 1.25.x regexMatch
-            // h = true iff start(lastMatch) + len(lastMatch) == len(string) (-1 to account for null byte)
-            h = lastMatch.offset + lastMatch.size == l-1;
-          }
-        }
-      }
-      return hits;
-    }
-    
-    proc substringSearch(const substr: string, mode: SearchMode, regex: bool = false) throws {
-      if regex || mode == SearchMode.match {
-        // match always uses substringSearchRegex
-        return substringSearchRegex(substr, mode);
-      }
-      var hits: [offsets.aD] bool;  // the answer
-      if (size == 0) || (substr.size == 0) {
-        return hits;
-      }
-      var t = new Timer();
-
-      if logLevel == LogLevel.DEBUG {
-           saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                "Checking bytes of substr"); 
-           t.start();
-      }
-      const truth = findSubstringInBytes(substr);
-      const D = truth.domain;
-      if logLevel == LogLevel.DEBUG {
-            t.stop(); 
-            saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                  "took %t seconds\nTranslating to segments...".format(t.elapsed())); 
-            t.clear(); 
-            t.start();
-      }
-      // Need to ignore segment(s) at the end of the array that are too short to contain substr
-      const tail = + reduce (offsets.a > D.high);
-      // oD is the right-truncated domain representing segments that are candidates for containing substr
-      var oD: subdomain(offsets.aD) = offsets.aD[offsets.aD.low..#(offsets.size - tail)];
-      if logLevel == LogLevel.DEBUG {
-             t.stop(); 
-             saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                   "took %t seconds\ndetermining answer...".format(t.elapsed())); 
-             t.clear(); 
-             t.start();
-      }
-      ref oa = offsets.a;
-      if mode == SearchMode.contains {
-        // Determine whether each segment contains a hit
-        // Do this by taking the difference in the cumulative number of hits at the end vs the beginning of the segment  
-        // check there's enough room to create a copy for scan and throw if creating a copy would go over memory limit
-        overMemLimit(numBytes(int) * truth.size);
-        // Cumulative number of hits up to (and excluding) this point
-        var numHits = (+ scan truth) - truth;
-        hits[oD.interior(-(oD.size-1))] = (numHits[oa[oD.interior(oD.size-1)]] - numHits[oa[oD.interior(-(oD.size-1))]]) > 0;
-        hits[oD.high] = (numHits[D.high] + truth[D.high] - numHits[oa[oD.high]]) > 0;
-      } else if mode == SearchMode.startsWith {
-        // First position of segment must be a hit
-        hits[oD] = truth[oa[oD]];
-      } else if mode == SearchMode.endsWith {
-        // Position where substr aligns with end of segment must be a hit
-        // -1 for null byte
-        hits[oD.interior(-(oD.size-1))] = truth[oa[oD.interior(oD.size-1)] - substr.numBytes - 1];
-        hits[oD.high] = truth[D.high-1];
-      }
-      if logLevel == LogLevel.DEBUG {
-          t.stop(); 
-          saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                   "took %t seconds".format(t.elapsed()));
-      }
-      return hits;
+      return computeOnSegments(offsets.a, values.a, SegFunction.StringSearch, bool, pattern);
     }
 
     /*
@@ -873,13 +753,13 @@ module SegmentedArray {
           // The string can be peeled; figure out where to split
           var match_index: int = if left then (times - 1) else (matches.size - times);
           var match = matches[match_index][0]; // v1.24.x -> reMatch, v1.25.x -> regexMatch
-          var j: int = o + match.offset: int;
+          var j: int = o + match.byteOffset: int;
           // j is now the start of the correct delimiter
           // tweak leftEnd and rightStart based on includeDelimiter
           if includeDelimiter {
             if left {
-              leftEnd[i] = j + match.size - 1;
-              rightStart[i] = j + match.size;
+              leftEnd[i] = j + match.numBytes - 1;
+              rightStart[i] = j + match.numBytes;
             }
             else {
               leftEnd[i] = j - 1;
@@ -888,7 +768,7 @@ module SegmentedArray {
           }
           else {
             leftEnd[i] = j - 1;
-            rightStart[i] = j + match.size;
+            rightStart[i] = j + match.numBytes;
           }
         }
       }
@@ -904,15 +784,17 @@ module SegmentedArray {
       var leftVals = makeDistArray((+ reduce leftLengths), uint(8));
       var rightVals = makeDistArray((+ reduce rightLengths), uint(8));
       // Fill left values
-      forall (srcStart, dstStart, len) in zip(oa, leftOffsets, leftLengths) {
+      forall (srcStart, dstStart, len) in zip(oa, leftOffsets, leftLengths) with (var agg = newDstAggregator(uint(8))) {
+        var localIdx = new lowLevelLocalizingSlice(va, srcStart..#(len-1));
         for i in 0..#(len-1) {
-          unorderedCopy(leftVals[dstStart+i], va[srcStart+i]);
+          agg.copy(leftVals[dstStart+i], localIdx.ptr[i]);
         }
       }
       // Fill right values
-      forall (srcStart, dstStart, len) in zip(rightStart, rightOffsets, rightLengths) {
+      forall (srcStart, dstStart, len) in zip(rightStart, rightOffsets, rightLengths) with (var agg = newDstAggregator(uint(8))) {
+        var localIdx = new lowLevelLocalizingSlice(va, srcStart..#(len-1));
         for i in 0..#(len-1) {
-          unorderedCopy(rightVals[dstStart+i], va[srcStart+i]);
+          agg.copy(rightVals[dstStart+i], localIdx.ptr[i]);
         }
       }
       return (leftOffsets, leftVals, rightOffsets, rightVals);
@@ -1025,15 +907,17 @@ module SegmentedArray {
       var rightVals = makeDistArray((+ reduce rightLengths), uint(8));
       ref va = values.a;
       // Fill left values
-      forall (srcStart, dstStart, len) in zip(oa, leftOffsets, leftLengths) {
+      forall (srcStart, dstStart, len) in zip(oa, leftOffsets, leftLengths) with (var agg = newDstAggregator(uint(8))) {
+        var localIdx = new lowLevelLocalizingSlice(va, srcStart..#(len-1));
         for i in 0..#(len-1) {
-          unorderedCopy(leftVals[dstStart+i], va[srcStart+i]);
+          agg.copy(leftVals[dstStart+i], localIdx.ptr[i]);
         }
       }
       // Fill right values
-      forall (srcStart, dstStart, len) in zip(rightStart, rightOffsets, rightLengths) {
+      forall (srcStart, dstStart, len) in zip(rightStart, rightOffsets, rightLengths) with (var agg = newDstAggregator(uint(8))) {
+        var localIdx = new lowLevelLocalizingSlice(va, srcStart..#(len-1));
         for i in 0..#(len-1) {
-          unorderedCopy(rightVals[dstStart+i], va[srcStart+i]);
+          agg.copy(rightVals[dstStart+i], localIdx.ptr[i]);
         }
       }
       return (leftOffsets, leftVals, rightOffsets, rightVals);
@@ -1062,33 +946,37 @@ module SegmentedArray {
       // Copy in the left and right-hand values, separated by the delimiter
       ref va1 = values.a;
       ref va2 = other.values.a;
-      forall (o1, o2, no, l1, l2) in zip(offsets.a, other.offsets.a, newOffsets, leftLen, rightLen) {
+      forall (o1, o2, no, l1, l2) in zip(offsets.a, other.offsets.a, newOffsets, leftLen, rightLen) with (var agg = newDstAggregator(uint(8))) {
         var pos = no;
         // Left side
         if right {
+          var localIdx = new lowLevelLocalizingSlice(va1, o1..#l1);
           for i in 0..#l1 {
-            unorderedCopy(newVals[pos+i], va1[o1+i]);
+            agg.copy(newVals[pos+i], localIdx.ptr[i]);
           }
           pos += l1;
         } else {
+          var localIdx = new lowLevelLocalizingSlice(va2, o2..#l2);
           for i in 0..#l2 {
-            unorderedCopy(newVals[pos+i], va2[o2+i]);
+            agg.copy(newVals[pos+i], localIdx.ptr[i]);
           }
           pos += l2;
         }
         // Delimiter
         for (i, b) in zip(0..#delim.numBytes, delim.chpl_bytes()) {
-          unorderedCopy(newVals[pos+i], b);
+          agg.copy(newVals[pos+i], b);
         }
         pos += delim.numBytes;
         // Right side
         if right {
+          var localIdx = new lowLevelLocalizingSlice(va2, o2..#l2);
           for i in 0..#l2 {
-            unorderedCopy(newVals[pos+i], va2[o2+i]);
+            agg.copy(newVals[pos+i], localIdx.ptr[i]);
           }
         } else {
+          var localIdx = new lowLevelLocalizingSlice(va1, o1..#l1);
           for i in 0..#l1 {
-            unorderedCopy(newVals[pos+i], va1[o1+i]);
+            agg.copy(newVals[pos+i], localIdx.ptr[i]);
           }
         }
       }
@@ -1160,9 +1048,6 @@ module SegmentedArray {
   }
 
 
-  enum SearchMode { contains, startsWith, endsWith, match }
-  class UnknownSearchMode: Error {}
-  
   /* Test for equality between two same-length arrays of strings. Returns
      a boolean vector of the same length. */
   operator ==(lss:SegString, rss:SegString) throws {
@@ -1188,6 +1073,11 @@ module SegmentedArray {
                            routineName = getRoutineName(),
                            moduleName = getModuleName(),
                            errorClass="ArgumentError");
+    }
+    if useHash {
+      const lh = lss.hash();
+      const rh = rss.hash();
+      return if polarity then (lh == rh) else (lh != rh);
     }
     ref oD = lss.offsets.aD;
     // Start by assuming all elements differ, then correct for those that are equal
@@ -1236,157 +1126,99 @@ module SegmentedArray {
 
   /* Test an array of strings for equality against a constant string. Return a boolean
      vector the same size as the array. */
-  operator ==(ss:SegString, testStr: string) {
-    return compare(ss, testStr, true);
+  operator ==(ss:SegString, testStr: string) throws {
+    return compare(ss, testStr, SegFunction.StringCompareLiteralEq);
   }
   
   /* Test an array of strings for inequality against a constant string. Return a boolean
      vector the same size as the array. */
-  operator !=(ss:SegString, testStr: string) {
-    return compare(ss, testStr, false);
+  operator !=(ss:SegString, testStr: string) throws {
+    return compare(ss, testStr, SegFunction.StringCompareLiteralNeq);
   }
 
+  inline proc stringCompareLiteralEq(values, rng, testStr) {
+    if rng.size == (testStr.numBytes + 1) {
+      const s = interpretAsString(values, rng);
+      return (s == testStr);
+    } else {
+      return false;
+    }
+  }
+
+  inline proc stringCompareLiteralNeq(values, rng, testStr) {
+    if rng.size == (testStr.numBytes + 1) {
+      const s = interpretAsString(values, rng);
+      return (s != testStr);
+    } else {
+      return true;
+    }
+  }
+  
   /* Element-wise comparison of an arrays of string against a target string. 
      The polarity parameter determines whether the comparison checks for 
      equality (polarity=true, result is true where elements equal target) 
      or inequality (polarity=false, result is true where elements differ from 
      target). */
-  proc compare(ss:SegString, testStr: string, param polarity: bool) {
-    ref oD = ss.offsets.aD;
-    // Initially assume all elements equal the target string, then correct errors
-    // For ==, this means everything starts true; for !=, everything starts false
-    var truth: [oD] bool = polarity;
-    // Early exit for zero-length result
-    if (ss.size == 0) {
-      return truth;
+  proc compare(ss:SegString, const testStr: string, param function: SegFunction) throws {
+    if testStr.numBytes == 0 {
+      // Comparing against the empty string is a quick check for zero length
+      const lengths = ss.getLengths() - 1;
+      return (lengths == 0);
     }
-    ref values = ss.values.a;
-    ref vD = ss.values.aD;
-    ref offsets = ss.offsets.a;
-    // Use a whole-array strategy, where the ith byte from every segment is checked simultaneously
-    // This will do len(testStr) parallel loops, but loops will have low overhead
-    for (b, i) in zip(testStr.chpl_bytes(), 0..) {
-      forall (t, o, idx) in zip(truth, offsets, oD) with (var agg = newDstAggregator(bool)) {
-        if ((o+i > vD.high) || (b != values[o+i])) {
-          // Strings are not equal, so change the output
-          // For ==, output is now false; for !=, output is now true
-          agg.copy(t, !polarity);
-        }
-      }
-    }
-    // Check the length by checking that the next byte is null
-    forall (t, o, idx) in zip(truth, offsets, oD) with (var agg = newDstAggregator(bool)) {
-      if ((o+testStr.size > vD.high) || (0 != values[o+testStr.size])) {
-        // Strings are not equal, so change the output
-        // For ==, output is now false; for !=, output is now true
-        agg.copy(t, !polarity);
-      }
-    }
-    return truth;
+    return computeOnSegments(ss.offsets.a, ss.values.a, function, bool, testStr);
   }
 
-  private config const in1dAssocSortThreshold = 10**6;
+  /*
+    Returns Regexp.compile if pattern can be compiled without an error
+  */
+  proc checkCompile(const pattern: ?t) throws where t == bytes || t == string {
+    try {
+      return compile(pattern);
+    }
+    catch {
+      var errorMsg = "re2 could not compile pattern: %s".format(pattern);
+      saLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+      throw new owned IllegalArgumentError(errorMsg);
+    }
+  }
+
+  proc _unsafeCompileRegex(const pattern: ?t) where t == bytes || t == string {
+    // This is a private function and should not be called to compile pattern. Use checkCompile instead
+
+    // This proc is a workaound to allow declaring regexps using a with clause in forall loops
+    // since using declarations with throws are illegal
+    // It is only called after checkCompile so the try! will not result in a server crash
+    return try! compile(pattern);
+  }
+
+  inline proc stringSearch(values, rng, myRegex) throws {
+    return myRegex.search(interpretAsString(values, rng, borrow=true)).matched;
+  }
+
+  /*
+    The SegFunction called by computeOnSegments for isLower
+  */
+  inline proc stringIsLower(values, rng) throws {
+    return interpretAsString(values, rng, borrow=true).isLower();
+  }
+
+  /*
+    The SegFunction called by computeOnSegments for isUpper
+  */
+  inline proc stringIsUpper(values, rng) throws {
+    return interpretAsString(values, rng, borrow=true).isUpper();
+  }
 
   /* Test array of strings for membership in another array (set) of strings. Returns
      a boolean vector the same size as the first array. */
-  proc in1d(mainStr: SegString, testStr: SegString, invert=false, forceSort=false) throws where useHash {
-    var truth: [mainStr.offsets.aD] bool;
+  proc in1d(mainStr: SegString, testStr: SegString, invert=false) throws where useHash {
+    use In1d;
     // Early exit for zero-length result
     if (mainStr.size == 0) {
+      var truth: [mainStr.offsets.aD] bool;
       return truth;
     }
-    // Hash all strings for fast comparison
-    var t = new Timer();
-    saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),"Hashing strings");
-    if logLevel == LogLevel.DEBUG { t.start(); }
-    const hashes = mainStr.hash();
-    if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                                                "%t seconds".format(t.elapsed())); 
-        t.clear();
-    }
-
-    if (testStr.size <= in1dAssocSortThreshold) && !forceSort {
-      if logLevel == LogLevel.DEBUG {
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                       "Making associative domains for test set on each locale");
-        t.start();
-      }
-      // On each locale, make an associative domain with the hashes of the second array
-      // parSafe=false because we are adding in serial and it's faster
-      var localTestHashes: [PrivateSpace] domain(2*uint(64), parSafe=false);
-      coforall loc in Locales {
-        on loc {
-          // Local hashes of second array
-          ref mySet = localTestHashes[here.id];
-          mySet.requestCapacity(testStr.size);
-          var testHashes: [{0..#testStr.size}] 2*uint(64);
-          testHashes = testStr.hash();
-          for h in testHashes {
-            mySet += h;
-          }
-          /* // Check membership of hashes in this locale's chunk of the array */
-          /* [i in truth.localSubdomain()] truth[i] = mySet.contains(hashes[i]); */
-        }
-      }
-      if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                       "%t seconds".format(t.elapsed())); 
-        t.clear();
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),      
-                       "Testing membership"); 
-        t.start();
-      }
-      [i in truth.domain] truth[i] = localTestHashes[here.id].contains(hashes[i]);
-      if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                       "%t seconds".format(t.elapsed()));
-      }
-    } else {
-      if logLevel == LogLevel.DEBUG {
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                       "Using sort-based strategy");
-        t.start();
-      }
-      const testHashes = testStr.hash();
-      // Unique the hashes of each array, preserving reverse index for main
-      var (umain, cmain, revIdx) = uniqueSortWithInverse(hashes);
-      var utest = uniqueSort(testHashes, needCounts=false);
-      // Concat unique hashes
-      var combinedDom = makeDistDom(umain.size + utest.size);
-      var combined: [combinedDom] 2*uint(64);
-      combined[combinedDom.interior(-umain.size)] = umain;
-      combined[combinedDom.interior(utest.size)] = utest;
-      // Sort
-      var iv = radixSortLSD_ranks(combined);
-      var sorted: [combinedDom] 2*uint(64);
-      forall (i, s) in zip(iv, sorted) with (var agg = newSrcAggregator(2*uint(64))) {
-        agg.copy(s, combined[i]);
-      }
-      // Find duplicates
-      // Dupe parallels unique hashes of mainStr and is true when value is in testStr
-      var dupe: [combinedDom] bool = false;
-      forall (sortedIdx, origIdx, s) in zip(combinedDom, iv, sorted) with (var agg = newDstAggregator(bool)){
-        // When next hash is same as current, string exists in both arrays
-        if sortedIdx < combinedDom.high && (s == sorted[sortedIdx+1]){
-          // Use the iv to scatter back to pre-sorted order
-          agg.copy(dupe[origIdx], true);
-        }
-      }
-      // Use revIdx to broadcast dupe to original non-unique domain
-      forall (t, ri) in zip(truth, revIdx) with (var agg = newSrcAggregator(bool)) {
-        agg.copy(t, dupe[ri]);
-      }
-      if logLevel == LogLevel.DEBUG {
-        t.stop(); 
-        saLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                       "%t seconds".format(t.elapsed()));
-      }
-    }
-    return truth;
+    return in1d(mainStr.hash(), testStr.hash(), invert);
   }
 
   proc concat(s1: [] int, v1: [] uint(8), s2: [] int, v2: [] uint(8)) throws {
@@ -1404,16 +1236,17 @@ module SegmentedArray {
 
   private config const in1dSortThreshold = 64;
   
-  proc in1d(mainStr: SegString, testStr: SegString, invert=false, forceSort=false) throws where !useHash {
+  proc in1d(mainStr: SegString, testStr: SegString, invert=false) throws where !useHash {
     var truth: [mainStr.offsets.aD] bool;
     // Early exit for zero-length result
     if (mainStr.size == 0) {
       return truth;
     }
-    if (testStr.size <= in1dSortThreshold) && !forceSort {
+    if (testStr.size <= in1dSortThreshold) {
       for i in 0..#testStr.size {
         truth |= (mainStr == testStr[i]);
       }
+      if invert { truth = !truth; }
       return truth;
     } else {
       // This is inspired by numpy in1d
@@ -1503,4 +1336,25 @@ module SegmentedArray {
       return "<error interpreting bytes as string>";
     }
   }
+
+  /*
+     Interpret a region of a byte array as bytes. Modeled after interpretAsString
+   */
+  proc interpretAsBytes(bytearray: [?D] uint(8), region: range(?), borrow=false): bytes {
+    var localSlice = new lowLevelLocalizingSlice(bytearray, region);
+    // Byte buffer is null-terminated, so length is region.size - 1
+    try {
+      if localSlice.isOwned {
+        localSlice.isOwned = false;
+        return createBytesWithOwnedBuffer(localSlice.ptr, region.size-1, region.size);
+      } else if borrow {
+        return createBytesWithBorrowedBuffer(localSlice.ptr, region.size-1, region.size);
+      } else {
+        return createBytesWithNewBuffer(localSlice.ptr, region.size-1, region.size);
+      }
+    } catch {
+      return b"<error interpreting uint(8) as bytes>";
+    }
+  }
+
 }

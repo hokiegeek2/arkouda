@@ -4,6 +4,7 @@ prototype module efuncTest
     config const LEN = 2**20;
     use TestBase;
     
+    use OperatorMsg;
     use MsgProcessing;
 
     proc main() {
@@ -66,6 +67,5 @@ prototype module efuncTest
         repMsg = opeqvvMsg(cmd=cmd, payload=reqMsg, st).msg;
         d.stop("opeqvvMsg");
         writeRep(repMsg);
-        st.pretty();
     }
 }

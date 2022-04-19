@@ -50,13 +50,10 @@ module ConcatenateMsg
         var nbytes: int = 0;          
         var dtype: DType;
         // Check that all arrays exist in the symbol table and have the same size
-        for (rawName, i) in zip(names, 1..) {
-            var name: string;
+        for (name, i) in zip(names, 1..) {
             var valSize: int;
             select objtype {
                 when "str" {
-                    var legacy_placeholder: string;
-                    (name, legacy_placeholder) = rawName.splitMsgToTuple('+', 2);
                     try {
                         // get the values/bytes portion of strings
                         var segString = getSegString(name, st);
@@ -71,12 +68,11 @@ module ConcatenateMsg
                            errorClass="UnknownSymbolError");                    
                     }
                     cmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                             "name: %s legacy_placeholder: %s".format(name, legacy_placeholder));
+                                             "name: %s".format(name));
                 }
                 when "pdarray" {
-                    name = rawName;
                     cmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                 "pdarray name %s".format(rawName));
+                                 "pdarray name %s".format(name));
                 }
                 otherwise { 
                     var errorMsg = notImplementedError(pn, objtype); 
@@ -308,6 +304,35 @@ module ConcatenateMsg
                         cmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                            "created concatenated pdarray: %s".format(st.attrib(rname)));
                     }
+                    when DType.UInt64 {
+                        // create array to copy into
+                        var e = st.addEntry(rname, size, uint);
+                        var start: int;
+                        start = 0;
+                        for (name, i) in zip(names, 1..) {
+                            // lookup and cast operand to copy from
+                            const o = toSymEntry(getGenericTypedArrayEntry(name, st), uint);
+                            if mode == "interleave" {
+                              coforall loc in Locales {
+                                on loc {
+                                  const size = o.aD.localSubdomain().size;
+                                  e.a[{blockstarts[here.id]..#size}] = o.a.localSlice[o.aD.localSubdomain()];
+                                  blockstarts[here.id] += size;
+                                }
+                              }
+                            } else {
+                              ref ea = e.a;
+                              // copy array into concatenation array
+                              forall (i, v) in zip(o.aD, o.a) with (var agg = newDstAggregator(uint)) {
+                                agg.copy(ea[start+i], v);
+                              }
+                              // update new start for next array copy
+                              start += o.size;
+                            }
+                        }
+                        cmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
+                                         "created concatenated pdarray: %s".format(st.attrib(rname)));
+                    }
                     otherwise {
                         var errorMsg = notImplementedError("concatenate",dtype);
                         cmLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg); 
@@ -325,5 +350,10 @@ module ConcatenateMsg
                 return new MsgTuple(errorMsg, MsgType.ERROR);
             }
         }
+    }
+
+    proc registerMe() {
+      use CommandMap;
+      registerFunction("concatenate", concatenateMsg, getModuleName());
     }
 }

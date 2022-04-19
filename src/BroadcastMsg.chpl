@@ -61,6 +61,11 @@ module BroadcastMsg {
           var res = st.addEntry(rname, size, int);
           res.a = broadcast(perm.a, segs.a, vals.a);
         }
+        when DType.UInt64 {
+          const vals = toSymEntry(gv, uint);
+          var res = st.addEntry(rname, size, uint);
+          res.a = broadcast(perm.a, segs.a, vals.a);
+        }
         when DType.Float64 {
           const vals = toSymEntry(gv, real);
           var res = st.addEntry(rname, size, real);
@@ -87,6 +92,11 @@ module BroadcastMsg {
           var res = st.addEntry(rname, size, int);
           res.a = broadcast(segs.a, vals.a, size);
         }
+        when DType.UInt64 {
+          const vals = toSymEntry(gv, uint);
+          var res = st.addEntry(rname, size, uint);
+          res.a = broadcast(segs.a, vals.a, size);
+        }
         when DType.Float64 {
           const vals = toSymEntry(gv, real);
           var res = st.addEntry(rname, size, real);
@@ -109,5 +119,10 @@ module BroadcastMsg {
     var repMsg = "created " + st.attrib(rname); 
     bmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
     return new MsgTuple(repMsg, MsgType.NORMAL);    
+  }
+
+  proc registerMe() {
+    use CommandMap;
+    registerFunction("broadcast", broadcastMsg, getModuleName());
   }
 }

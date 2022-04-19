@@ -35,6 +35,13 @@ module IndexingMsg
                  imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
                  return new MsgTuple(repMsg, MsgType.NORMAL);  
              }
+             when (DType.UInt64) {
+               var e = toSymEntry(gEnt, uint);
+                 repMsg = "item %s %t".format(dtype2str(e.dtype),e.a[idx]);
+
+                 imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+                 return new MsgTuple(repMsg, MsgType.NORMAL);  
+             }
              when (DType.Float64) {
                  var e = toSymEntry(gEnt,real);
                  repMsg = "item %s %.17r".format(dtype2str(e.dtype),e.a[idx]);
@@ -103,6 +110,9 @@ module IndexingMsg
             when (DType.Int64) {
                 return sliceHelper(int);
             }
+            when (DType.UInt64) {
+                return sliceHelper(uint);
+            }
             when (DType.Float64) {
                 return sliceHelper(real);
             }
@@ -170,6 +180,42 @@ module IndexingMsg
             return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
+        // gather indexing by integer index vector
+        proc ivUInt64Helper(type XType): MsgTuple throws {
+            var e = toSymEntry(gX,XType);
+            var iv = toSymEntry(gIV,uint);
+            if (e.size == 0) && (iv.size == 0) {
+                var a = st.addEntry(rname, 0, XType);
+                var repMsg = "created " + st.attrib(rname);
+                imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
+                return new MsgTuple(repMsg, MsgType.NORMAL);
+            }
+            var ivMin = min reduce iv.a;
+            var ivMax = max reduce iv.a;
+            if ivMin < 0 {
+                var errorMsg = "Error: %s: OOBindex %i < 0".format(pn,ivMin);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg,MsgType.ERROR);               
+            }
+            if ivMax >= e.size {
+                var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMin,e.size-1);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);             
+                return new MsgTuple(errorMsg,MsgType.ERROR);
+            }
+            var a = st.addEntry(rname, iv.size, XType);
+            //[i in iv.aD] a.a[i] = e.a[iv.a[i]]; // bounds check iv[i] against e.aD?
+            ref a2 = e.a;
+            ref iva = iv.a;
+            ref aa = a.a;
+            forall (a1,idx) in zip(aa,iva) with (var agg = newSrcAggregator(XType)) {
+              agg.copy(a1,a2[idx:int]);
+            }
+            
+            var repMsg =  "created " + st.attrib(rname);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
+            return new MsgTuple(repMsg, MsgType.NORMAL);
+        }
+        
         // compression boolean indexing by bool index vector
         proc ivBoolHelper(type XType): MsgTuple throws {
             var e = toSymEntry(gX,XType);
@@ -208,17 +254,35 @@ module IndexingMsg
             when (DType.Int64, DType.Int64) {
                 return ivInt64Helper(int);
             }
+            when (DType.UInt64, DType.Int64) {
+                return ivInt64Helper(uint);
+            }
+            when (DType.Int64, DType.UInt64) {
+                return ivUInt64Helper(int);
+            }
+            when (DType.UInt64, DType.UInt64) {
+                return ivUInt64Helper(uint);
+            }
             when (DType.Int64, DType.Bool) {
                 return ivBoolHelper(int);
             }
+            when (DType.UInt64, DType.Bool) {
+                return ivBoolHelper(uint);
+            }
             when (DType.Float64, DType.Int64) {
                 return ivInt64Helper(real);
+            }
+            when (DType.Float64, DType.UInt64) {
+                return ivUInt64Helper(real);
             }
             when (DType.Float64, DType.Bool) {
                 return ivBoolHelper(real);
             }
             when (DType.Bool, DType.Int64) {
                 return ivInt64Helper(bool);
+            }
+            when (DType.Bool, DType.UInt64) {
+                return ivUInt64Helper(bool);
             }
             when (DType.Bool, DType.Bool) {
                 return ivBoolHelper(bool);
@@ -252,6 +316,11 @@ module IndexingMsg
                  var val = try! value:int;
                  e.a[idx] = val;
              }
+             when (DType.Int64, DType.UInt64) {
+                 var e = toSymEntry(gEnt,int);
+                 var val = try! value:uint;
+                 e.a[idx] = val:int;
+             }
              when (DType.Int64, DType.Float64) {
                  var e = toSymEntry(gEnt,int);
                  var val = try! value:real;
@@ -264,10 +333,37 @@ module IndexingMsg
                  var val = try! value:bool;
                  e.a[idx] = val:int;
              }
+             when (DType.UInt64, DType.Int64) {
+                 var e = toSymEntry(gEnt,uint);
+                 var val = try! value:int;
+                 e.a[idx] = val:uint;
+             }
+             when (DType.UInt64, DType.UInt64) {
+                 var e = toSymEntry(gEnt,uint);
+                 var val = try! value:uint;
+                 e.a[idx] = val;
+             }
+             when (DType.UInt64, DType.Float64) {
+                 var e = toSymEntry(gEnt,uint);
+                 var val = try! value:real;
+                 e.a[idx] = val:uint;
+             }
+             when (DType.UInt64, DType.Bool) {
+                 var e = toSymEntry(gEnt,uint);
+                 value = value.replace("True","true");// chapel to python bool
+                 value = value.replace("False","false");// chapel to python bool
+                 var val = try! value:bool;
+                 e.a[idx] = val:uint;
+             }
              when (DType.Float64, DType.Int64) {
                  var e = toSymEntry(gEnt,real);
                  var val = try! value:int;
                  e.a[idx] = val;
+             }
+             when (DType.Float64, DType.UInt64) {
+                 var e = toSymEntry(gEnt,real);
+                 var val = try! value:uint;
+                 e.a[idx] = val:real;
              }
              when (DType.Float64, DType.Float64) {
                  var e = toSymEntry(gEnt,real);
@@ -286,6 +382,11 @@ module IndexingMsg
              when (DType.Bool, DType.Int64) {
                  var e = toSymEntry(gEnt,bool);
                  var val = try! value:int;
+                 e.a[idx] = val:bool;
+             }
+             when (DType.Bool, DType.UInt64) {
+                 var e = toSymEntry(gEnt,bool);
+                 var val = try! value:uint;
                  e.a[idx] = val:bool;
              }
              when (DType.Bool, DType.Float64) {
@@ -360,6 +461,38 @@ module IndexingMsg
             return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
+        // scatter indexing by unsigned integer index vector
+        proc ivUInt64Helper(type Xtype, type dtype): MsgTuple throws {
+            var e = toSymEntry(gX,Xtype);
+            var iv = toSymEntry(gIV,uint);
+            var ivMin = min reduce iv.a;
+            var ivMax = max reduce iv.a;
+            if ivMin < 0 {
+                var errorMsg = "Error: %s: OOBindex %i < 0".format(pn,ivMin);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg,MsgType.ERROR);;
+            }
+            if ivMax >= e.size {
+                var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMax,e.size-1);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg,MsgType.ERROR);;   
+            }
+            if isBool(dtype) {
+                value = value.replace("True","true"); // chapel to python bool
+                value = value.replace("False","false"); // chapel to python bool
+            }
+            var val = try! value:dtype;
+            // [i in iv.a] e.a[i] = val;
+            ref iva = iv.a;
+            ref ea = e.a;
+            forall i in iva with (var agg = newDstAggregator(dtype)) {
+              agg.copy(ea[i:int],val);
+            }
+            var repMsg = "%s success".format(pn);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);
+        }
+
         // expansion boolean indexing by bool index vector
         proc ivBoolHelper(type Xtype, type dtype): MsgTuple throws {
             var e = toSymEntry(gX,Xtype);
@@ -393,17 +526,35 @@ module IndexingMsg
             when (DType.Int64, DType.Int64, DType.Int64) {
               return ivInt64Helper(int, int);
             }
+            when (DType.Int64, DType.UInt64, DType.Int64) {
+              return ivUInt64Helper(int, int);
+            }
             when (DType.Int64, DType.Bool, DType.Int64) {
               return ivBoolHelper(int, int);
             }
+            when (DType.UInt64, DType.Int64, DType.UInt64) {
+              return ivInt64Helper(uint, uint);
+            }
+            when (DType.UInt64, DType.UInt64, DType.UInt64) {
+              return ivUInt64Helper(uint, uint);
+            }
+            when (DType.UInt64, DType.Bool, DType.UInt64) {
+              return ivBoolHelper(uint, uint);
+            }
             when (DType.Float64, DType.Int64, DType.Float64) {
               return ivInt64Helper(real, real);
+            }
+            when (DType.Float64, DType.UInt64, DType.Float64) {
+              return ivUInt64Helper(real, real);
             }
             when (DType.Float64, DType.Bool, DType.Float64) {
               return ivBoolHelper(real, real);
             }
             when (DType.Bool, DType.Int64, DType.Bool) {
               return ivInt64Helper(bool, bool);
+            }
+            when (DType.Bool, DType.UInt64, DType.Bool) {
+              return ivUInt64Helper(bool, bool);
             }
             when (DType.Bool, DType.Bool, DType.Bool) {
               return ivBoolHelper(bool, bool);
@@ -472,6 +623,41 @@ module IndexingMsg
             return new MsgTuple(repMsg, MsgType.NORMAL);
         }
 
+        // scatter indexing by unsigned integer index vector
+        proc ivUInt64Helper(type t): MsgTuple throws {
+            // add check to make syre IV and Y are same size
+            if (gIV.size != gY.size) {
+                var errorMsg = "Error: %s: size mismatch %i %i".format(pn,gIV.size,gY.size);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
+                return new MsgTuple(errorMsg,MsgType.ERROR);;     
+            }
+            var e = toSymEntry(gX,t);
+            var iv = toSymEntry(gIV,uint);
+            var ivMin = min reduce iv.a;
+            var ivMax = max reduce iv.a;
+            var y = toSymEntry(gY,t);
+            if ivMin < 0 {
+                var errorMsg = "Error: %s: OOBindex %i < 0".format(pn,ivMin);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg); 
+                return new MsgTuple(errorMsg,MsgType.ERROR);;  
+            }
+            if ivMax >= e.size {
+                var errorMsg = "Error: %s: OOBindex %i > %i".format(pn,ivMax,e.size-1);
+                imLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);           
+                return new MsgTuple(errorMsg,MsgType.ERROR);;
+            }
+            //[(i,v) in zip(iv.a,y.a)] e.a[i] = v;
+            ref iva = iv.a;
+            ref ya = y.a;
+            ref ea = e.a;
+            forall (i,v) in zip(iva,ya) with (var agg = newDstAggregator(t)) {
+              agg.copy(ea[i:int],v);
+            }
+            var repMsg = "%s success".format(pn);
+            imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
+            return new MsgTuple(repMsg, MsgType.NORMAL);
+        }
+
         // expansion indexing by a bool index vector
         proc ivBoolHelper(type t): MsgTuple throws {
             // add check to make syre IV and Y are same size
@@ -513,17 +699,35 @@ module IndexingMsg
             when (DType.Int64, DType.Int64, DType.Int64) {
                 return ivInt64Helper(int);
             }
+            when (DType.Int64, DType.UInt64, DType.Int64) {
+                return ivUInt64Helper(int);
+            }
             when (DType.Int64, DType.Bool, DType.Int64) {
                 return ivBoolHelper(int);
             }
+            when (DType.UInt64, DType.Int64, DType.UInt64) {
+                return ivInt64Helper(uint);
+            }
+            when (DType.UInt64, DType.UInt64, DType.UInt64) {
+                return ivUInt64Helper(uint);
+            }
+            when (DType.UInt64, DType.Bool, DType.UInt64) {
+                return ivBoolHelper(uint);
+            }
             when (DType.Float64, DType.Int64, DType.Float64) {
                 return ivInt64Helper(real);
+            }
+            when (DType.Float64, DType.UInt64, DType.Float64) {
+                return ivUInt64Helper(real);
             }
             when (DType.Float64, DType.Bool, DType.Float64) {
                 return  ivBoolHelper(real);
             }
             when (DType.Bool, DType.Int64, DType.Bool) {
                 return ivInt64Helper(bool);
+            }
+            when (DType.Bool, DType.UInt64, DType.Bool) {
+                return ivUInt64Helper(bool);
             }
             when (DType.Bool, DType.Bool, DType.Bool) {
                 return ivBoolHelper(bool);
@@ -569,6 +773,11 @@ module IndexingMsg
                 var val = try! value:int;
                 e.a[slice] = val;
             }
+            when (DType.Int64, DType.UInt64) {
+                var e = toSymEntry(gEnt,int);
+                var val = try! value:uint;
+                e.a[slice] = val:int;
+            }
             when (DType.Int64, DType.Float64) {
                 var e = toSymEntry(gEnt,int);
                 var val = try! value:real;
@@ -581,10 +790,37 @@ module IndexingMsg
                 var val = try! value:bool;
                 e.a[slice] = val:int;
             }
+            when (DType.UInt64, DType.Int64) {
+                var e = toSymEntry(gEnt,uint);
+                var val = try! value:int;
+                e.a[slice] = val:uint;
+            }
+            when (DType.UInt64, DType.UInt64) {
+                var e = toSymEntry(gEnt,uint);
+                var val = try! value:uint;
+                e.a[slice] = val:uint;
+            }
+            when (DType.UInt64, DType.Float64) {
+                var e = toSymEntry(gEnt,uint);
+                var val = try! value:real;
+                e.a[slice] = val:uint;
+            }
+            when (DType.UInt64, DType.Bool) {
+                var e = toSymEntry(gEnt,uint);
+                value = value.replace("True","true");// chapel to python bool
+                value = value.replace("False","false");// chapel to python bool
+                var val = try! value:bool;
+                e.a[slice] = val:uint;
+            }
             when (DType.Float64, DType.Int64) {
                 var e = toSymEntry(gEnt,real);
                 var val = try! value:int;
                 e.a[slice] = val;
+            }
+            when (DType.Float64, DType.UInt64) {
+                var e = toSymEntry(gEnt,real);
+                var val = try! value:uint;
+                e.a[slice] = val:real;
             }
             when (DType.Float64, DType.Float64) {
                 var e = toSymEntry(gEnt,real);
@@ -603,6 +839,11 @@ module IndexingMsg
             when (DType.Bool, DType.Int64) {
                 var e = toSymEntry(gEnt,bool);
                 var val = try! value:int;
+                e.a[slice] = val:bool;
+            }
+            when (DType.Bool, DType.UInt64) {
+                var e = toSymEntry(gEnt,bool);
+                var val = try! value:uint;
                 e.a[slice] = val:bool;
             }
             when (DType.Bool, DType.Float64) {
@@ -668,6 +909,11 @@ module IndexingMsg
                 var y = toSymEntry(gY,int);
                 x.a[slice] = y.a;
             }
+            when (DType.Int64, DType.UInt64) {
+                var x = toSymEntry(gX,int);
+                var y = toSymEntry(gY,uint);
+                x.a[slice] = y.a:int;
+            }
             when (DType.Int64, DType.Float64) {
                 var x = toSymEntry(gX,int);
                 var y = toSymEntry(gY,real);
@@ -678,9 +924,34 @@ module IndexingMsg
                 var y = toSymEntry(gY,bool);
                 x.a[slice] = y.a:int;
             }
+            when (DType.UInt64, DType.Int64) {
+                var x = toSymEntry(gX,uint);
+                var y = toSymEntry(gY,int);
+                x.a[slice] = y.a:uint;
+            }
+            when (DType.UInt64, DType.UInt64) {
+                var x = toSymEntry(gX,uint);
+                var y = toSymEntry(gY,uint);
+                x.a[slice] = y.a:uint;
+            }
+            when (DType.UInt64, DType.Float64) {
+                var x = toSymEntry(gX,uint);
+                var y = toSymEntry(gY,real);
+                x.a[slice] = y.a:uint;
+            }
+            when (DType.UInt64, DType.Bool) {
+                var x = toSymEntry(gX,uint);
+                var y = toSymEntry(gY,bool);
+                x.a[slice] = y.a:uint;
+            }
             when (DType.Float64, DType.Int64) {
                 var x = toSymEntry(gX,real);
                 var y = toSymEntry(gY,int);
+                x.a[slice] = y.a:real;
+            }
+            when (DType.Float64, DType.UInt64) {
+                var x = toSymEntry(gX,real);
+                var y = toSymEntry(gY,uint);
                 x.a[slice] = y.a:real;
             }
             when (DType.Float64, DType.Float64) {
@@ -696,6 +967,11 @@ module IndexingMsg
             when (DType.Bool, DType.Int64) {
                 var x = toSymEntry(gX,bool);
                 var y = toSymEntry(gY,int);
+                x.a[slice] = y.a:bool;
+            }
+            when (DType.Bool, DType.UInt64) {
+                var x = toSymEntry(gX,bool);
+                var y = toSymEntry(gY,uint);
                 x.a[slice] = y.a:bool;
             }
             when (DType.Bool, DType.Float64) {
@@ -719,5 +995,17 @@ module IndexingMsg
         repMsg = "%s success".format(pn);
         imLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
         return new MsgTuple(repMsg, MsgType.NORMAL); 
-    } 
+    }
+    
+    proc registerMe() {
+      use CommandMap;
+      registerFunction("[int]", intIndexMsg, getModuleName());
+      registerFunction("[slice]", sliceIndexMsg, getModuleName());
+      registerFunction("[pdarray]", pdarrayIndexMsg, getModuleName());
+      registerFunction("[int]=val", setIntIndexToValueMsg, getModuleName());
+      registerFunction("[pdarray]=val", setPdarrayIndexToValueMsg, getModuleName());
+      registerFunction("[pdarray]=pdarray", setPdarrayIndexToPdarrayMsg, getModuleName());
+      registerFunction("[slice]=val", setSliceIndexToValueMsg, getModuleName());
+      registerFunction("[slice]=pdarray", setSliceIndexToPdarrayMsg, getModuleName());
+    }
 }

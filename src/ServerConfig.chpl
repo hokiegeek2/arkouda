@@ -6,7 +6,7 @@ module ServerConfig
     use SymArrayDmap only makeDistDom;
 
     public use IO;
-    private use SysCTypes;
+    private use CTypes;
 
     use ServerErrorStrings;
     use Reflection;
@@ -106,14 +106,13 @@ module ServerConfig
     */
     config param regexMaxCaptures = 20;
 
-    /* Whether the server was built with parquet support */
-    config param hasParquetSupport = false;
+    config const saveUsedModules : bool = false;
 
     private config const lLevel = ServerConfig.logLevel;
     const scLogger = new Logger(lLevel);
    
     proc createConfig() {
-        use SysCTypes;
+        use CTypes;
 
         class LocaleConfig {
             const id: int;
@@ -132,11 +131,11 @@ module ServerConfig
                 }
             }
         }
+
         class Config {
             const arkoudaVersion: string;
             const ZMQVersion: string;
             const HDF5Version: string;
-            const arrowVersion: string;
             const serverHostname: string;
             const ServerPort: int;
             const MetricsServerPort: int;
@@ -153,29 +152,15 @@ module ServerConfig
             const connectHostname: string;
             const connectHostIp: string;
         }
+
         var (Zmajor, Zminor, Zmicro) = ZMQ.version;
         var H5major: c_uint, H5minor: c_uint, H5micro: c_uint;
         H5get_libversion(H5major, H5minor, H5micro);
-
-        var arrowVNum = "Unsupported";
-        if hasParquetSupport {
-          use SysCTypes, CPtr;
-          extern proc c_getVersionInfo(): c_string;
-          extern proc strlen(str): c_int;
-          extern proc c_free_string(ptr);
-          var cVersionString = c_getVersionInfo();
-          defer {
-            c_free_string(cVersionString: c_void_ptr);
-          }
-          arrowVNum = try! createStringWithNewBuffer(cVersionString,
-                                                     strlen(cVersionString));
-        }
         
         const cfg = new owned Config(
             arkoudaVersion = (ServerConfig.arkoudaVersion:string),
             ZMQVersion = try! "%i.%i.%i".format(Zmajor, Zminor, Zmicro),
             HDF5Version = try! "%i.%i.%i".format(H5major, H5minor, H5micro),
-            arrowVersion = arrowVNum,
             serverHostname = serverHostname,
             ServerPort = ServerPort,
             MetricsServerPort = MetricsServerPort,
@@ -195,7 +180,7 @@ module ServerConfig
         return try! "%jt".format(cfg);
 
     }
-    private const cfgStr = createConfig();
+    private var cfgStr = createConfig();
 
     proc getConfig(): string {
         return cfgStr;
@@ -351,4 +336,24 @@ module ServerConfig
       return tup;
     }
 
+    proc getEnvInt(name: string, default: int): int {
+      extern proc getenv(name : c_string) : c_string;
+      var strval = getenv(name.localize().c_str()): string;
+      if strval.isEmpty() { return default; }
+      return try! strval: int;
+    }
+
+    /*
+     * String constants for use in constructing JSON formatted messages
+     */
+    const Q = '"'; // Double Quote, escaping quotes often throws off syntax highlighting.
+    const QCQ = Q + ":" + Q; // `":"` -> useful for closing and opening quotes for named json k,v pairs
+    const BSLASH = '\\';
+    const ESCAPED_QUOTES = BSLASH + Q;
+
+    proc appendToConfigStr(key:string, val:string) {
+      var idx_close = cfgStr.rfind("}"):int;
+      var tmp_json = cfgStr(0..idx_close-1);
+      cfgStr = tmp_json + "," + Q + key + QCQ + val + Q + "}";
+    }
 }

@@ -87,19 +87,12 @@ This yielded a >20TB dataframe in Arkouda.
 
 <a id="toc"></a>
 # Table of Contents
- 
-1. [Prerequisites](#prereq-main)
-   - [Requirements](#prereq-reqs)
-   - [MacOS](#prereq-mac)
-     - [Installing Chapel](#prereq-mac-chapel)
-     - [Python environment - Anaconda](#prereq-mac-anaconda)
-   - [Linux](#prereq-linux)
-     - [Install Chapel](#prereq-linux-chapel)
-     - [Python environment - Anaconda](#prereq-linux-anaconda)
-   - [Windows - WSL](#prereq-windows)
+
+1. [Prerequisites](#prereqs)
 2. [Building Arkouda](#build-ak)
    - [Building the source](#build-ak-source)
    - [Building the docs](#build-ak-docs)
+   - [Modular building](#build-ak-mod)
 3. [Testing Arkouda](#test-ak)
 4. [Installing Arkouda Python libs and deps](#install-ak)
 5. [Running arkouda_server](#run-ak)
@@ -114,192 +107,22 @@ This yielded a >20TB dataframe in Arkouda.
 11. [Versioning](#versioning-ak)
 12. [Contributing](#contrib-ak)
 
-<a id="prereq-main"></a>
+<a id="prereqs"></a>
 ## Prerequisites <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
 
-<a id="prereq-reqs"></a>
-### Requirements: <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
- * requires chapel 1.25.0
- * requires zeromq version >= 4.2.5, tested with 4.2.5 and 4.3.1
- * requires hdf5 
- * requires python 3.7 or greater
- * requires numpy
- * requires typeguard for runtime type checking
- * requires pandas for testing and conversion utils
- * requires pytest, pytest-env, and h5py to execute the Python test harness
- * requires sphinx, sphinx-argparse, and sphinx-autoapi to generate docs
- * requires versioneer for versioning
+For detailed prerequisite information and installation guides, please review [INSTALL.md](INSTALL.md).
 
-<a id="prereq-mac"></a>
-### MacOS Environment <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-
-<a id="prereq-mac-chapel"></a>
-#### Installing Chapel <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-
-Option 1: Setup using brew
-
-<details>
- <summary>(click to see more)</summary>
-
-```bash
-brew install zeromq
-
-brew install hdf5
-
-brew install chapel
-
-```
-
-</details>
-
-Option 2: Build Chapel from source
-
-<details>
- <summary>(click to see more)</summary>
-
-```bash
-# build chapel in the user home directory with these settings...
-export CHPL_HOME=~/chapel/chapel-1.25.0
-source $CHPL_HOME/util/setchplenv.bash
-export CHPL_COMM=gasnet
-export CHPL_COMM_SUBSTRATE=smp
-export CHPL_TARGET_CPU=native
-export GASNET_QUIET=Y
-export CHPL_RT_OVERSUBSCRIBED=yes
-cd $CHPL_HOME
-make
-
-# Build chpldoc to enable generation of Arkouda docs
-make chpldoc
-
-# Add the Chapel and Chapel Doc executables (chpl and chpldoc, respectiveley) to 
-# PATH either in ~/.bashrc (single user) or /etc/environment (all users):
-
-export PATH=$CHPL_HOME/bin/linux64-x86_64/:$PATH
-```
-
-</details>
-
-<a id="prereq-mac-anaconda"></a>
-#### Mac - Python / Anaconda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-While not required, it is highly recommended to [install Anaconda](https://docs.anaconda.com/anaconda/install/mac-os/) to provide a Python3 environment and manage Python dependencies. Otherwise, python can be installed via brew.
-
-```
-# The recommended Python install is via Anaconda:
-wget https://repo.anaconda.com/archive/Anaconda3-2020.07-MacOSX-x86_64.sh
-sh Anaconda3-2020.07-MacOSX-x86_64.sh
-source ~/.bashrc
-
-# Otherwise, Python 3 can be installed with brew
-brew install python3
-
-# versioneer is required, use either conda or pip
-pip install versioneer
- or
-conda install versioneer
-
-# these packages are nice but not a requirement (manual install required if Python installed with brew)
-pip3 install pandas
-pip3 install jupyter
-```
-
-<a id="prereq-linux"></a>
-### Linux Environment <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-
-<a id="prereq-linux-chapel"></a>
-#### Installing Chapel on Linux <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-There is no Linux Chapel install, so the first two steps in the Linux Arkouda install are 
-to install the Chapel dependencies followed by downloading and building Chapel.
-
-<details>
- <summary>(click to see more)</summary>
-
-```bash
-# Update Linux kernel and install Chapel dependencies
-sudo apt-get update
-sudo apt-get install gcc g++ m4 perl python python-dev python-setuptools bash make mawk git pkg-config libcurl4-gnutls-dev -y
-
-# Download latest Chapel release, explode archive, and navigate to source root directory
-wget https://github.com/chapel-lang/chapel/releases/download/1.25.0/chapel-1.25.0.tar.gz
-tar xvf chapel-1.25.0.tar.gz
-cd chapel-1.25.0/
-
-# Set CHPL_HOME
-export CHPL_HOME=$PWD
-
-# Add chpl to PATH
-source $CHPL_HOME/util/setchplenv.bash
-
-# Set remaining env variables and execute make
-export CHPL_COMM=gasnet
-export CHPL_COMM_SUBSTRATE=smp
-export CHPL_TARGET_CPU=native
-export GASNET_QUIET=Y
-export CHPL_RT_OVERSUBSCRIBED=yes
-cd $CHPL_HOME
-make
-
-# Build chpldoc to enable generation of Arkouda docs
-make chpldoc
-
-# Optionally add the Chapel executable (chpl) to the PATH for all users: /etc/environment
-export PATH=$CHPL_HOME/bin/linux64-x86_64/:$PATH
-
-```
-
-</details>
-
-<a id="prereq-linux-anaconda"></a> 
-#### Python environment setup - Anaconda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-As is the case with the MacOS install, it is highly recommended to [install Anaconda](https://docs.anaconda.com/anaconda/install/linux/) to provide a Python environment and manage Python dependencies:
-
-<details>
- <summary>(click to see more)</summary>
-
-```
- wget https://repo.anaconda.com/archive/Anaconda3-2020.07-Linux-x86_64.sh
- sh Anaconda3-2020.07-Linux-x86_64.sh
- source ~/.bashrc
- 
- # Install versioneer and other required python packages if they are not included in yoru anaconda install
- conda install versioneer
- or
- pip install versioneer
- 
- # Repeat for any missing pacakges using your package manager of choice (conda or pip)
-```
-
-</details>
-
-
-<a id="prereq-windows"></a>
-### Windows Environment (WSL2) <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-It is possible to set up a basic arkouda installation on MS Windows using the Windows Subsystem for Linux (WSL2).
-The general strategy here is to use Linux terminals on WSL to launch the server
-If you are going to try this route we suggest using WSL-2 with Ubuntu 20.04 LTS.  There are a number of tutorials
-available online such has [MicroSoft's](https://docs.microsoft.com/en-us/windows/wsl/install-win10)
-
-Key installation points:
-  - Make sure to use WSL2
-  - Ubuntu 20.04 LTS from the MS app store
-  - Don't forget to create a user account and password as part of the Linux install
-
-Once configured you can follow the basic [Linux installation instructions](#prereq-linux)
-for installing Chapel & Arkouda.  We also recommend installing Anaconda for windows.
-
-The general plan is to compile & run the `arkouda-server` process from a Linux terminal on WSL and then either connect
-to it with the python client using another Linux terminal running on WSL _or_ using the Windows Anaconda-Powershell.
-
-If running an IDE you can use either the Windows or Linux version, however, you may need to install an X-window system
-on Windows such as VcXsrv, X410, or an alternative.  Follow the setup instructions for whichever one you choose, but
-keep in mind you may need to update your Windows firewall to allow the Xserver to connect.  Also, on the Linux side of
-the house we found it necessary to add 
-```bash
-export DISPLAY=$(cat /etc/resolv.conf | grep nameserver | awk '{print $2; exit;}'):0.0
-```
-to our `~/.bashrc` file to get the display correctly forwarded.
-
-
+**Requirements List**
+* chapel 1.25.1
+* zeromq version >= 4.2.5, tested with 4.2.5 and 4.3.1
+* hdf5 
+* python 3.7 or greater
+* numpy
+* typeguard for runtime type checking
+* pandas for testing and conversion utils
+* pytest, pytest-env, and h5py to execute the Python test harness
+* sphinx, sphinx-argparse, and sphinx-autoapi to generate docs
+* versioneer for versioning
 
 <a id="build-ak"></a>
 ## Building Arkouda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
@@ -331,7 +154,7 @@ make
 
 <a id="build-ak-docs"></a>
 ### Building the Arkouda documentation <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
-The Arkouda documentation is hosted on [Read-the-Docs](https://arkouda.readthedocs.io/en/latest/).
+The Arkouda documentation is [here](https://bears-r-us.github.io/arkouda/).
 
 <details>
 <summary><b>(click to see more)</b></summary>
@@ -365,7 +188,7 @@ arkouda/docs/server # Chapel backend server documentation
 To view the Arkouda documentation locally, type the following url into the browser of choice:
  `file:///path/to/arkouda/docs/index.html`, substituting the appropriate path for the Arkouda directory configuration.
 
-The `make doc` target detailed above prepares the Arkouda Python and Chapel docs for hosting both locally and on Read-the-Docs.
+The `make doc` target detailed above prepares the Arkouda Python and Chapel docs for hosting both locally and on ghpages.
 
 There are three easy steps to hosting Arkouda docs on Github Pages. First, the Arkouda docs generated via `make doc` 
 are pushed to the Arkouda or Arkouda fork _master branch_. Next, navigate to the Github project home and click the 
@@ -374,6 +197,10 @@ option. The Github Pages docs url will be displayed once the source option is se
 Arkouda documentation homepage will be displayed.
 
 </details>
+
+<a id="build-ak-mod"></a>
+### Modular building <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
+For information on Arkouda's modular building feature, see [MODULAR.md](MODULAR.md).
 
 <a id="test-ak"></a>
 ## Testing Arkouda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>
@@ -514,6 +341,9 @@ The generated token is saved to the tokens.txt file which is contained in the .a
 working directory the arkouda\_server is launched from. The arkouda\_server will re-use the same token until the 
 .arkouda/tokens.txt file is removed, which forces arkouda\_server to generate a new token and corresponding
 tokens.txt file.
+
+In situations where a user-specified token string is preferred, this can be specified in the ARKOUDA_SERVER_TOKEN environment variable. As is the case with an Arkouda-generated token, the user-supplied token
+is saved to the .arkouda/tokens.txt file for re-use.
 
 <a id="run-ak-connect"></a>
 ### Connecting to Arkouda <sup><sup><sub><a href="#toc">toc</a></sub></sup></sup>

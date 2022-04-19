@@ -6,9 +6,11 @@ import numpy as np # type: ignore
 from arkouda.client import generic_msg
 from arkouda.dtypes import dtype, DTypes, resolve_scalar_dtype, \
      translate_np_dtype, NUMBER_FORMAT_STRINGS, \
-     int_scalars, numeric_scalars, numpy_scalars, get_server_byteorder
+     int_scalars, numeric_scalars, numeric_and_bool_scalars, numpy_scalars, get_server_byteorder
 from arkouda.dtypes import int64 as akint64
+from arkouda.dtypes import uint64 as akuint64
 from arkouda.dtypes import str_ as akstr_
+from arkouda.dtypes import bool as akbool
 from arkouda.dtypes import bool as npbool
 from arkouda.dtypes import isSupportedInt
 from arkouda.logger import getArkoudaLogger
@@ -136,7 +138,7 @@ class pdarray:
         from arkouda.client import pdarrayIterThresh
         return generic_msg(cmd='repr',args='{} {}'.format(self.name,pdarrayIterThresh))
 
-    def format_other(self, other : object) -> np.dtype:
+    def format_other(self, other : object) -> str:
         """
         Attempt to cast scalar other to the element dtype of this pdarray,
         and print the resulting value to a string (e.g. for sending to a
@@ -149,7 +151,7 @@ class pdarray:
             
         Returns
         -------
-        np.dtype corresponding to the other parameter
+        string representation of np.dtype corresponding to the other parameter
         
         Raises
         ------
@@ -209,7 +211,14 @@ class pdarray:
             repMsg = generic_msg(cmd=cmd,args=args)
             return create_pdarray(repMsg)
         # pdarray binop scalar
-        dt = resolve_scalar_dtype(other)
+        if np.can_cast(other, self.dtype):
+            # If scalar can be losslessly cast to array dtype, 
+            # do the cast so that return array will have same dtype
+            dt = self.dtype.name
+            other = self.dtype.type(other)
+        else:
+            # If scalar cannot be safely cast, server will infer the return dtype
+            dt = resolve_scalar_dtype(other)
         if dt not in DTypes:
             raise TypeError("Unhandled scalar type: {} ({})".format(other, 
                                                                     type(other)))
@@ -249,7 +258,14 @@ class pdarray:
         if op not in self.BinOps:
             raise ValueError("bad operator {}".format(op))
         # pdarray binop scalar
-        dt = resolve_scalar_dtype(other)
+        if np.can_cast(other, self.dtype):
+            # If scalar can be losslessly cast to array dtype, 
+            # do the cast so that return array will have same dtype
+            dt = self.dtype.name
+            other = self.dtype.type(other)
+        else:
+            # If scalar cannot be safely cast, server will infer the return dtype
+            dt = resolve_scalar_dtype(other)
         if dt not in DTypes:
             raise TypeError("Unhandled scalar type: {} ({})".format(other, 
                                                                     type(other)))
@@ -449,7 +465,7 @@ class pdarray:
 
     # overload a[] to treat like list
     def __getitem__(self, key):
-        if np.isscalar(key) and resolve_scalar_dtype(key) == 'int64':
+        if np.isscalar(key) and (resolve_scalar_dtype(key) == 'int64' or 'uint64'):
             orig_key = key
             if key < 0:
                 # Interpret negative key as offset from end of array
@@ -468,7 +484,7 @@ class pdarray:
             return create_pdarray(repMsg);
         if isinstance(key, pdarray):
             kind, _ = translate_np_dtype(key.dtype)
-            if kind not in ("bool", "int"):
+            if kind not in ("bool", "int", "uint"):
                 raise TypeError("unsupported pdarray index type {}".format(key.dtype))
             if kind == "bool" and self.size != key.size:
                 raise ValueError("size mismatch {} {}".format(self.size,key.size))
@@ -478,7 +494,7 @@ class pdarray:
             raise TypeError("Unhandled key type: {} ({})".format(key, type(key)))
 
     def __setitem__(self, key, value):
-        if np.isscalar(key) and resolve_scalar_dtype(key) == 'int64':
+        if np.isscalar(key) and (resolve_scalar_dtype(key) == 'int64' or 'uint64'):
             orig_key = key
             if key < 0:
                 # Interpret negative key as offset from end of array
@@ -627,7 +643,7 @@ class pdarray:
         """
         return is_sorted(self)
 
-    def sum(self) -> numpy_scalars:
+    def sum(self) -> numeric_and_bool_scalars:
         """
         Return the sum of all elements in the array.
         """
@@ -839,6 +855,28 @@ class pdarray:
         Rotate bits right by <other>.
         """
         return rotr(self, other)
+
+    def astype(self, dtype) -> pdarray:
+        """
+        Cast values of pdarray to provided dtype
+
+        Parameters
+        __________
+        dtype: np.dtype or str
+            Dtype to cast to
+
+        Returns
+        _______
+        ak.pdarray
+            An arkouda pdarray with values converted to the specified data type
+
+        Notes
+        _____
+        This is essentially shorthand for ak.cast(x, '<dtype>') where x is a pdarray.
+        """
+        from arkouda.numeric import cast as akcast
+
+        return akcast(self, dtype)
     
     def to_ndarray(self) -> np.ndarray:
         """
@@ -1043,7 +1081,8 @@ class pdarray:
                            format(self.name, dataset, m, json_array, self.dtype)))
 
     @typechecked
-    def save_parquet(self, prefix_path : str, dataset : str='array', mode : str='truncate') -> str:
+    def save_parquet(self, prefix_path : str, dataset : str='array', mode : str='truncate',
+                     compressed : bool = False) -> str:
         """
         Save the pdarray to Parquet. The result is a collection of Parquet files,
         one file per locale of the arkouda server, where each filename starts
@@ -1059,6 +1098,8 @@ class pdarray:
         mode : str {'truncate'}
             By default, truncate (overwrite) output files, if they exist.
             Append is currently not supported.
+        compressed : bool
+            By default, write without Snappy compression and RLE encoding.
 
         Returns
         -------
@@ -1104,17 +1145,20 @@ class pdarray:
         >>> (a == b).all()
         True
         """
-        if mode.lower() in 'truncate':
+        if mode.lower() in 'append':
+            m = 1
+        elif mode.lower() in 'truncate':
             m = 0
-        else: # TODO: add support for the append mode
-            raise ValueError("Currently only the 'truncate' mode is supported")
+        else:
+            raise ValueError("Allowed modes are 'truncate' and 'append'")
         
         try:
             json_array = json.dumps([prefix_path])
         except Exception as e:
             raise ValueError(e)
-        return cast(str, generic_msg(cmd="writeParquet", args="{} {} {} {}".\
-                                     format(self.name, dataset, json_array, self.dtype)))
+        return cast(str, generic_msg(cmd="writeParquet", args="{} {} {} {} {} {}".\
+                                     format(self.name, dataset, m, json_array, self.dtype,
+                                            compressed)))
     
     @typechecked
     def register(self, user_defined_name: str) -> pdarray:
@@ -1257,6 +1301,23 @@ class pdarray:
         """
         return attach_pdarray(user_defined_name)
 
+    def _get_grouping_keys(self) -> List[pdarray]:
+        ''' 
+        Private method for generating grouping keys used by GroupBy.
+
+        API: this method must be defined by all groupable arrays, and it
+        must return a list of arrays that can be (co)argsorted.
+        '''
+        if self.dtype == akbool:
+            from arkouda.numeric import cast as akcast
+            return [akcast(self, akint64)]
+        elif self.dtype in (akint64, akuint64):
+            # Integral pdarrays are their own grouping keys
+            return [self]
+        else:
+            raise TypeError("Grouping is only supported on numeric data (integral types) and bools.")
+
+
 #end pdarray class def
     
 # creates pdarray object
@@ -1302,7 +1363,7 @@ def create_pdarray(repMsg : str) -> pdarray:
         raise ValueError(e)
     logger.debug(("created Chapel array with name: {} dtype: {} size: {} ndim: {} shape: {} " +
                   "itemsize: {}").format(name, mydtype, size, ndim, shape, itemsize))
-    return pdarray(name, mydtype, size, ndim, shape, itemsize)
+    return pdarray(name, dtype(mydtype), size, ndim, shape, itemsize)
 
 def clear() -> None:
     """
@@ -1567,7 +1628,7 @@ def mean(pda : pdarray) -> np.float64:
     RuntimeError
         Raised if there's a server-side error thrown
     """
-    return pda.sum() / pda.size
+    return np.float64(pda.sum()) / pda.size
 
 @typechecked
 def var(pda : pdarray, ddof : int_scalars=0) -> np.float64:
@@ -1889,7 +1950,7 @@ def popcount(pda: pdarray) -> pdarray:
 
     Parameters
     ----------
-    pda : pdarray, int64
+    pda : pdarray, int64, uint64
         Input array (must be integral).
 
     Returns
@@ -1900,7 +1961,7 @@ def popcount(pda: pdarray) -> pdarray:
     Raises
     ------
     TypeError
-        If input array is not int64
+        If input array is not int64 or uint64
     
     Examples
     --------
@@ -1908,8 +1969,8 @@ def popcount(pda: pdarray) -> pdarray:
     >>> ak.popcount(A)
     array([0, 1, 1, 2, 1, 2, 2, 3, 1, 2])
     """
-    if pda.dtype != akint64:
-        raise TypeError("BitOps only supported on int64 arrays")
+    if pda.dtype != akint64 and pda.dtype != akuint64:
+        raise TypeError("BitOps only supported on int64 and uint64 arrays")
     repMsg = generic_msg(cmd="efunc", args="{} {}".format("popcount", pda.name))
     return create_pdarray(repMsg)
 
@@ -1919,7 +1980,7 @@ def parity(pda: pdarray) -> pdarray:
 
     Parameters
     ----------
-    pda : pdarray, int64
+    pda : pdarray, int64, uint64
         Input array (must be integral).
 
     Returns
@@ -1930,7 +1991,7 @@ def parity(pda: pdarray) -> pdarray:
     Raises
     ------
     TypeError
-        If input array is not int64
+        If input array is not int64 or uint64
     
     Examples
     --------
@@ -1938,8 +1999,8 @@ def parity(pda: pdarray) -> pdarray:
     >>> ak.parity(A)
     array([0, 1, 1, 0, 1, 0, 0, 1, 1, 0])
     """
-    if pda.dtype != akint64:
-        raise TypeError("BitOps only supported on int64 arrays")
+    if pda.dtype != akint64 and pda.dtype != akuint64:
+        raise TypeError("BitOps only supported on int64 and uint64 arrays")
     repMsg = generic_msg(cmd="efunc", args="{} {}".format("parity", pda.name))
     return create_pdarray(repMsg)
 
@@ -1949,7 +2010,7 @@ def clz(pda: pdarray) -> pdarray:
 
     Parameters
     ----------
-    pda : pdarray, int64
+    pda : pdarray, int64, uint64
         Input array (must be integral).
 
     Returns
@@ -1960,7 +2021,7 @@ def clz(pda: pdarray) -> pdarray:
     Raises
     ------
     TypeError
-        If input array is not int64
+        If input array is not int64 or uint64
     
     Examples
     --------
@@ -1968,8 +2029,8 @@ def clz(pda: pdarray) -> pdarray:
     >>> ak.clz(A)
     array([64, 63, 62, 62, 61, 61, 61, 61, 60, 60])
     """
-    if pda.dtype != akint64:
-        raise TypeError("BitOps only supported on int64 arrays")
+    if pda.dtype != akint64 and pda.dtype != akuint64:
+        raise TypeError("BitOps only supported on int64 and uint64 arrays")
     repMsg = generic_msg(cmd="efunc", args="{} {}".format("clz", pda.name))
     return create_pdarray(repMsg)
 
@@ -1979,7 +2040,7 @@ def ctz(pda: pdarray) -> pdarray:
 
     Parameters
     ----------
-    pda : pdarray, int64
+    pda : pdarray, int64, uint64
         Input array (must be integral).
 
     Returns
@@ -1994,7 +2055,7 @@ def ctz(pda: pdarray) -> pdarray:
     Raises
     ------
     TypeError
-        If input array is not int64
+        If input array is not int64 or uint64
     
     Examples
     --------
@@ -2002,8 +2063,8 @@ def ctz(pda: pdarray) -> pdarray:
     >>> ak.ctz(A)
     array([0, 0, 1, 0, 2, 0, 1, 0, 3, 0])
     """
-    if pda.dtype != akint64:
-        raise TypeError("BitOps only supported on int64 arrays")
+    if pda.dtype != akint64 and pda.dtype != akuint64:
+        raise TypeError("BitOps only supported on int64 and uint64 arrays")
     repMsg = generic_msg(cmd="efunc", args="{} {}".format("ctz", pda.name))
     return create_pdarray(repMsg)
 

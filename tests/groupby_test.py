@@ -23,12 +23,13 @@ def groupby_to_arrays(df : pd.DataFrame, kname, vname, op, levels):
     return keys, agg.values
 
 def make_arrays():
-    keys = np.random.randint(0, GROUPS, SIZE)
+    keys = np.random.randint(0, GROUPS, SIZE, dtype=np.uint64)
     keys2 = np.random.randint(0, GROUPS, SIZE)
     i = np.random.randint(0, SIZE//GROUPS, SIZE)
+    u = np.random.randint(0, SIZE//GROUPS, SIZE, dtype=np.uint64)
     f = np.random.randn(SIZE) # normally dist random numbers
     b = (i % 2) == 0
-    d = {'keys':keys, 'keys2':keys2, 'int64':i, 'float64':f, 'bool':b}
+    d = {'keys':keys, 'keys2':keys2, 'int64':i, 'uint64':u, 'float64':f, 'bool':b}
 
     return d
   
@@ -83,7 +84,7 @@ def run_test(levels, verbose=False):
     akkeys, akvals = akg.count()
     akvals = akvals.to_ndarray()
     failures += compare_keys(pdkeys, akkeys, levels, pdvals, akvals)
-    for vname in ('int64', 'float64', 'bool'):
+    for vname in ('int64', 'uint64', 'float64', 'bool'):
         for op in ak.GroupBy.Reductions:
             if verbose: print(f"\nDoing aggregate({vname}, {op})")
             tests += 1
@@ -128,7 +129,9 @@ class GroupByTest(ArkoudaTest):
         self.bvalues = ak.randint(0,1,10,dtype=bool)
         self.fvalues = ak.randint(0,1,10,dtype=float)
         self.ivalues = ak.array([4, 1, 3, 2, 2, 2, 5, 5, 2, 3])
+        self.uvalues = ak.cast(self.ivalues, ak.uint64)
         self.igb = ak.GroupBy(self.ivalues)
+        self.ugb = ak.GroupBy(self.uvalues)
 
     def test_groupby_on_one_level(self):
         '''
@@ -138,8 +141,8 @@ class GroupByTest(ArkoudaTest):
         :raise: AssertionError if there are any errors encountered in run_test with levels = 1
         '''
         self.assertEqual(0, run_test(1, verbose))
-  
-    def test_groupby_one_two_levels(self):
+
+    def test_groupby_on_two_levels(self):
         '''
         Executes run_test with levels=1 and asserts whether there are any errors
         
@@ -147,6 +150,22 @@ class GroupByTest(ArkoudaTest):
         :raise: AssertionError if there are any errors encountered in run_test with levels = 2
         '''
         self.assertEqual(0, run_test(2, verbose))
+
+    def test_boolean_arrays(self):
+        a = ak.array([True, False, True, True, False])
+        true_ct = a.sum()
+        g = ak.GroupBy(a)
+        k, ct = g.count()
+
+        self.assertEqual(ct[1], true_ct)
+        self.assertListEqual(k.to_ndarray().tolist(), [False, True])
+
+        b = ak.array([False, False, True, False, False])
+        g = ak.GroupBy([a, b])
+        k, ct = g.count()
+        self.assertListEqual(ct.to_ndarray().tolist(), [2, 2, 1])
+        self.assertListEqual(k[0].to_ndarray().tolist(), [False, True, True])
+        self.assertListEqual(k[1].to_ndarray().tolist(), [False, False, True])
 
     def test_bitwise_aggregations(self):
         revs = ak.arange(self.igb.size) % 2
@@ -178,8 +197,38 @@ class GroupByTest(ArkoudaTest):
         self.assertTrue((np.array([0,0,0,0,0,1,1,0,1,1]),results.to_ndarray()))     
         
         results = self.igb.broadcast(1*(counts < 4))
-        self.assertTrue((np.array([1,0,0,0,0,1,1,1,1,1]),results.to_ndarray()))  
-        
+        self.assertTrue((np.array([1,0,0,0,0,1,1,1,1,1]),results.to_ndarray()))
+
+    def test_broadcast_uints(self):
+        keys, counts = self.ugb.count()
+        self.assertTrue((np.array([1, 4, 2, 1, 2]) == counts.to_ndarray()).all())
+        self.assertTrue((np.array([1, 2, 3, 4, 5]) == keys.to_ndarray()).all())
+
+        u_results = self.ugb.broadcast(1 * (counts > 2))
+        i_results = self.igb.broadcast(1 * (counts > 2))
+        self.assertTrue((i_results == u_results).all())
+
+        u_results = self.ugb.broadcast(1 * (counts == 2))
+        i_results = self.igb.broadcast(1 * (counts == 2))
+        self.assertTrue((i_results == u_results).all())
+
+        u_results = self.ugb.broadcast(1 * (counts < 4))
+        i_results = self.igb.broadcast(1 * (counts < 4))
+        self.assertTrue((i_results == u_results).all())
+
+        # test uint Groupby.broadcast with and without permute
+        u_results = self.ugb.broadcast(ak.array([1, 2, 6, 8, 9], dtype=ak.uint64), permute=False)
+        i_results = self.igb.broadcast(ak.array([1, 2, 6, 8, 9], dtype=ak.uint64), permute=False)
+        self.assertTrue((i_results == u_results).all())
+        u_results = self.ugb.broadcast(ak.array([1, 2, 6, 8, 9], dtype=ak.uint64))
+        i_results = self.igb.broadcast(ak.array([1, 2, 6, 8, 9], dtype=ak.uint64))
+        self.assertTrue((i_results == u_results).all())
+
+        # test uint broadcast
+        u_results = ak.broadcast(ak.array([0]), ak.array([1], dtype=ak.uint64), 1)
+        i_results = ak.broadcast(ak.array([0]), ak.array([1]), 1)
+        self.assertTrue((i_results == u_results).all())
+
     def test_broadcast_booleans(self):
         keys,counts = self.igb.count()
 
@@ -218,71 +267,45 @@ class GroupByTest(ArkoudaTest):
         d = make_arrays()
         akdf = {k:ak.array(v) for k, v in d.items()}        
         gb = ak.GroupBy([akdf['keys'], akdf['keys2']])
+
+        with self.assertRaises(TypeError) as cm:
+            ak.GroupBy(ak.arange(4), ak.arange(4))
         
         with self.assertRaises(TypeError) as cm:
-            ak.GroupBy(self.bvalues)  
-        self.assertEqual('GroupBy only supports pdarrays with a dtype int64', 
-                         cm.exception.args[0])    
-        
-        with self.assertRaises(TypeError) as cm:
-            ak.GroupBy(self.fvalues)  
-        self.assertEqual('GroupBy only supports pdarrays with a dtype int64', 
-                         cm.exception.args[0])              
+            ak.GroupBy(self.fvalues)
 
         with self.assertRaises(TypeError) as cm:
             gb.broadcast([])
-        self.assertEqual('type of argument "values" must be arkouda.pdarrayclass.pdarray; got list instead', 
-                         cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:
             self.igb.nunique(ak.randint(0,1,10,dtype=bool))
-        self.assertEqual('nunique unsupported for this dtype', 
-                         cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:
             self.igb.nunique(ak.randint(0,1,10,dtype=float64))
-        self.assertEqual('nunique unsupported for this dtype', 
-                         cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:
             self.igb.any(ak.randint(0,1,10,dtype=float64))
-        self.assertEqual('any is only supported for pdarrays of dtype bool', 
-                         cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:
             self.igb.any(ak.randint(0,1,10,dtype=int64))
-        self.assertEqual('any is only supported for pdarrays of dtype bool', 
-                         cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:
             self.igb.all(ak.randint(0,1,10,dtype=float64))
-        self.assertEqual('all is only supported for pdarrays of dtype bool', 
-                         cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:
             self.igb.all(ak.randint(0,1,10,dtype=int64))
-        self.assertEqual('all is only supported for pdarrays of dtype bool', 
-                         cm.exception.args[0])  
-        
+
         with self.assertRaises(TypeError) as cm:
             self.igb.min(ak.randint(0,1,10,dtype=bool))
-        self.assertEqual('min is only supported for pdarrays of dtype float64 and int64', 
-                         cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:
             self.igb.max(ak.randint(0,1,10,dtype=bool))
-        self.assertEqual('max is only supported for pdarrays of dtype float64 and int64', 
-                         cm.exception.args[0])  
         
         with self.assertRaises(TypeError) as cm:
             self.igb.argmin(ak.randint(0,1,10,dtype=bool))
-        self.assertEqual('argmin is only supported for pdarrays of dtype float64 and int64', 
-                         cm.exception.args[0])  
 
         with self.assertRaises(TypeError) as cm:
             self.igb.argmax(ak.randint(0,1,10,dtype=bool))
-        self.assertEqual('argmax is only supported for pdarrays of dtype float64 and int64', 
-                         cm.exception.args[0])
 
     def test_aggregate_strings(self):
         s = ak.array(['a', 'b', 'a', 'b', 'c'])
@@ -339,6 +362,30 @@ class GroupByTest(ArkoudaTest):
         keys = [ak.randint(0, 10, 100), ak.randint(0, 10, 100)]
         g = ak.GroupBy(keys)
         g.min(ak.randint(0, 10, 100))
+
+    def test_uint64_aggregate(self):
+        # reproducer for Issue #1129
+        u = ak.cast(ak.arange(100), ak.uint64)
+        i = ak.arange(100)
+        gu = ak.GroupBy(u)
+        gi = ak.GroupBy(i)
+        u_keys, u_group_sums = gu.sum(u)
+        i_keys, i_group_sums = gi.sum(i)
+
+        self.assertListEqual(u_keys.to_ndarray().tolist(), i_keys.to_ndarray().tolist())
+        self.assertListEqual(u_group_sums.to_ndarray().tolist(), i_group_sums.to_ndarray().tolist())
+
+        # verify the multidim unsigned version doesnt break
+        multi_gu = ak.GroupBy([u, u])
+
+        u_data = ak.array(np.array([3, 4, 3, 1, 1, 4, 3, 4, 1, 4], dtype=np.uint64))
+        i_data = ak.array([3, 4, 3, 1, 1, 4, 3, 4, 1, 4])
+        labels = ak.array([1, 1, 1, 2, 2, 2, 3, 3, 3, 4])
+        g = ak.GroupBy(labels)
+        u_unique_keys, u_group_nunique = g.nunique(u_data)
+        i_unique_keys, i_group_nunique = g.nunique(i_data)
+        self.assertListEqual(u_unique_keys.to_ndarray().tolist(), i_unique_keys.to_ndarray().tolist())
+        self.assertListEqual(u_group_nunique.to_ndarray().tolist(), i_group_nunique.to_ndarray().tolist())
 
     def test_zero_length_groupby(self):
         """

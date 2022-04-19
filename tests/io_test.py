@@ -167,7 +167,7 @@ class IOTest(ArkoudaTest):
     def testLsHdf(self):
         '''
         Creates 1..n files depending upon the number of arkouda_server locales, invokes the 
-        ls_hdf method on an explicit file name reads the files and confirms the expected 
+        ls method on an explicit file name reads the files and confirms the expected 
         message was returned.
 
         :return: None
@@ -175,24 +175,23 @@ class IOTest(ArkoudaTest):
         '''
         self._create_file(columns=self.dict_single_column, 
                           prefix_path='{}/iotest_single_column'.format(IOTest.io_test_dir))
-        message = ak.ls_hdf('{}/iotest_single_column_LOCALE0000'.format(IOTest.io_test_dir))
+        message = ak.ls('{}/iotest_single_column_LOCALE0000'.format(IOTest.io_test_dir))
         self.assertIn('int_tens_pdarray', message)
         
 
         with self.assertRaises(RuntimeError) as cm:        
-            ak.ls_hdf('{}/not-a-file_LOCALE0000'.format(IOTest.io_test_dir))
-        self.assertIn('is not an HDF5 file', cm.exception.args[0])
+            ak.ls('{}/not-a-file_LOCALE0000'.format(IOTest.io_test_dir))
 
     def testLsHdfEmpty(self):
         # Test filename empty/whitespace-only condition
         with self.assertRaises(ValueError):
-            ak.ls_hdf("")
+            ak.ls("")
         
         with self.assertRaises(ValueError):
-            ak.ls_hdf("   ")
+            ak.ls("   ")
         
         with self.assertRaises(ValueError):
-            ak.ls_hdf(" \n\r\t  ")
+            ak.ls(" \n\r\t  ")
 
     def testReadHdf(self):
         ''' DEPRECATED - all client calls route to `readAllHdf`
@@ -217,15 +216,12 @@ class IOTest(ArkoudaTest):
         with self.assertRaises(RuntimeError) as cm:
             ak.read_hdf(dsetName='in_tens_pdarray', 
                     filenames=['{}/iotest_single_column_LOCALE0000'.format(IOTest.io_test_dir),
-                               '{}/iotest_single_column_dupe_LOCALE0000'.format(IOTest.io_test_dir)])       
-        self.assertTrue('Dataset in_tens_pdarray not found in file' in  
-                         cm.exception.args[0])
+                               '{}/iotest_single_column_dupe_LOCALE0000'.format(IOTest.io_test_dir)])
         
         with self.assertRaises(RuntimeError) as cm:
             ak.read_hdf(dsetName='int_tens_pdarray', 
                     filenames=['{}/iotest_single_colum_LOCALE0000'.format(IOTest.io_test_dir),
-                               '{}/iotest_single_colum_dupe_LOCALE0000'.format(IOTest.io_test_dir)])       
-        self.assertTrue('iotest_single_colum_LOCALE0000 not found' in  cm.exception.args[0])
+                               '{}/iotest_single_colum_dupe_LOCALE0000'.format(IOTest.io_test_dir)])
 
     def testReadHdfWithGlob(self):
         ''' DEPRECATED - all client calls route to `readAllHdf`
@@ -356,15 +352,12 @@ class IOTest(ArkoudaTest):
         # Test load with invalid prefix
         with self.assertRaises(RuntimeError) as cm:
             ak.load(path_prefix='{}/iotest_dict_column'.format(IOTest.io_test_dir), 
-                                    dataset='int_tens_pdarray')  
-        self.assertIn('either corresponds to files inaccessible to Arkouda or files of an invalid format', cm.exception.args[0].args[0])
+                                    dataset='int_tens_pdarray')
 
         # Test load with invalid file
         with self.assertRaises(RuntimeError) as cm:
             ak.load(path_prefix='{}/not-a-file'.format(IOTest.io_test_dir), 
-                                    dataset='int_tens_pdarray') 
-        cm.exception.args[0]
-        self.assertIn('is not an HDF5 file', cm.exception.args[0].args[0])
+                                    dataset='int_tens_pdarray')
         
     def testLoadAll(self):   
         self._create_file(columns=self.dict_columns, 
@@ -382,8 +375,7 @@ class IOTest(ArkoudaTest):
             
         # Test load with invalid file
         with self.assertRaises(RuntimeError) as cm:
-            ak.load_all(path_prefix='{}/not-a-file'.format(IOTest.io_test_dir)) 
-        self.assertIn('Could not open on or more files with the file prefix', cm.exception.args[0])      
+            ak.load_all(path_prefix='{}/not-a-file'.format(IOTest.io_test_dir))
     
     def testGetDataSets(self):
         '''
@@ -404,7 +396,6 @@ class IOTest(ArkoudaTest):
         # Test load_all with invalid filename
         with self.assertRaises(RuntimeError) as cm:            
             ak.get_datasets('{}/iotest_dict_columns_LOCALE000'.format(IOTest.io_test_dir))
-        self.assertIn('does not exist in a location accessible to Arkouda', cm.exception.args[0])
 
     def testSaveStringsDataset(self):
         # Create, save, and load Strings dataset
@@ -579,16 +570,45 @@ class IOTest(ArkoudaTest):
             a2 = ak.load(f"{tmp_dirname}/small_numeric", dataset="a1")
             self.assertEqual(str(a1), str(a2))
 
-    # This currently breaks on 4 or greater locales.  Since it is such a rare corner case
-    # we are going to remove it for now.
-    @pytest.mark.skip(reason="Breaks nightly testing and this is an extremely rare corner case.")
+    # This tests small array corner cases on multi-locale environments
     def testSmallStringArrayToHDF5(self):
         a1 = ak.array(["ab", "cd"])
         with tempfile.TemporaryDirectory(dir=IOTest.io_test_dir) as tmp_dirname:
-            a1.save(f"{tmp_dirname}/small_numeric", dataset="a1")
+            a1.save(f"{tmp_dirname}/small_string_array", dataset="a1")
             # Now load it back in
-            a2 = ak.load(f"{tmp_dirname}/small_numeric", dataset="a1")
+            a2 = ak.load(f"{tmp_dirname}/small_string_array", dataset="a1")
             self.assertEqual(str(a1), str(a2))
+
+        # Test a single string
+        b1 = ak.array(["123456789"])
+        with tempfile.TemporaryDirectory(dir=IOTest.io_test_dir) as tmp_dirname:
+            b1.save(f"{tmp_dirname}/single_string", dataset="b1")
+            # Now load it back in
+            b2 = ak.load(f"{tmp_dirname}/single_string", dataset="b1")
+            self.assertEqual(str(b1), str(b2))
+
+    def testUint64ToFromHDF5(self):
+        """
+        Test our ability to read/write uint64 to HDF5
+        """
+        npa1 = np.array([18446744073709551500, 18446744073709551501, 18446744073709551502], dtype=np.uint64)
+        pda1 = ak.array(npa1)
+        with tempfile.TemporaryDirectory(dir=IOTest.io_test_dir) as tmp_dirname:
+            pda1.save(f"{tmp_dirname}/small_numeric", dataset="pda1")
+            # Now load it back in
+            pda2 = ak.load(f"{tmp_dirname}/small_numeric", dataset="pda1")
+            self.assertEqual(str(pda1), str(pda2))
+            self.assertEqual(18446744073709551500, pda2[0])
+            self.assertTrue((pda2.to_ndarray() == npa1).all())
+
+    def testUint64ToFromArray(self):
+        """
+        Test conversion to and from numpy array / pdarray using unsigned 64bit integer (uint64)
+        """
+        npa1 = np.array([18446744073709551500, 18446744073709551501, 18446744073709551502], dtype=np.uint64)
+        pda1 = ak.array(npa1)
+        self.assertEqual(18446744073709551500, pda1[0])
+        self.assertTrue((pda1.to_ndarray() == npa1).all())
 
     def testHdfUnsanitizedNames(self):
         # Test when quotes are part of the dataset name

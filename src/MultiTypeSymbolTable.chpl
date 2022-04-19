@@ -1,6 +1,7 @@
 module MultiTypeSymbolTable
 {
     use ServerConfig;
+    use Security;
     use ServerErrorStrings;
     use Reflection;
     use ServerErrors;
@@ -26,13 +27,15 @@ module MultiTypeSymbolTable
         */
         var tab: map(string, shared AbstractSymEntry);
 
+        var serverid = "id_" + generateToken(8) + "_";
         var nid = 0;
+
         /*
         Gives out symbol names.
         */
         proc nextName():string {
             nid += 1;
-            return "id_"+ nid:string;
+            return serverid + nid:string;
         }
 
         proc regName(name: string, userDefinedName: string) throws {
@@ -161,6 +164,7 @@ module MultiTypeSymbolTable
         proc addEntry(name: string, len: int, dtype: DType): borrowed AbstractSymEntry throws {
             select dtype {
                 when DType.Int64 { return addEntry(name, len, int); }
+                when DType.UInt64 { return addEntry(name, len, uint); }
                 when DType.Float64 { return addEntry(name, len, real); }
                 when DType.Bool { return addEntry(name, len, bool); }
                 otherwise { 
