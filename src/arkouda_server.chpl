@@ -547,7 +547,8 @@ proc main() {
                     "<<< %s resulted in error: %s in %.17r sec".format(cmd, e.message(),
                                                                                  t1.elapsed() - s0));
             }
-        }
+         }
+      }
     }
 
     t1.stop();
@@ -557,7 +558,6 @@ proc main() {
     on Locales[here.id] { 
         deregisterFromExternalSystem();
     }
-  }
     asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
                "requests = %i responseCount = %i elapsed sec = %i".format(reqCount,repCount,
                                                                                  t1.elapsed()));
