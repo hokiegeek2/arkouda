@@ -337,7 +337,7 @@ proc main() {
         try! socket.bind("tcp://*:%t".format(port));
         asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
             "Metrics Server initialized and listening in port %i".format(port));
-        while true {
+        while !shutdownServer {
             asLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
                                    "awaiting message on port %i".format(port));
             var req = socket.recv(bytes).decode();
@@ -395,6 +395,7 @@ proc main() {
         var (rawRequest, _) = reqMsgRaw.splitMsgToTuple(b"BINARY_PAYLOAD",2);
         var payload = if reqMsgRaw.endsWith(b"BINARY_PAYLOAD") then socket.recv(bytes) else b"";
         var user, token, cmd: string;
+        var responseTime: real;
 
         // parse requests, execute requests, format responses
         try {
@@ -422,6 +423,10 @@ proc main() {
             cmd    = msg.cmd;
             var format = msg.format;
             var args   = msg.args;
+
+            if collectMetrics {
+                requestMetrics.increment(cmd);
+            }
 
             /*
              * If authentication is enabled with the --authenticate flag, authenticate
@@ -510,6 +515,12 @@ proc main() {
             if !repTuple.msg.isEmpty() {
                 sendRepMsg(serialize(msg=repTuple.msg,msgType=repTuple.msgType,
                                                               msgFormat=MsgFormat.STRING, user=user));
+            }
+
+            responseTime = t1.elapsed() - s0;
+
+            if collectMetrics {
+                responseTimeMetrics.set(cmd,responseTime);
             }
 
             /*
