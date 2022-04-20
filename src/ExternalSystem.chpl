@@ -434,15 +434,14 @@ module ExternalSystem {
      * service endpoint that enables access to Arkouda deployed within or outside of 
      * Kubernetes from applications deployed within Kubernetes
      */
-    proc deregisterFromKubernetes() throws {
-        proc generateServiceDeleteUrl() : string throws {
+    proc deregisterFromKubernetes(serviceName: string) throws {
+        proc generateServiceDeleteUrl(serviceName: string) throws {
             var k8sHost = ServerConfig.getEnv('K8S_HOST');
-            var namespace = ServerConfig.getEnv(name='NAMESPACE',default='default');
-            var name = ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
-            return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,name);
+            var namespace = ServerConfig.getEnv('NAMESPACE');   
+            return '%s/api/v1/namespaces/%s/services/%s'.format(k8sHost,namespace,serviceName);
         }
         
-        var url = generateServiceDeleteUrl();
+        var url = generateServiceDeleteUrl(serviceName);
         var channel = getExternalChannel(new HttpChannelParams(
                                          channelType=ChannelType.HTTP,
                                          url=url,
@@ -456,6 +455,7 @@ module ExternalSystem {
                                          sslKeyPasswd=ServerConfig.getEnv('KEY_PASSWD')));
         channel.write('{}');
         esLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                     "Deregistered service from Kubernetes via url %s".format(url));
+                     "Deregistered service %s from Kubernetes via url %s".format(serviceName, 
+                                                                                 url));
     }
 }

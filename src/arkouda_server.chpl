@@ -272,21 +272,21 @@ proc main() {
     
     /*
      * Deregisters Arkouda from an external system upon recepit of shutdown command
-     */    
-    proc deregisterFromExternalSystem() throws {
+     */
+    proc deregisterFromExternalSystem(serviceName: string) throws {
         select externalSystem {
-            when SystemType.KUBERNETES {     
-                deregisterFromKubernetes();
+            when SystemType.KUBERNETES {
+                deregisterFromKubernetes(serviceName);
                 asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                        "Deregistered Arkouda from Kubernetes");
+                        "Deregistered service %s from Kubernetes".format(serviceName));
             }
             otherwise {
                 asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                        "Did not deregister Arkouda from any external system");            
+                        "Did not deregister Arkouda from any external system");
             }
-        }    
+        }
     }
-    
+ 
     if externalSystem != SystemType.NONE {
         on Locales[0] {
             var appName: string;
@@ -297,19 +297,19 @@ proc main() {
                 appName = 'arkouda-server';
             }
 
-            var params: (string,int,int) = getKubernetesServiceParameters(ServiceType.EXTERNAL);
+            var params: (string,int,int) = getKubernetesRegistrationParameters(ServiceType.EXTERNAL);
 
-            registerWithExternalSystem(appName, params(0), params(1), 
-                                        params(2));
+            registerWithExternalSystem(appName, params(0), params(1), params(2));
+
             if collectMetrics {
-                var params: (string,int,int) = getKubernetesServiceParameters(ServiceType.METRICS);
+                var params: (string,int,int) = getKubernetesRegistrationParameters(ServiceType.METRICS);
                 registerWithExternalSystem(appName, params(0), params(1),
                                         params(2));
             }
         }
     }
 
-    proc getKubernetesServiceParameters(serviceType: ServiceType) {
+    proc getKubernetesRegistrationParameters(serviceType: ServiceType) {
         var serviceName: string;
         var servicePort: int;
         var targetServicePort: int;
@@ -328,6 +328,13 @@ proc main() {
         return (serviceName,servicePort,targetServicePort);
     } 
 
+    proc getKubernetesDeregisterParameters(serviceType: ServiceType) {
+        if serviceType == ServiceType.METRICS {
+            return ServerConfig.getEnv('METRICS_SERVICE_NAME');
+        } else {
+            return ServerConfig.getEnv('EXTERNAL_SERVICE_NAME');
+        }
+    }
     
     proc runMetricsServer() throws {
         var context: ZMQ.Context;
@@ -566,9 +573,17 @@ proc main() {
 
     deleteServerConnectionInfo();
     
-    on Locales[here.id] { 
-        deregisterFromExternalSystem();
+    on Locales[here.id] {
+        var serviceName = getKubernetesDeregisterParameters(ServiceType.EXTERNAL); 
+
+        deregisterFromExternalSystem(serviceName);
+
+        if collectMetrics {
+            serviceName = getKubernetesDeregisterParameters(ServiceType.METRICS);
+            deregisterFromExternalSystem(serviceName);
+        }
     }
+
     asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
                "requests = %i responseCount = %i elapsed sec = %i".format(reqCount,repCount,
                                                                                  t1.elapsed()));
