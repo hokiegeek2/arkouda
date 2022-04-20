@@ -10,7 +10,7 @@ ADD ServerModules.cfg /opt/arkouda
 WORKDIR /opt/arkouda
 
 RUN python3 -m pip install --upgrade pip
-RUN python3 -m pip install -e .
+RUN python3 -m pip install -e .[dev]
 
 ENV SSH_SERVERS=0.0.0.0
 ENV GASNET_MASTERIP=0.0.0.0
