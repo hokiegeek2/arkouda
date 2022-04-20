@@ -13,7 +13,7 @@ module MetricsMsg {
     use DateTime;
 
     enum MetricCategory{ALL,NUM_REQUESTS,RESPONSE_TIME,SYSTEM,SERVER,SERVER_INFO};
-    enum MetricScope{GLOBAL,LOCALE};
+    enum MetricScope{GLOBAL,LOCALE,REQUEST,USER};
 
     private config const logLevel = ServerConfig.logLevel;
     const mLogger = new Logger(logLevel);
@@ -221,7 +221,28 @@ module MetricsMsg {
             this.value = value;
         }
     }
-    
+   
+    class UserMetric : Metric {
+
+        var user: string;
+
+        proc init(name: string, category: MetricCategory,
+                                scope: MetricScope=MetricScope.USER,
+                                timestamp: datetime=datetime.now(),
+                                value: real,
+                                user: string) {
+
+            super.init(name=name,
+                       category = category,
+                       scope = scope,
+                       timestamp = timestamp,
+                       value = value);
+            this.user = user;
+        }
+
+    }
+
+ 
     class LocaleInfo {
         var name: string;
         var id: string;
@@ -300,5 +321,10 @@ module MetricsMsg {
         mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                             'metrics %s'.format(metrics));
         return new MsgTuple(metrics, MsgType.NORMAL);        
+    }
+
+    proc registerMe() {
+      use CommandMap;
+      registerFunction("metrics", metricsMsg, getModuleName());
     }
 }
