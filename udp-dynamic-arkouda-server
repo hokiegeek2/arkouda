@@ -6,6 +6,7 @@ ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 ADD arkouda.tar.gz /opt/
 RUN mv /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
 RUN sudo chown -R ubuntu:ubuntu /opt/arkouda
+ADD ServerModules.cfg /opt/arkouda
 WORKDIR /opt/arkouda
 
 RUN python3 -m pip install --upgrade pip
