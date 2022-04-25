@@ -137,8 +137,9 @@ setup(
         'typeguard==2.10.0',
         'tabulate',
         'pyfiglet',
-        'kubernetes',
         'versioneer',
+        'matplotlib',
+        'kubernetes',
         'python-dateutil',
         'prometheus_client'
     ],

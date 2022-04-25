@@ -146,6 +146,9 @@ proc main() {
         registerFunction("getmemused", getmemusedMsg);
         registerFunction("getCmdMap", getCommandMapMsg);
         registerFunction("clear", clearMsg);
+        registerFunction("lsany", lsAnyMsg);
+        registerFunction("readany", readAnyMsg);
+        registerFunction("getfiletype", getFileTypeMsg);
 
         // For a few specialized cmds we're going to add dummy functions, so they
         // get added to the client listing of available commands. They will be
@@ -247,9 +250,26 @@ proc main() {
         shutdownServer = true;
         repCount += 1;
 
-        // Replace this section w/ a dispatch table
         socket.send(serialize(msg="shutdown server (%i req)".format(repCount), 
-                         msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));         
+                         msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));     
+
+	    deleteServerConnectionInfo();
+	    
+	    on Locales[here.id] {
+	        var serviceName = getKubernetesDeregisterParameters(ServiceType.EXTERNAL); 
+	
+	        deregisterFromExternalSystem(serviceName);
+	
+	        if collectMetrics {
+	            serviceName = getKubernetesDeregisterParameters(ServiceType.METRICS);
+	            deregisterFromExternalSystem(serviceName);
+	        }
+	    }
+	
+	    asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
+	               "requests = %i responseCount = %i elapsed sec = %i".format(reqCount,repCount,
+	                                                                                 t1.elapsed())); 
+	    exit(0);                          
     }
 
     /*
@@ -466,7 +486,6 @@ proc main() {
                                          "<<< shutdown initiated by %s took %.17r sec".format(user, 
                                                    t1.elapsed() - s0));
                 }
-                break;
             }
 
             /*
