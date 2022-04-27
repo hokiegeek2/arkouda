@@ -17,12 +17,82 @@ module MetricsMsg {
 
     private config const logLevel = ServerConfig.logLevel;
     const mLogger = new Logger(logLevel);
+
+    var metricScope = ServerConfig.getEnv(name='METRIC_SCOPE',default='MetricScope.REQUEST');
     
     var serverMetrics = new CounterTable();
     
     var requestMetrics = new CounterTable();
     
     var responseTimeMetrics = new MeasurementTable();
+
+    var users = new Users();
+    
+    var userMetrics = new UserMetrics();
+
+    record User {
+        var name: string;
+    }
+
+    class Users {
+        var users = new map(string,User);
+
+        proc getUser(name: string) {
+            if !this.users.contains(name) {
+                var user = new User(name);
+                users.add(name,user);
+                return user;
+            } else {
+                return users.getValue(name);
+            }
+        }
+    }
+
+    class UserMetrics {
+        var metrics = new map(keyType=User,valType=shared CounterTable);
+        var users = new Users();
+
+        proc getUserMetrics(user: User) {
+            if this.metrics.contains(user: User) {
+                return this.metrics.getValue(user);
+            } else {
+                var userMetrics = new shared CounterTable();
+                this.metrics.add(user, userMetrics);
+                return userMetrics;
+            }
+        }
+
+        proc incrementRequestMetric(userName: string, metricName: string, increment: int=1) {
+            var counterTable = this.getUserMetrics(this.getUser(userName));
+            counterTable.increment(metricName,increment);
+        }
+        
+        proc getNumRequestsPerCommandUserMetrics(userName: string) {
+            var userMetrics = this.getUserMetrics(this.users.getUser(userName));
+            var metrics = new list(owned UserMetric?);
+            for (metric, value) in userMetrics {
+                metrics.insert(UserMetric(name=metric,
+                                          scope=MetricScope.REQUEST,
+                                          value=value,
+                                          user=userName));
+            }
+            return metrics;
+        }
+
+        proc getNumRequestsPerCommandForAllUsersMetrics() {
+            var metrics = new list(owned UserMetric?);
+            for userName in this.users.keys() {
+                metrics.extend(this.getUserNumRequestsPerCommandMetrics(userName));
+            }
+
+            return metrics;
+        }
+
+        proc incrementNumRequestsPerCommand(userName: string, cmd: string) {
+            var userMetrics : borrowed CounterTable = this.getUserMetrics(this.users.getUser(userName));
+            userMetrics.increment(cmd);
+        }        
+    } 
 
     class MeasurementTable {
         var measurements = new map(string, real);
@@ -115,7 +185,11 @@ module MetricsMsg {
 
         return metrics.toArray();
     }
-    
+   
+    proc getUserRequestMetrics(userName: string) throws {
+        return userMetrics.getUserRequestMetrics(userName);
+    }
+ 
     proc getServerMetrics() throws {
         var metrics: list(owned Metric?);
          
@@ -141,6 +215,22 @@ module MetricsMsg {
                                   value=requestMetrics.total()));
         return metrics;
     }
+
+    proc getNumRequestMetricsPerUser(userName: string) throws {
+        var metrics = new list(owned Metric?);
+
+        for item in userMetrics.items() {
+            metrics.append(new Metric(name=item[0],
+                                      category=MetricCategory.NUM_REQUESTS,
+                                      value=item[1]));
+        }
+
+        metrics.append(new Metric(name='total',
+                                  category=MetricCategory.NUM_REQUESTS,
+                                  value=requestMetrics.total()));
+        return metrics;
+    }
+
 
     proc getResponseTimeMetrics() throws {
         var metrics = new list(owned Metric?);
@@ -242,7 +332,6 @@ module MetricsMsg {
 
     }
 
- 
     class LocaleInfo {
         var name: string;
         var id: string;
