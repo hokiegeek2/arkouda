@@ -1,5 +1,5 @@
 from __future__ import annotations
-from typing import cast, List, Sequence
+from typing import cast, List, Sequence, Tuple
 from typeguard import typechecked
 import json
 import numpy as np # type: ignore
@@ -481,7 +481,7 @@ class pdarray:
             (start,stop,stride) = key.indices(self.size)
             logger.debug('start: {} stop: {} stride: {}'.format(start,stop,stride))
             repMsg = generic_msg(cmd="[slice]", args="{} {} {} {}".format(self.name, start, stop, stride))
-            return create_pdarray(repMsg);
+            return create_pdarray(repMsg)
         if isinstance(key, pdarray):
             kind, _ = translate_np_dtype(key.dtype)
             if kind not in ("bool", "int", "uint"):
@@ -877,7 +877,34 @@ class pdarray:
         from arkouda.numeric import cast as akcast
 
         return akcast(self, dtype)
-    
+
+    def reshape(self, *shape, order='row_major'):
+        """
+        Gives a new shape to an array without changing its data.
+
+        Parameters
+        ----------
+        shape : int, tuple of ints, or pdarray
+            The new shape should be compatible with the original shape.
+        order : str {'row_major' | 'C' | 'column_major' | 'F'}
+            Read the elements of the pdarray in this index order
+            By default, read the elements in row_major or C-like order where the last index changes the fastest
+            If 'column_major' or 'F', read the elements in column_major or Fortran-like order where the first index changes the fastest
+
+        Returns
+        -------
+        ArrayView
+            An arrayview object with the data from the array but with the new shape
+        """
+        from arkouda.array_view import ArrayView
+        # allows the elements of the shape parameter to be passed in as separate arguments
+        # For example, a.reshape(10, 11) is equivalent to a.reshape((10, 11))
+        if len(shape) == 1:
+            shape = shape[0]
+        elif not isinstance(shape, pdarray):
+            shape = [i for i in shape]
+        return ArrayView(base=self, shape=shape, order=order)
+
     def to_ndarray(self) -> np.ndarray:
         """
         Convert the array to a np.ndarray, transferring array data from the
@@ -2151,20 +2178,20 @@ def rotl(x, rot) -> pdarray:
 
     Parameters
     ----------
-    x : pdarray(int64) or integer
+    x : pdarray(int64/uint64) or integer
         Value(s) to rotate left.
-    rot : pdarray(int64) or integer
+    rot : pdarray(int64/uint64) or integer
         Amount(s) to rotate by.
 
     Returns
     -------
-    rotated : pdarray(int64)
+    rotated : pdarray(int64/uint64)
         The rotated elements of x.
 
     Raises
     ------
     TypeError
-        If input array is not int64
+        If input array is not int64 or uint64
     
     Examples
     --------
@@ -2172,12 +2199,12 @@ def rotl(x, rot) -> pdarray:
     >>> ak.rotl(A, A)
     array([0, 2, 8, 24, 64, 160, 384, 896, 2048, 4608])
     """
-    if isinstance(x, pdarray) and x.dtype == akint64:
-        if (isinstance(rot, pdarray) and rot.dtype == akint64) or isSupportedInt(rot):
+    if isinstance(x, pdarray) and (x.dtype == akint64 or x.dtype == akuint64):
+        if (isinstance(rot, pdarray) and (rot.dtype == akint64 or rot.dtype == akuint64)) or isSupportedInt(rot):
             return x._binop(rot, "<<<")
         else:
             raise TypeError("Rotations only supported on integers")
-    elif isSupportedInt(x) and isinstance(rot, pdarray) and rot.dtype == akint64:
+    elif isSupportedInt(x) and isinstance(rot, pdarray) and (rot.dtype == akint64 or rot.dtype == akuint64):
         return rot._r_binop(x, "<<<")
     else:
         raise TypeError("Rotations only supported on integers")
@@ -2188,20 +2215,20 @@ def rotr(x, rot) -> pdarray:
 
     Parameters
     ----------
-    x : pdarray(int64) or integer
+    x : pdarray(int64/uint64) or integer
         Value(s) to rotate left.
-    rot : pdarray(int64) or integer
+    rot : pdarray(int64/uint64) or integer
         Amount(s) to rotate by.
 
     Returns
     -------
-    rotated : pdarray(int64)
+    rotated : pdarray(int64/uint64)
         The rotated elements of x.
 
     Raises
     ------
     TypeError
-        If input array is not int64
+        If input array is not int64 or uint64
     
     Examples
     --------
@@ -2209,12 +2236,12 @@ def rotr(x, rot) -> pdarray:
     >>> ak.rotr(1024 * A, A)
     array([0, 512, 512, 384, 256, 160, 96, 56, 32, 18])
     """
-    if isinstance(x, pdarray) and x.dtype == akint64:
-        if (isinstance(rot, pdarray) and rot.dtype == akint64) or isSupportedInt(rot):
+    if isinstance(x, pdarray) and (x.dtype == akint64 or x.dtype == akuint64):
+        if (isinstance(rot, pdarray) and (rot.dtype == akint64 or rot.dtype == akuint64)) or isSupportedInt(rot):
             return x._binop(rot, ">>>")
         else:
             raise TypeError("Rotations only supported on integers")
-    elif isSupportedInt(x) and isinstance(rot, pdarray) and rot.dtype == akint64:
+    elif isSupportedInt(x) and isinstance(rot, pdarray) and (rot.dtype == akint64 or rot.dtype == akuint64):
         return rot._r_binop(x, ">>>")
     else:
         raise TypeError("Rotations only supported on integers")
