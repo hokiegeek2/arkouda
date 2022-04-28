@@ -4,6 +4,37 @@ The arkouda-metrics-exporter-chart is installed as follows:
 helm install arkouda-metrics-exporter arkouda-metrics-exporter-chart/
 ```
 
+# Prometheus SLurm Exporter Kubernetes External Service
+
+```
+---
+kind: "Service"
+apiVersion: "v1"
+metadata:
+  name: "prometheus-slurm-exporter"
+spec:
+  ports:
+    -
+      protocol: "TCP"
+      port: 9090
+      targetPort: 9090
+---
+
+kind: "Endpoints"
+apiVersion: "v1"
+metadata:
+  name: "prometheus-slurm-exporter"
+subsets:
+  -
+    addresses:
+      -
+        ip: "ace"
+    ports:
+      -
+        port: 9090
+        targetPort: 9090
+```
+
 # Prometheus Scrape Targets
 
 ```
