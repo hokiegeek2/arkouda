@@ -46,6 +46,14 @@ module MetricsMsg {
                 return users.getValue(name);
             }
         }
+
+        proc getUserNames() {
+            return this.users.keys();
+        }
+
+        proc getUsers() {
+            return this.users.values();
+        }
     }
 
     class UserMetrics {
@@ -67,22 +75,23 @@ module MetricsMsg {
             counterTable.increment(metricName,increment);
         }
         
-        proc getNumRequestsPerCommandUserMetrics(userName: string) {
+        proc getPerUserNumRequestsPerCommandMetrics(userName: string) {
             var userMetrics = this.getUserMetrics(this.users.getUser(userName));
             var metrics = new list(owned UserMetric?);
-            for (metric, value) in userMetrics {
-                metrics.insert(UserMetric(name=metric,
-                                          scope=MetricScope.REQUEST,
-                                          value=value,
-                                          user=userName));
+            for (metric, value) in userMetrics.items() {
+                metrics.append(new UserMetric(name=metric,
+                                                     scope=MetricScope.USER,
+                                                     category=MetricCategory.NUM_REQUESTS,
+                                                     value=value,
+                                                     user=userName));
             }
             return metrics;
         }
 
-        proc getNumRequestsPerCommandForAllUsersMetrics() {
+        proc getPerUserNumRequestsPerCommandForAllUsersMetrics() {
             var metrics = new list(owned UserMetric?);
-            for userName in this.users.keys() {
-                metrics.extend(this.getUserNumRequestsPerCommandMetrics(userName));
+            for userName in this.users.getUserNames() {
+                metrics.extend(this.getPerUserNumRequestsPerCommandMetrics(userName));
             }
 
             return metrics;
@@ -183,11 +192,19 @@ module MetricsMsg {
         metrics.extend(getSystemMetrics());
         metrics.extend(getServerMetrics());
 
+        for userMetric in getAllUserRequestMetrics() {
+            metrics.append(userMetric: owned Metric);
+        }
+
         return metrics.toArray();
     }
    
     proc getUserRequestMetrics(userName: string) throws {
         return userMetrics.getUserRequestMetrics(userName);
+    }
+
+    proc getAllUserRequestMetrics() throws {
+        return userMetrics.getPerUserNumRequestsPerCommandForAllUsersMetrics();
     }
  
     proc getServerMetrics() throws {
@@ -216,7 +233,7 @@ module MetricsMsg {
         return metrics;
     }
 
-    proc getNumRequestMetricsPerUser(userName: string) throws {
+    proc getPerUserNumRequestMetrics() throws {
         var metrics = new list(owned Metric?);
 
         for item in userMetrics.items() {

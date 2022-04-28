@@ -5,7 +5,7 @@ import numpy as np # type: ignore
 from datetime import datetime
 from dateutil import parser # type: ignore
 from dataclasses import dataclass
-from prometheus_client import start_http_server, Counter, Gauge, Info # type: ignore
+from prometheus_client import start_http_server,mGauge, Info # type: ignore
 import arkouda as ak
 from arkouda import client, logger
 from arkouda.logger import LogLevel
@@ -23,6 +23,7 @@ class MetricCategory(Enum):
     SERVER = 'SERVER'
     SERVER_INFO = 'SERVER_INFO'
     SYSTEM = 'SYSTEM'
+    PER_USER_NUM_REQUESTS = 'PER_USER_NUM_REQUESTS'
 
     def __str__(self) -> str:
         """
@@ -41,6 +42,8 @@ class MetricCategory(Enum):
 class MetricScope(Enum):
     GLOBAL = 'GLOBAL'
     LOCALE = 'LOCALE'
+    REQUEST = 'REQUEST'
+    USER = 'USER'
 
     def __str__(self) -> str:
         """
@@ -158,15 +161,15 @@ class ArkoudaMetrics:
                  'numberOfRequestsPerCommand','numberOfConnections', '_updateMetric', 
                  'responseTimesPerCommand', 'memoryUsedPerLocale', 'pctMemoryUsedPerLocale',
                  'systemMemoryPerLocale', 'systemProcessingUnitsPerLocale', 'reportedTimestamp',
-                 'arkoudaServerInfo')
+                 'arkoudaServerInfo','perUserTotalNumberOfRequests','perUserNumberOfRequestsPerCommand')
     
     arkoudaMetricsHost: str
     arkoudaMetricsPort: int
     serverName: str
     exportPort: int
     pollingInterval: int 
-    totalNumberOfRequests: Counter 
-    numberOfRequestsPerCommand: Counter 
+    totalNumberOfRequests: Gauge 
+    numberOfRequestsPerCommand: Gauge 
     numberOfConnections: Gauge
     responseTimesPerCommand: Gauge
     memoryUsedPerLocale: Gauge
@@ -175,6 +178,8 @@ class ArkoudaMetrics:
     systemProcessingUnitsPerLocale: Gauge
     reportedTimestamp: Gauge
     arkoudaServerInfo: Info
+    perUserTotalNumberOfRequests: Gauge
+    perUserNumberOfRequestsPerCommand: Gauge
 
     def __init__(self, arkoudaMetricsHost : str, arkoudaMetricsPort : int, exportPort : int=5080, 
                  serverName : str='arkouda-metrics', pollingInterval : int=5) -> None:
@@ -225,6 +230,15 @@ class ArkoudaMetrics:
                                                       'locale_num', 
                                                       'locale_hostname',
                                                       'arkouda_server_name'])
+        self.perUserTotalNumberOfRequests = Gauge('arkouda_per_user_total_number_of_requests',
+                                                  'Total number of Arkouda requests',
+                                            labelnames=['arkouda_server_name',
+                                                       'user'])
+        self.perUserNumberOfRequestsPerCommand = Gauge('arkouda_per_user_number_of_requests_per_command',
+                                                  'Total number of Arkouda requests per command',
+                                            labelnames=['command',
+                                                        'arkouda_server_name',
+                                                        'user'])
 
         self._updateMetric = {
             MetricCategory.NUM_REQUESTS: lambda x: self._updateNumberOfRequests(x),
