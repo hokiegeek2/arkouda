@@ -5,7 +5,7 @@ import numpy as np # type: ignore
 from datetime import datetime
 from dateutil import parser # type: ignore
 from dataclasses import dataclass
-from prometheus_client import start_http_server,mGauge, Info # type: ignore
+from prometheus_client import start_http_server, Gauge, Info # type: ignore
 import arkouda as ak
 from arkouda import client, logger
 from arkouda.logger import LogLevel
@@ -231,11 +231,11 @@ class ArkoudaMetrics:
                                                       'locale_hostname',
                                                       'arkouda_server_name'])
         self.perUserTotalNumberOfRequests = Gauge('arkouda_per_user_total_number_of_requests',
-                                                  'Total number of Arkouda requests',
+                                                  'Total number of Arkouda requests per user',
                                             labelnames=['arkouda_server_name',
                                                        'user'])
         self.perUserNumberOfRequestsPerCommand = Gauge('arkouda_per_user_number_of_requests_per_command',
-                                                  'Total number of Arkouda requests per command',
+                                                  'Total number of Arkouda requests per command, per user',
                                             labelnames=['command',
                                                         'arkouda_server_name',
                                                         'user'])
@@ -266,6 +266,8 @@ class ArkoudaMetrics:
             labels = [Label('locale_name',value=value['locale_name']),
                       Label('locale_num',value=value['locale_num']),
                       Label('locale_hostname',value=value['locale_hostname'])]
+        elif scope == MetricScope.USER:
+            labels = [Label('user',value=value['user'])]
         else:
             labels = None
 
@@ -278,7 +280,11 @@ class ArkoudaMetrics:
     
     def _updateNumberOfRequests(self, metric : Metric) -> None:
         metricName = metric.name
-        
+        metricScope = metric.scope
+
+        if metricScope == MetricScope.USER:
+            print(f'METRIC {metric}')
+
         if metricName == 'total':
             self.totalNumberOfRequests.labels(arkouda_server_name=self.serverName).set(metric.value)
         else:
