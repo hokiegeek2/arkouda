@@ -70,9 +70,9 @@ module MetricsMsg {
             }
         }
 
-        proc incrementRequestMetric(userName: string, metricName: string, increment: int=1) {
-            var counterTable = this.getUserMetrics(this.getUser(userName));
-            counterTable.increment(metricName,increment);
+        proc incrementPerUserRequestMetrics(userName: string, metricName: string, increment: int=1) {
+            this.incrementNumRequestsPerCommand(userName,metricName,increment);
+            this.incrementTotalNumRequests(userName,increment);
         }
         
         proc getPerUserNumRequestsPerCommandMetrics(userName: string) {
@@ -97,10 +97,14 @@ module MetricsMsg {
             return metrics;
         }
 
-        proc incrementNumRequestsPerCommand(userName: string, cmd: string) {
+        proc incrementNumRequestsPerCommand(userName: string, cmd: string, increment: int=1) {
             var userMetrics : borrowed CounterTable = this.getUserMetrics(this.users.getUser(userName));
-            userMetrics.increment(cmd);
-        }        
+            userMetrics.increment(cmd,increment);
+        }   
+        proc incrementTotalNumRequests(userName: string,increment: int=1) {
+            var userMetrics : borrowed CounterTable = this.getUserMetrics(this.users.getUser(userName));
+            userMetrics.increment('total',increment);
+        }     
     } 
 
     class MeasurementTable {

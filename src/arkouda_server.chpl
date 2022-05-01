@@ -452,7 +452,7 @@ proc main() {
             var args   = msg.args;
 
             if collectMetrics {
-                userMetrics.incrementNumRequestsPerCommand(user,cmd);
+                userMetrics.incrementPerUserRequestMetrics(user,cmd);
                 requestMetrics.increment(cmd);
             }
 
