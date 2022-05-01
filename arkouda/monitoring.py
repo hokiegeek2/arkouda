@@ -99,6 +99,19 @@ class Metric():
         object.__setattr__(self, 'labels', labels)
 
 @dataclass(frozen=True)
+class UserMetric(Metric):
+
+    __slots__ = ('user')
+
+    user: str
+
+    def __init__(self, name : str, category : MetricCategory, scope : MetricScope,
+                 value : Union[float,int], timestamp : np.datetime64, user : str,
+                 labels : Optional[List[Label]]=None) -> None:
+        Metric.__init__(self, name, category, scope, value, timestamp, labels)
+        object.__setattr__(self, 'user', user)
+
+@dataclass(frozen=True)
 class LocaleInfo():
 
     __slots__ = ('server_name', 'locale_name', 'locale_id', 'locale_hostname',
@@ -266,34 +279,61 @@ class ArkoudaMetrics:
             labels = [Label('locale_name',value=value['locale_name']),
                       Label('locale_num',value=value['locale_num']),
                       Label('locale_hostname',value=value['locale_hostname'])]
-        elif scope == MetricScope.USER:
-            labels = [Label('user',value=value['user'])]
-        else:
-            labels = None
-
-        return Metric(name=str(value['name']), 
+            return Metric(name=str(value['name']),
                   category=MetricCategory(value['category']),
                   scope=MetricScope(value['scope']),
                   value=value['value'],
                   timestamp=parser.parse(cast(str,value['timestamp'])),
-                  labels=labels)    
+                  labels=labels)
+
+        elif scope == MetricScope.USER:
+            user = value['user']
+            labels = [Label('user',value=user)] 
+            return UserMetric(name=str(value['name']),
+                  category=MetricCategory(value['category']),
+                  scope=MetricScope(value['scope']),
+                  value=value['value'],
+                  timestamp=parser.parse(cast(str,value['timestamp'])),
+                  user=user,
+                  labels=labels)
+        else:
+            labels = None
+            return Metric(name=str(value['name']),
+                  category=MetricCategory(value['category']),
+                  scope=MetricScope(value['scope']),
+                  value=value['value'],
+                  timestamp=parser.parse(cast(str,value['timestamp'])),
+                  labels=labels)
     
     def _updateNumberOfRequests(self, metric : Metric) -> None:
-        metricName = metric.name
         metricScope = metric.scope
 
         if metricScope == MetricScope.USER:
-            print(f'METRIC {metric}')
+            self._updatePerUserNumberOfRequests(metric)
+        else:
+            self._updateGlobalNumberOfRequests(metric)
+
+    def _updatePerUserNumberOfRequests(self, metric : Metric) -> None:
+        metricName = metric.name
+        if metricName == 'total':
+            self.perUserTotalNumberOfRequests.labels(user=metric.user,
+                                         arkouda_server_name=self.serverName).set(metric.value)
+        else:
+            self.perUserNumberOfRequestsPerCommand.labels(command=metricName, user=metric.user,
+                                         arkouda_server_name=self.serverName).set(metric.value)
+
+    def _updateGlobalNumberOfRequests(self, metric : Metric) -> None:
+        metricName = metric.name
 
         if metricName == 'total':
             self.totalNumberOfRequests.labels(arkouda_server_name=self.serverName).set(metric.value)
         else:
-            self.numberOfRequestsPerCommand.labels(command=metricName, 
-                                               arkouda_server_name=self.serverName).set(metric.value)
-            
+            self.numberOfRequestsPerCommand.labels(command=metricName,
+                                         arkouda_server_name=self.serverName).set(metric.value)
+
     def _updateResponseTimes(self, metric : Metric) -> None:
         self.responseTimesPerCommand.labels(command=metric.name, 
-                                               arkouda_server_name=self.serverName).set(metric.value)
+                                         arkouda_server_name=self.serverName).set(metric.value)
 
     def _updateServerMetrics(self, metric : Metric) -> None:
         self.numberOfConnections.labels(arkouda_server_name=self.serverName).set(metric.value)   
