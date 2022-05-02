@@ -1,6 +1,6 @@
 # Docker Build
 
-From the Arkodua project home, execute the following commands to build the arkouda-metrics-server Docker image:
+From the Arkouda project home, execute the following commands to build the arkouda-metrics-server Docker image:
 
 ```
 # Package Arkouda client and server
@@ -15,8 +15,8 @@ mv dist/arkouda-2022.4.15+231.g093ec76c.tar.gz arkouda.tar.gz
 export VERSION=0.4.2
 
 # Build Docker imae
-docker build --build-arg ARKOUDA_DIST_FOLDER=$ARKOUDA_DIST_FOLDER -f arkouda-metrics-server \
-       -t hokiegeek2/arkouda-metrics-server:$VERSION .
+docker build --build-arg ARKOUDA_DIST_FOLDER=$ARKOUDA_DIST_FOLDER -f arkouda-metrics-exporter \
+       -t hokiegeek2/arkouda-metrics-exporter:$VERSION .
 ```
 
 # Kubernetes Deployment
