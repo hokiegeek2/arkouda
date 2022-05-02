@@ -84,7 +84,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.4.0
+releaseVersion: 0.4.2
 imagePullPolicy: IfNotPresent
 
 ############ Arkouda Metrics Server Configuration ############

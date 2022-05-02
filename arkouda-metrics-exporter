@@ -10,7 +10,7 @@ WORKDIR /opt/arkouda
 
 # Execute Arkouda pip install
 RUN pip install --upgrade pip
-RUN pip install .
+RUN pip install -e .[dev]
 WORKDIR /opt
 
 # Remove unneeded files
