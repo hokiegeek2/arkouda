@@ -47,10 +47,26 @@ arkouda:
       port: 5556
 ```
 
-## Standalone arkouda-metrics-exporter Kubernetes Deployment 
+## Standalone arkouda-metrics-exporter Helm Deployment 
 
 The arkouda-metrics-exporter-chart is installed as follows:
 
 ```
 helm install arkouda-metrics-exporter arkouda-metrics-exporter-chart/
+```
+       
+# Scrape Target Configuration
+       
+The Prometheus scrape target contains Arkouda instance-scoped labels such as Slurm job name, Kubernetes namespace, etc..., an example of which is shown below:
+
+```
+- job_name: external-arkouda-metrics
+ static_configs:
+   - targets: [external-arkouda-metrics-exporter.arkouda:8090]
+     labels:
+       arkouda_instance: "external-integration-test"
+       launch_method: "Slurm"
+       project: 'Arkouda-on-Slurm benchmarks'
+       slurm_job: 978
+    
 ```
