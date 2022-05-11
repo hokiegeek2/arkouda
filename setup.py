@@ -139,6 +139,7 @@ setup(
         'pyfiglet',
         'versioneer',
         'matplotlib',
+        'types-tabulate',
         'kubernetes',
         'python-dateutil',
         'prometheus_client'
