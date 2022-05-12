@@ -269,8 +269,8 @@ module MetricsMsg {
         var metrics = new list(owned Metric?);
 
         for loc in Locales {
-            var used = memoryUsed():int;
-            var total = loc.physicalMemory():int;
+            var used = memoryUsed():real;
+            var total = loc.physicalMemory():real;
             
             mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                               'memoryUsed: %i physicalMemory: %i'.format(used,total));
@@ -286,7 +286,7 @@ module MetricsMsg {
                              locale_num=loc.id,
                              locale_name=loc.name,
                              locale_hostname = loc.hostname,                             
-                             value=used/total * 100.0000):Metric);                            
+                             value=used/total * 100):Metric);                            
         }
         return metrics;
     }
