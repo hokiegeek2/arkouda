@@ -140,6 +140,8 @@ setup(
         'versioneer',
         'matplotlib',
         'types-tabulate',
+        'tables',
+        'pyarrow',
         'kubernetes',
         'python-dateutil',
         'prometheus_client'
