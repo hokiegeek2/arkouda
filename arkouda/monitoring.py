@@ -1,7 +1,6 @@
 import os, json, time
 from enum import Enum
 from typing import cast, Dict, List, Optional, Union
-import numpy as np # type: ignore
 from datetime import datetime
 from dateutil import parser # type: ignore
 from dataclasses import dataclass
@@ -85,11 +84,11 @@ class Metric():
     category: MetricCategory
     scope: MetricScope
     value: Union[float,int]
-    timestamp: np.datetime64
+    timestamp: datetime
     labels: List[Label]
     
     def __init__(self, name : str, category : MetricCategory, scope : MetricScope, 
-                 value : Union[float,int], timestamp : np.datetime64, 
+                 value : Union[float,int], timestamp : datetime, 
                  labels : Optional[List[Label]]=None) -> None:
         object.__setattr__(self, 'name', name)
         object.__setattr__(self, 'category', category)
@@ -106,7 +105,7 @@ class UserMetric(Metric):
     user: str
 
     def __init__(self, name : str, category : MetricCategory, scope : MetricScope,
-                 value : Union[float,int], timestamp : np.datetime64, user : str,
+                 value : Union[float,int], timestamp : datetime, user : str,
                  labels : Optional[List[Label]]=None) -> None:
         Metric.__init__(self, name, category, scope, value, timestamp, labels)
         object.__setattr__(self, 'user', user)
@@ -287,7 +286,7 @@ class ArkoudaMetrics:
                   labels=labels)
 
         elif scope == MetricScope.USER:
-            user = value['user']
+            user = cast(str,value['user'])
             labels = [Label('user',value=user)] 
             return UserMetric(name=str(value['name']),
                   category=MetricCategory(value['category']),
@@ -309,11 +308,11 @@ class ArkoudaMetrics:
         metricScope = metric.scope
 
         if metricScope == MetricScope.USER:
-            self._updatePerUserNumberOfRequests(metric)
+            self._updatePerUserNumberOfRequests(cast(UserMetric,metric))
         else:
             self._updateGlobalNumberOfRequests(metric)
 
-    def _updatePerUserNumberOfRequests(self, metric : Metric) -> None:
+    def _updatePerUserNumberOfRequests(self, metric : UserMetric) -> None:
         metricName = metric.name
         if metricName == 'total':
             self.perUserTotalNumberOfRequests.labels(user=metric.user,
