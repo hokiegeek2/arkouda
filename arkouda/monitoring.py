@@ -338,7 +338,7 @@ class ArkoudaMetrics:
         self.numberOfConnections.labels(arkouda_server_name=self.serverName).set(metric.value)   
         
     def _updateReportedTimestamp(self, value : datetime) -> None:     
-        self.reportedTimestamp.labels(arkouda_server_name=self.serverName).set(value)
+        self.reportedTimestamp.labels(arkouda_server_name=self.serverName).set(value.timestamp() * 1000)
             
     def _updateSystemMetrics(self, metric : Metric) -> None:
         metricName = metric.name
