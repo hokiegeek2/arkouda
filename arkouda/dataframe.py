@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from datetime import datetime
-from ipaddress import ip_address
-from tabulate import tabulate
 from collections import UserDict
 from warnings import warn
 import pandas as pd  # type: ignore
 import numpy as np  # type: ignore
 import random
 import json
-from typing import cast
+from typing import cast, Union, List, Callable, Dict
+from typeguard import typechecked
+import os
 
 from arkouda.segarray import SegArray
 from arkouda.pdarrayclass import pdarray
@@ -21,15 +20,16 @@ from arkouda.groupbyclass import GroupBy as akGroupBy, unique
 from arkouda.pdarraysetops import concatenate, intersect1d, in1d
 
 from arkouda.pdarrayIO import save_all, load_all
-from arkouda.dtypes import int64 as akint64, uint64 as akuint64, float64 as akfloat64, bool as akbool
+from arkouda.dtypes import int64 as akint64, float64 as akfloat64, bool as akbool
 from arkouda.sorting import argsort, coargsort
-from arkouda.numeric import where
+from arkouda.numeric import where, cumsum
 from arkouda.client import maxTransferBytes, generic_msg
 from arkouda.row import Row
 from arkouda.alignment import in1dmulti
 from arkouda.series import Series
 from arkouda.index import Index
 from arkouda.numeric import cast as akcast, isnan as akisnan
+from arkouda.pdarrayIO import get_filetype
 
 # This is necessary for displaying DataFrames with BitVector columns,
 # because pandas _html_repr automatically truncates the number of displayed bits
@@ -324,7 +324,7 @@ class DataFrame(UserDict):
         if key not in self.columns:
             raise AttributeError(f'Attribute {key} not found')
         # Should this be cached?
-        return Series(data=self[key], index=self.index)
+        return Series(data=self[key], index=self.index.index)
 
     def __dir__(self):
         return dir(DataFrame) + self.columns
@@ -610,6 +610,7 @@ class DataFrame(UserDict):
             The labels to be dropped on the given axis
         """
         for key in keys:
+            # This will raise an exception if key does not exist. Use self.pop(key, None) if we do not want to error
             del self[key]
 
     def _drop_row(self, keys):
@@ -638,7 +639,9 @@ class DataFrame(UserDict):
             UserDict.__setitem__(self, key, self[key][idx_to_keep])
         self._set_index(idx_to_keep)
 
-    def drop(self, keys, axis=0):
+    @typechecked
+    def drop(self, keys: Union[str, int, List[Union[str, int]]],
+             axis: Union[str, int] = 0, inplace: bool = False) -> Union[None, DataFrame]:
         """
         Drop column/s or row/s from the dataframe, in-place.
 
@@ -648,6 +651,14 @@ class DataFrame(UserDict):
             The labels to be dropped on the given axis
         axis : int or str
             The axis on which to drop from. 0/'index' - drop rows, 1/'columns' - drop columns
+        inplace: bool
+            Default False. When True, perform the operation on the calling object.
+            When False, return a new object.
+
+        Returns
+        -------
+            DateFrame when `inplace=False`
+            None when `inplace=True`
 
         Examples
         ----------
@@ -663,20 +674,27 @@ class DataFrame(UserDict):
         if isinstance(keys, str) or isinstance(keys, int):
             keys = [keys]
 
+        obj = self if inplace else self.copy()
+
         if axis == 0 or axis == 'index':
             #drop a row
-            self._drop_row(keys)
+            obj._drop_row(keys)
         elif axis == 1 or axis == 'columns':
             #drop column
-            self._drop_column(keys)
+            obj._drop_column(keys)
         else:
             raise ValueError(f"No axis named {axis} for object type DataFrame")
 
         # If the dataframe just became empty...
-        if len(self._columns) == 0:
-            self._set_index(None)
-            self._empty = True
-        self.update_size()
+        if len(obj._columns) == 0:
+            obj._set_index(None)
+            obj._empty = True
+        obj.update_size()
+
+        if not inplace:
+            return obj
+
+        return None
 
     def drop_duplicates(self, subset=None, keep='first'):
         """
@@ -780,7 +798,8 @@ class DataFrame(UserDict):
             raise TypeError(f"DataFrame Index can only be constructed from type ak.Index, pdarray or list."
                             f" {type(value)} provided.")
 
-    def reset_index(self, size=False):
+    @typechecked
+    def reset_index(self, size: bool = False, inplace: bool = False) -> Union[None, DataFrame]:
         """
         Set the index to an integer range.
 
@@ -793,6 +812,14 @@ class DataFrame(UserDict):
         size : int
             If size is passed, do not attempt to determine size based on
             existing column sizes. Assume caller handles consistency correctly.
+        inplace: bool
+            Default False. When True, perform the operation on the calling object.
+            When False, return a new object.
+
+        Returns
+        -------
+            DateFrame when `inplace=False`
+            None when `inplace=True`
 
         NOTE
         ----------
@@ -800,11 +827,17 @@ class DataFrame(UserDict):
         support this behavior.
         """
 
+        obj = self if inplace else self.copy()
+
         if not size:
-            self.update_size()
-            self._set_index(arange(self._size))
+            obj.update_size()
+            obj._set_index(arange(obj._size))
         else:
-            self._set_index(arange(size))
+            obj._set_index(arange(size))
+
+        if not inplace:
+            return obj
+        return None
 
     @property
     def info(self):
@@ -854,7 +887,8 @@ class DataFrame(UserDict):
         else:
             self._size = sizes.pop()
 
-    def rename(self, mapper):
+    @typechecked
+    def rename(self, mapper: Union[Callable, dict], inplace: bool = False) -> Union[None, DataFrame]:
         """
         Rename columns in-place according to a mapping.
 
@@ -864,38 +898,44 @@ class DataFrame(UserDict):
             Function or dictionary mapping existing column names to
             new column names. Nonexistent names will not raise an
             error.
+        inplace: bool
+            Default False. When True, perform the operation on the calling object.
+            When False, return a new object.
 
         Returns
         -------
-        self
-            Renaming occurs in-place, but result is also returned,
-            for compatibility.
+            DateFrame when `inplace=False`
+            None when `inplace=True`
         """
+
+        obj = self if inplace else self.copy()
 
         if callable(mapper):
             # Do not rename index, start at 1
-            for i in range(0, len(self._columns)):
-                oldname = self._columns[i]
+            for i in range(0, len(obj._columns)):
+                oldname = obj._columns[i]
                 newname = mapper(oldname)
                 # Only rename if name has changed
                 if newname != oldname:
-                    self._columns[i] = newname
-                    self.data[newname] = self.data[oldname]
-                    del self.data[oldname]
+                    obj._columns[i] = newname
+                    obj.data[newname] = obj.data[oldname]
+                    del obj.data[oldname]
         elif isinstance(mapper, dict):
             for oldname, newname in mapper.items():
                 # Only rename if name has changed
                 if newname != oldname:
                     try:
-                        i = self._columns.index(oldname)
-                        self._columns[i] = newname
-                        self.data[newname] = self.data[oldname]
-                        del self.data[oldname]
+                        i = obj._columns.index(oldname)
+                        obj._columns[i] = newname
+                        obj.data[newname] = obj.data[oldname]
+                        del obj.data[oldname]
                     except:
                         pass
         else:
             raise TypeError("Argument must be callable or dict-like")
-        return self
+        if not inplace:
+            return obj
+        return None
 
     def append(self, other, ordered=True):
         """
@@ -1248,7 +1288,17 @@ class DataFrame(UserDict):
 
     @classmethod
     def load_table(cls, prefix_path, file_format='INFER'):
-        return cls(load_all(prefix_path, file_format=file_format))
+        prefix, extension = os.path.splitext(prefix_path)
+        first_file = "{}_LOCALE0000{}".format(prefix, extension)
+        filetype = get_filetype(first_file) if file_format.lower() == "infer" else file_format
+
+        # columns load backwards
+        df = cls(load_all(prefix_path, file_format=filetype))
+        if filetype == "HDF5":
+            return df
+        else:
+            # return the dataframe with them reversed so they match what was saved. This is only an issue with parquet
+            return df[df.columns[::-1]]
 
     def argsort(self, key, ascending=True):
         """
@@ -1434,10 +1484,12 @@ class DataFrame(UserDict):
             res._size = self._size
             res._bytes = self._bytes
             res._empty = self._empty
-            res._columns = self._columns
+            res._columns = self._columns[:]  # if this is not a slice, droping columns modifies both
 
             for key, val in self.items():
                 res[key] = val[:]
+
+            res._set_index(Index(self.index.index))
 
             return res
         else:
@@ -1457,6 +1509,101 @@ class DataFrame(UserDict):
         """
 
         return self.GroupBy(keys, use_series)
+
+    @typechecked
+    def isin(self, values: Union[pdarray, Dict, Series, DataFrame]) -> DataFrame:
+        """
+        Determine whether each element in the DataFrame is contained in values.
+
+        Parameters
+        __________
+        values : pdarray, dict, Series, or DataFrame
+            The values to check for in DataFrame. Series can only have a single index.
+
+        Returns
+        _______
+        DataFrame
+            Arkouda DataFrame of booleans showing whether each element in the DataFrame is contained in values
+
+        See Also
+        ________
+        ak.Series.isin
+
+        Notes
+        _____
+        - Pandas supports values being an iterable type. In arkouda, we replace this with pdarray
+        - Pandas supports ~ operations. Currently, ak.DataFrame does not support this.
+
+        Examples
+        ________
+        >>> df = ak.DataFrame({'col_A': ak.array([7, 3]), 'col_B':ak.array([1, 9])})
+        >>> df
+            col_A  col_B
+        0      7      1
+        1      3      9 (2 rows x 2 columns)
+
+        When `values` is a pdarray, check every value in the DataFrame to determine if it exists in values
+        >>> df.isin(ak.array([0, 1]))
+           col_A  col_B
+        0  False   True
+        1  False  False (2 rows x 2 columns)
+
+        When `values` is a dict, the values in the dict are passed to check the column indicated by the key
+        >>> df.isin({'col_A': ak.array([0, 3])})
+            col_A  col_B
+        0  False  False
+        1   True  False (2 rows x 2 columns)
+
+        When `values` is a Series, each column is checked if values is present positionally. This means that for `True`
+        to be returned, the indexes must be the same.
+        >>> i = ak.Index(ak.arange(2))
+        >>> s = ak.Series(data=[3, 9], index=i)
+        >>> df.isin(s)
+            col_A  col_B
+        0  False  False
+        1  False   True (2 rows x 2 columns)
+
+        When `values` is a DataFrame, the index and column must match. Note that 9 is not found because the column
+        name does not match.
+        >>> other_df = ak.DataFrame({'col_A':ak.array([7, 3]), 'col_C':ak.array([0, 9])})
+        >>> df.isin(other_df)
+            col_A  col_B
+        0   True  False
+        1   True  False (2 rows x 2 columns)
+        """
+        if isinstance(values, pdarray):
+            # flatten the DataFrame so single in1d can be used.
+            flat_in1d = in1d(concatenate(list(self.data.values())), values)
+            segs = concatenate([array([0]), cumsum(array([self.data[col].size for col in self.columns]))])
+            df_def = {col: flat_in1d[segs[i]:segs[i + 1]] for i, col in enumerate(self.columns)}
+        elif isinstance(values, Dict):
+            # key is column name, val is the list of values to check
+            df_def = {col: (in1d(self.data[col], values[col]) if col in values.keys()
+                            else zeros(self.size, dtype=akbool)) for col in self.columns}
+        elif isinstance(values, DataFrame) or \
+                (isinstance(values, Series) and isinstance(values.index, Index)):
+            # create the dataframe with all false
+            df_def = {col: zeros(self.size, dtype=akbool) for col in self.columns}
+            # identify the indexes in both
+            rows_self, rows_val = intersect(self.index.index, values.index.index, unique=True)
+
+            # used to sort the rows with only the indexes in both
+            sort_self = self.index[rows_self].argsort()
+            sort_val = values.index[rows_val].argsort()
+            # update values in columns that exist in both. only update the rows whose indexes match
+
+            for col in self.columns:
+                if isinstance(values, DataFrame) and col in values.columns:
+                    df_def[col][rows_self] = self.data[col][rows_self][sort_self] == \
+                                             values.data[col][rows_val][sort_val]
+                elif isinstance(values, Series):
+                    df_def[col][rows_self] = self.data[col][rows_self][sort_self] == \
+                                             values.values[rows_val][sort_val]
+        else:
+            # pandas provides the same error in this case
+            raise ValueError("Cannot compute isin with duplicate axis.")
+
+        return DataFrame(df_def, index=self.index)
 
 
 def sorted(df, column=False):

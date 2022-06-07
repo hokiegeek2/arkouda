@@ -387,8 +387,8 @@ class IOTest(ArkoudaTest):
         with self.assertRaises(RuntimeError) as cm:
             ak.load(path_prefix='{}/not-a-file'.format(IOTest.io_test_dir), 
                                     dataset='int_tens_pdarray')
-        
-    def testLoadAll(self):   
+
+    def testLoadAll(self):
         self._create_file(columns=self.dict_columns,
                           prefix_path='{}/iotest_dict_columns'.format(IOTest.io_test_dir))
 
