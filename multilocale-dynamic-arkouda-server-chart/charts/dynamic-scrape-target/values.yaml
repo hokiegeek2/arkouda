@@ -1,4 +1,4 @@
-# Default values for arkouda-server-chart.
+# Default values for dynamic-scrape-target.
 # This is a YAML-formatted file.
 # Declare variables to be passed into your templates.
 
@@ -47,11 +47,27 @@ ingress:
     # kubernetes.io/tls-acme: "true"
   hosts:
     - host: chart-example.local
-      paths: []
+      paths:
+      - path: /
+        backend:
+          serviceName: chart-example.local
+          servicePort: 80
   tls: []
   #  - secretName: chart-example-tls
   #    hosts:
   #      - chart-example.local
+
+resources: {}
+  # We usually recommend not to specify default resources and to leave this as a conscious
+  # choice for the user. This also increases chances charts run on environments with little
+  # resources, such as Minikube. If you do want to specify resources, uncomment the following
+  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
+  # limits:
+  #   cpu: 100m
+  #   memory: 128Mi
+  # requests:
+  #   cpu: 100m
+  #   memory: 128Mi
 
 autoscaling:
   enabled: false
@@ -66,48 +82,20 @@ tolerations: []
 
 affinity: {}
 
-######################## Pod Settings ########################
+############################# Dynamic Scrape Target Configuration #############################
 
-releaseVersion: 0.4.3
-imagePullPolicy: IfNotPresent
+prometheus:
+  server: arkouda-prometheus-server
+  addScrapeTarget:
+    name: arkouda
+    value: '{"job_name": "arkouda", "static_configs": [{"labels": {"arkouda_instance": "arkouda", "launch_method": "Kubernetes", "project": "resource management"}, "targets": ["arkouda-metrics-exporter.arkouda:5080"]}]}'
+    action: ADD
+  deleteScrapeTarget:
+    name: arkouda
+    action: REMOVE
+  kubernetes:
+    host: https://10.114.89.224:6443
+    namespace: monitoring
+  certPath: /etc/ssl/arkouda/tls.crt
+  keyPath: /etc/ssl/arkouda/tls.key
 
-################ Arkouda Server Configuration ################
-
-server: 
-  port: 5555
-  numLocales: 3
-  authenticate: false
-  verbose: false
-  memTrack: true
-  resources:
-    limits:
-      cpu: 2000m
-      memory: 2048Mi
-    requests:
-      cpu: 2000m
-      memory: 2048Mi
-  threadsPerLocale: 4
-  logLevel: LogLevel.DEBUG
-  metrics:
-    collectMetrics: true
-    service:
-      name: arkouda-metrics
-      port: 5556
-      targetPort: 5556
-external:
-  persistence:
-    enabled: true
-    path: /opt/locale
-    hostPath: /mnt/data/arkouda
-  certFile: /etc/ssl/arkouda/tls.crt
-  keyFile: /etc/ssl/arkouda/tls.key
-  k8sHost:
-  namespace: arkouda
-  externalServiceName: arkouda
-  externalServicePort: 5555
-  externalServiceTargetPort: 5555
-metricsServer:
-  port: 5080
-  arkoudaServerName: arkouda-metrics
-  pollingIntervalSeconds: 5
-  dynamicScrapeTarget: true

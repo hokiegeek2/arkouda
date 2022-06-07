@@ -5,7 +5,6 @@ metadata:
   labels: 
     app: arkouda-server
 spec:      
-      restartPolicy: Never
       containers:
         {{- if eq .Values.server.metrics.collectMetrics true }}
         - name: arkouda-metrics-server
