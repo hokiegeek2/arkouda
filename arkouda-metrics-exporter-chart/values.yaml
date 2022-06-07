@@ -89,13 +89,6 @@ imagePullPolicy: IfNotPresent
 
 ############ Arkouda Metrics Server Configuration ############
 
-metrics:
-  server: 
-    appName: external-arkouda-metrics-server
-    pollingIntervalSeconds: 5
-  service:
-    name: external-arkouda-metrics-exporter
-    port: 8090
 arkouda:
   metrics:
     server:
@@ -104,3 +97,24 @@ arkouda:
     service:
       name: arkouda-external-metrics.arkouda
       port: 5556
+metrics:
+  server:
+    appName: external-arkouda-metrics-server
+    pollingIntervalSeconds: 5
+  service:
+    name: external-arkouda-metrics-exporter
+    port: 8090
+prometheus:
+  server: arkouda-prometheus-server
+  addScrapeTarget:
+    name: external-arkouda
+    value: '{"job_name": "external-arkouda", "static_configs": [{"labels": {"arkouda_instance": "external-arkouda", "launch_method": "Slurm", "project": "resource management"}, "targets": ["external-arkouda-metrics-exporter.arkouda:8090"]}]}'
+    action: ADD
+  deleteScrapeTarget:
+    name: external-arkouda
+    action: REMOVE
+  kubernetes:
+    host: 
+    namespace: monitoring
+  certPath: /etc/ssl/arkouda/tls.crt
+  keyPath: /etc/ssl/arkouda/tls.key
