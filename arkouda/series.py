@@ -5,6 +5,7 @@ import numpy as np  # type: ignore
 import pandas as pd  # type: ignore
 from pandas._config import get_option  # type: ignore
 from typeguard import typechecked
+
 from arkouda.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from arkouda.alignment import lookup
 from arkouda.categorical import Categorical
@@ -13,7 +14,7 @@ from arkouda.groupbyclass import GroupBy, groupable_element_type
 from arkouda.index import Index
 from arkouda.numeric import cast as akcast
 from arkouda.numeric import value_counts
-from arkouda.pdarrayclass import argmaxk, attach_pdarray, pdarray, create_pdarray
+from arkouda.pdarrayclass import argmaxk, attach_pdarray, create_pdarray, pdarray
 from arkouda.pdarraycreation import arange, array, zeros
 from arkouda.pdarraysetops import argsort, concatenate, in1d
 from arkouda.strings import Strings
@@ -53,10 +54,7 @@ def natural_binary_operators(cls):
 
 
 def unary_operators(cls):
-    for name, op in {
-        "__invert__": operator.invert,
-        "__neg__": operator.neg,
-    }.items():
+    for name, op in {"__invert__": operator.invert, "__neg__": operator.neg,}.items():
         setattr(cls, name, cls._make_unaryop(op))
 
     return cls
@@ -124,8 +122,14 @@ class Series:
             self.index = Index.factory(data[0])
         else:
             # When only 1 positional argument it will be treated as data and not index
-            self.values = array(data) if not isinstance(data, (Strings, Categorical)) else data
-            self.index = Index.factory(index) if index is not None else Index(arange(self.values.size))
+            self.values = (
+                array(data) if not isinstance(data, (Strings, Categorical)) else data
+            )
+            self.index = (
+                Index.factory(index)
+                if index is not None
+                else Index(arange(self.values.size))
+            )
 
         if self.index.size != self.values.size:
             raise ValueError("Index size does not match data size")
@@ -148,7 +152,10 @@ class Series:
             length_str = ""
         else:
             prt = pd.concat(
-                [self.head(maxrows // 2 + 2).to_pandas(), self.tail(maxrows // 2).to_pandas()]
+                [
+                    self.head(maxrows // 2 + 2).to_pandas(),
+                    self.tail(maxrows // 2).to_pandas(),
+                ]
             )
             length_str = "\nLength {len(self)}"
         return (
@@ -313,7 +320,10 @@ class Series:
         """
 
         if not ascending:
-            if isinstance(self.values, pdarray) and self.values.dtype in (int64, float64):
+            if isinstance(self.values, pdarray) and self.values.dtype in (
+                int64,
+                float64,
+            ):
                 # For numeric values, negation reverses sort order
                 idx = argsort(-self.values)
             else:
@@ -389,7 +399,9 @@ class Series:
         if value_label is not None:
             value_label = [value_label]
 
-        return Series.concat([self], axis=1, index_labels=index_labels, value_labels=value_label)
+        return Series.concat(
+            [self], axis=1, index_labels=index_labels, value_labels=value_label
+        )
 
     def register(self, label):
         """Register the series with arkouda
@@ -548,7 +560,9 @@ class Series:
                 data = idx.to_dict(index_labels)
 
                 for col, label in zip(arrays, value_labels):
-                    data[str(label)] = lookup(col.index.index, col.values, idx.index, fillvalue=0)
+                    data[str(label)] = lookup(
+                        col.index.index, col.values, idx.index, fillvalue=0
+                    )
 
             retval = DataFrame(data)
         else:

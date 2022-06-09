@@ -92,7 +92,9 @@ def delimited_file_to_dict(path: str, delimiter: str = ",") -> Dict[str, str]:
     return values
 
 
-def dict_to_delimited_file(path: str, values: Mapping[Any, Any], delimiter: str = ",") -> None:
+def dict_to_delimited_file(
+    path: str, values: Mapping[Any, Any], delimiter: str = ","
+) -> None:
     """
     Writes a dictionary to delimited lines in a file where
     the first delimited element of each line is the dict key

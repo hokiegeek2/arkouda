@@ -46,7 +46,9 @@ class ErrorMode(Enum):
 
 @typechecked
 def cast(
-    pda: Union[pdarray, Strings], dt: Union[np.dtype, type, str], errors: ErrorMode = ErrorMode.strict
+    pda: Union[pdarray, Strings],
+    dt: Union[np.dtype, type, str],
+    errors: ErrorMode = ErrorMode.strict,
 ) -> Union[Union[pdarray, Strings], Tuple[pdarray, pdarray]]:
     """
     Cast an array to another dtype.
@@ -361,7 +363,9 @@ def cos(pda: pdarray) -> pdarray:
     TypeError
         Raised if the parameter is not a pdarray
     """
-    repMsg = type_cast(str, generic_msg(cmd="efunc", args="{} {}".format("cos", pda.name)))
+    repMsg = type_cast(
+        str, generic_msg(cmd="efunc", args="{} {}".format("cos", pda.name))
+    )
     return create_pdarray(type_cast(str, repMsg))
 
 
@@ -410,7 +414,9 @@ def hash(pda: pdarray, full: bool = True) -> Union[Tuple[pdarray, pdarray], pdar
         subcmd = "hash128"
     else:
         subcmd = "hash64"
-    repMsg = type_cast(str, generic_msg(cmd="efunc", args="{} {}".format(subcmd, pda.name)))
+    repMsg = type_cast(
+        str, generic_msg(cmd="efunc", args="{} {}".format(subcmd, pda.name))
+    )
     if full:
         a, b = type_cast(str, repMsg).split("+")
         return create_pdarray(type_cast(str, a)), create_pdarray(type_cast(str, b))
@@ -420,7 +426,9 @@ def hash(pda: pdarray, full: bool = True) -> Union[Tuple[pdarray, pdarray], pdar
 
 @typechecked
 def where(
-    condition: pdarray, A: Union[numeric_scalars, pdarray], B: Union[numeric_scalars, pdarray]
+    condition: pdarray,
+    A: Union[numeric_scalars, pdarray],
+    B: Union[numeric_scalars, pdarray],
 ) -> pdarray:
     """
     Returns an array with elements chosen from A and B based upon a
@@ -483,10 +491,13 @@ def where(
     if (not isSupportedNumber(A) and not isinstance(A, pdarray)) or (
         not isSupportedNumber(B) and not isinstance(B, pdarray)
     ):
-        raise TypeError("both A and B must be an int, np.int64, float, np.float64, or pdarray")
+        raise TypeError(
+            "both A and B must be an int, np.int64, float, np.float64, or pdarray"
+        )
     if isinstance(A, pdarray) and isinstance(B, pdarray):
         repMsg = generic_msg(
-            cmd="efunc3vv", args="{} {} {} {}".format("where", condition.name, A.name, B.name)
+            cmd="efunc3vv",
+            args="{} {} {} {}".format("where", condition.name, A.name, B.name),
         )
     # For scalars, try to convert it to the array's dtype
     elif isinstance(A, pdarray) and np.isscalar(B):
@@ -522,9 +533,12 @@ def where(
             dt = dtA
         # Cannot safely cast
         else:
-            raise TypeError(f"Cannot cast between scalars {A} and {B} to supported dtype")
+            raise TypeError(
+                f"Cannot cast between scalars {A} and {B} to supported dtype"
+            )
         repMsg = generic_msg(
-            cmd="efunc3ss", args="{} {} {} {} {} {}".format("where", condition.name, dt, A, dt, B)
+            cmd="efunc3ss",
+            args="{} {} {} {} {} {}".format("where", condition.name, dt, A, dt, B),
         )
     return create_pdarray(type_cast(str, repMsg))
 

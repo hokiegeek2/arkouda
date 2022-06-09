@@ -118,12 +118,19 @@ class Matcher:
 
         cmd = "segmentedSplit"
         args = "{} {} {} {} {}".format(
-            self.objtype, self.parent_entry_name, maxsplit, return_segments, json.dumps([self.pattern])
+            self.objtype,
+            self.parent_entry_name,
+            maxsplit,
+            return_segments,
+            json.dumps([self.pattern]),
         )
         repMsg = cast(str, generic_msg(cmd=cmd, args=args))
         if return_segments:
             arrays = repMsg.split("+", maxsplit=2)
-            return Strings.from_return_msg("+".join(arrays[0:2])), create_pdarray(arrays[2])
+            return (
+                Strings.from_return_msg("+".join(arrays[0:2])),
+                create_pdarray(arrays[2]),
+            )
         else:
             return Strings.from_return_msg(repMsg)
 
@@ -147,7 +154,10 @@ class Matcher:
         repMsg = cast(str, generic_msg(cmd=cmd, args=args))
         if return_match_origins:
             arrays = repMsg.split("+", maxsplit=2)
-            return Strings.from_return_msg("+".join(arrays[0:2])), create_pdarray(arrays[2])
+            return (
+                Strings.from_return_msg("+".join(arrays[0:2])),
+                create_pdarray(arrays[2]),
+            )
         else:
             return Strings.from_return_msg(repMsg)
 
@@ -172,6 +182,9 @@ class Matcher:
         repMsg = cast(str, generic_msg(cmd=cmd, args=args))
         if return_num_subs:
             arrays = repMsg.split("+", maxsplit=2)
-            return Strings.from_return_msg("+".join(arrays[0:2])), create_pdarray(arrays[2])
+            return (
+                Strings.from_return_msg("+".join(arrays[0:2])),
+                create_pdarray(arrays[2]),
+            )
         else:
             return Strings.from_return_msg(repMsg)

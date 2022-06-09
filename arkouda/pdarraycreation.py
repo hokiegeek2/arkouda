@@ -41,7 +41,9 @@ __all__ = [
 
 
 @typechecked
-def from_series(series: pd.Series, dtype: Optional[Union[type, str]] = None) -> Union[pdarray, Strings]:
+def from_series(
+    series: pd.Series, dtype: Optional[Union[type, str]] = None
+) -> Union[pdarray, Strings]:
     """
     Converts a Pandas Series to an Arkouda pdarray or Strings object. If
     dtype is None, the dtype is inferred from the Pandas Series. Otherwise,
@@ -204,7 +206,9 @@ def array(
         try:
             a = np.array(a, dtype=dtype)
         except (RuntimeError, TypeError, ValueError):
-            raise TypeError("a must be a pdarray, np.ndarray, or convertible to a numpy array")
+            raise TypeError(
+                "a must be a pdarray, np.ndarray, or convertible to a numpy array"
+            )
     # Return multi-dimensional arrayview
     if a.ndim != 1:
         # TODO add order
@@ -218,7 +222,12 @@ def array(
     # Check if array of strings
     if "U" in a.dtype.kind:
         # encode each string and add a null byte terminator
-        encoded = [i for i in itertools.chain.from_iterable(map(lambda x: x.encode() + b"\x00", a))]
+        encoded = [
+            i
+            for i in itertools.chain.from_iterable(
+                map(lambda x: x.encode() + b"\x00", a)
+            )
+        ]
         nbytes = len(encoded)
         if nbytes > maxTransferBytes:
             raise RuntimeError(
@@ -243,7 +252,9 @@ def array(
     # Do not allow arrays that are too large
     size = a.size
     if (size * a.itemsize) > maxTransferBytes:
-        raise RuntimeError("Array exceeds allowed transfer size. Increase ak.maxTransferBytes to allow")
+        raise RuntimeError(
+            "Array exceeds allowed transfer size. Increase ak.maxTransferBytes to allow"
+        )
     # Pack binary array data into a bytes object with a command header
     # including the dtype and size. If the server has a different byteorder
     # than our numpy array we need to swap to match since the server expects
@@ -251,7 +262,11 @@ def array(
     aview = _array_memview(a)
     args = f"{a.dtype.name} {size} seg_strings={False}"
     rep_msg = generic_msg(cmd="array", args=args, payload=aview, send_binary=True)
-    return create_pdarray(rep_msg) if dtype is None else akcast(create_pdarray(rep_msg), dtype)
+    return (
+        create_pdarray(rep_msg)
+        if dtype is None
+        else akcast(create_pdarray(rep_msg), dtype)
+    )
 
 
 def _array_memview(a) -> memoryview:
@@ -264,7 +279,9 @@ def _array_memview(a) -> memoryview:
 
 
 @typechecked
-def zeros(size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = float64) -> pdarray:
+def zeros(
+    size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = float64
+) -> pdarray:
     """
     Create a pdarray filled with zeros.
 
@@ -307,13 +324,17 @@ def zeros(size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = flo
     # check dtype for error
     if cast(np.dtype, dtype).name not in NumericDTypes:
         raise TypeError(f"unsupported dtype {dtype}")
-    repMsg = generic_msg(cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size))
+    repMsg = generic_msg(
+        cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size)
+    )
 
     return create_pdarray(repMsg)
 
 
 @typechecked
-def ones(size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = float64) -> pdarray:
+def ones(
+    size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = float64
+) -> pdarray:
     """
     Create a pdarray filled with ones.
 
@@ -356,7 +377,9 @@ def ones(size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = floa
     # check dtype for error
     if cast(np.dtype, dtype).name not in NumericDTypes:
         raise TypeError(f"unsupported dtype {dtype}")
-    repMsg = generic_msg(cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size))
+    repMsg = generic_msg(
+        cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size)
+    )
     a = create_pdarray(repMsg)
     a.fill(1)
     return a
@@ -364,7 +387,9 @@ def ones(size: Union[int_scalars, str], dtype: Union[np.dtype, type, str] = floa
 
 @typechecked
 def full(
-    size: Union[int_scalars, str], fill_value: int_scalars, dtype: Union[np.dtype, type, str] = float64
+    size: Union[int_scalars, str],
+    fill_value: int_scalars,
+    dtype: Union[np.dtype, type, str] = float64,
 ) -> pdarray:
     """
     Create a pdarray filled with fill_value.
@@ -410,7 +435,9 @@ def full(
     # check dtype for error
     if cast(np.dtype, dtype).name not in NumericDTypes:
         raise TypeError(f"unsupported dtype {dtype}")
-    repMsg = generic_msg(cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size))
+    repMsg = generic_msg(
+        cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size)
+    )
     a = create_pdarray(repMsg)
     a.fill(fill_value)
     return a
@@ -643,7 +670,11 @@ def arange(*args, **kwargs) -> pdarray:
         if stride < 0:
             stop = stop + 2
         repMsg = generic_msg(cmd="arange", args="{} {} {}".format(start, stop, stride))
-        return create_pdarray(repMsg) if dtype == int64 else akcast(create_pdarray(repMsg), dtype)
+        return (
+            create_pdarray(repMsg)
+            if dtype == int64
+            else akcast(create_pdarray(repMsg), dtype)
+        )
     else:
         raise TypeError(
             f"start,stop,stride must be type int, np.int64, or np.uint64 {start} {stop} {stride}"
@@ -651,7 +682,9 @@ def arange(*args, **kwargs) -> pdarray:
 
 
 @typechecked
-def linspace(start: numeric_scalars, stop: numeric_scalars, length: int_scalars) -> pdarray:
+def linspace(
+    start: numeric_scalars, stop: numeric_scalars, length: int_scalars
+) -> pdarray:
     """
     Create a pdarray of linearly-spaced floats in a closed interval.
 
@@ -695,7 +728,9 @@ def linspace(start: numeric_scalars, stop: numeric_scalars, length: int_scalars)
     array([-5, -3.75, -2.5, -1.25, 0])
     """
     if not isSupportedNumber(start) or not isSupportedNumber(stop):
-        raise TypeError("both start and stop must be an int, np.int64, float, or np.float64")
+        raise TypeError(
+            "both start and stop must be an int, np.int64, float, or np.float64"
+        )
     if not isSupportedNumber(length):
         raise TypeError("length must be an int or int64")
     repMsg = generic_msg(cmd="linspace", args="{} {} {}".format(start, stop, length))
@@ -704,7 +739,11 @@ def linspace(start: numeric_scalars, stop: numeric_scalars, length: int_scalars)
 
 @typechecked
 def randint(
-    low: numeric_scalars, high: numeric_scalars, size: int_scalars, dtype=int64, seed: int_scalars = None
+    low: numeric_scalars,
+    high: numeric_scalars,
+    size: int_scalars,
+    dtype=int64,
+    seed: int_scalars = None,
 ) -> pdarray:
     """
     Generate a pdarray of randomized int, float, or bool values in a
@@ -776,7 +815,8 @@ def randint(
     sizestr = NUMBER_FORMAT_STRINGS["int64"].format(size)
 
     repMsg = generic_msg(
-        cmd="randint", args="{} {} {} {} {}".format(sizestr, dtype.name, lowstr, highstr, seed)
+        cmd="randint",
+        args="{} {} {} {} {}".format(sizestr, dtype.name, lowstr, highstr, seed),
     )
     return create_pdarray(repMsg)
 
@@ -833,7 +873,9 @@ def uniform(
 
 
 @typechecked
-def standard_normal(size: int_scalars, seed: Union[None, int_scalars] = None) -> pdarray:
+def standard_normal(
+    size: int_scalars, seed: Union[None, int_scalars] = None
+) -> pdarray:
     """
     Draw real numbers from the standard normal distribution.
 
@@ -875,7 +917,8 @@ def standard_normal(size: int_scalars, seed: Union[None, int_scalars] = None) ->
         raise ValueError("The size parameter must be > 0")
     return create_pdarray(
         generic_msg(
-            cmd="randomNormal", args="{} {}".format(NUMBER_FORMAT_STRINGS["int64"].format(size), seed)
+            cmd="randomNormal",
+            args="{} {}".format(NUMBER_FORMAT_STRINGS["int64"].format(size), seed),
         )
     )
 
@@ -929,7 +972,9 @@ def random_strings_uniform(
     array(['+5"f', '-P]3', '4k', '~HFF', 'F'])
     """
     if minlen < 0 or maxlen <= minlen or size < 0:
-        raise ValueError("Incompatible arguments: minlen < 0, maxlen " + "<= minlen, or size < 0")
+        raise ValueError(
+            "Incompatible arguments: minlen < 0, maxlen " + "<= minlen, or size < 0"
+        )
 
     repMsg = generic_msg(
         cmd="randomStrings",
@@ -1003,7 +1048,9 @@ def random_strings_lognormal(
     array(['+5"fp-', ']3Q4kC~HF', '=F=`,IE!', 'DjkBa'9(', '5oZ1)='])
     """
     if not isSupportedNumber(logmean) or not isSupportedNumber(logstd):
-        raise TypeError("both logmean and logstd must be an int, np.int64, float, or np.float64")
+        raise TypeError(
+            "both logmean and logstd must be an int, np.int64, float, or np.float64"
+        )
     if logstd <= 0 or size < 0:
         raise ValueError("Incompatible arguments: logstd <= 0 or size < 0")
 

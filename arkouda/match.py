@@ -38,7 +38,12 @@ class Match:
         else:
             vals = [self.__getitem__(i) for i in range(3)]
             vals.append("... ")
-            vals.extend([self.__getitem__(i) for i in range(self._matched.size - 3, self._matched.size)])
+            vals.extend(
+                [
+                    self.__getitem__(i)
+                    for i in range(self._matched.size - 3, self._matched.size)
+                ]
+            )
         return f"<ak.{self._objtype} object: {'; '.join(vals)}>"
 
     def __getitem__(self, item):
@@ -163,7 +168,10 @@ class Match:
         repMsg = cast(str, generic_msg(cmd=cmd, args=args))
         if return_match_origins:
             arrays = repMsg.split("+", maxsplit=2)
-            return Strings.from_return_msg("+".join(arrays[0:2])), create_pdarray(arrays[2])
+            return (
+                Strings.from_return_msg("+".join(arrays[0:2])),
+                create_pdarray(arrays[2]),
+            )
         else:
             return Strings.from_return_msg(repMsg)
 
@@ -247,6 +255,9 @@ class Match:
         repMsg = cast(str, generic_msg(cmd=cmd, args=args))
         if return_group_origins:
             arrays = repMsg.split("+", maxsplit=2)
-            return Strings.from_return_msg("+".join(arrays[0:2])), create_pdarray(arrays[2])
+            return (
+                Strings.from_return_msg("+".join(arrays[0:2])),
+                create_pdarray(arrays[2]),
+            )
         else:
             return Strings.from_return_msg(repMsg)

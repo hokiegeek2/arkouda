@@ -72,7 +72,9 @@ class ArkoudaLogger(Logger):
         name: str,
         logLevel: LogLevel = LogLevel.INFO,
         handlers: Optional[List[Handler]] = None,
-        logFormat: Optional[str] = "[%(name)s] Line %(lineno)d %(levelname)s: %(message)s",
+        logFormat: Optional[
+            str
+        ] = "[%(name)s] Line %(lineno)d %(levelname)s: %(message)s",
     ) -> None:
 
         """
@@ -279,7 +281,9 @@ def getArkoudaLogger(
     if not logLevel:
         logLevel = LogLevel(os.getenv("ARKOUDA_LOG_LEVEL", LogLevel("INFO")))
 
-    logger = ArkoudaLogger(name=name, handlers=handlers, logFormat=logFormat, logLevel=logLevel)
+    logger = ArkoudaLogger(
+        name=name, handlers=handlers, logFormat=logFormat, logLevel=logLevel
+    )
     loggers[logger.name] = logger
     return logger
 

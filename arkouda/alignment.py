@@ -141,16 +141,22 @@ def in1dmulti(a, b, assume_unique=False, symmetric=False):
         ua = a
         ub = b
     # Key for deinterleaving result
-    isa = concatenate((ones(ua[0].size, dtype=akbool), zeros(ub[0].size, dtype=akbool)), ordered=False)
+    isa = concatenate(
+        (ones(ua[0].size, dtype=akbool), zeros(ub[0].size, dtype=akbool)), ordered=False
+    )
     c = [concatenate(x, ordered=False) for x in zip(ua, ub)]
     g = GroupBy(c)
     k, ct = g.count()
     if assume_unique:
         # need to verify uniqueness, otherwise answer will be wrong
         if (g.sum(isa)[1] > 1).any():
-            raise NonUniqueError("Called with assume_unique=True, but first argument is not unique")
+            raise NonUniqueError(
+                "Called with assume_unique=True, but first argument is not unique"
+            )
         if (g.sum(~isa)[1] > 1).any():
-            raise NonUniqueError("Called with assume_unique=True, but second argument is not unique")
+            raise NonUniqueError(
+                "Called with assume_unique=True, but second argument is not unique"
+            )
     # Where value appears twice, it is present in both a and b
     # truth = answer in c domain
     truth = g.broadcast(ct == 2, permute=True)
@@ -236,7 +242,9 @@ def lookup(keys, values, arguments, fillvalue=-1, keys_from_unique=False):
     # scattermask = Args that exist in table
     # gathermask = Elements of keys that are being asked for
     try:
-        scattermask, gathermask = in1dmulti(g.unique_keys, keys, assume_unique=True, symmetric=True)
+        scattermask, gathermask = in1dmulti(
+            g.unique_keys, keys, assume_unique=True, symmetric=True
+        )
     except NonUniqueError:
         raise NonUniqueError("Function keys must be unique.")
     # uvals = Retrieved values corresponding to unique args being queried
@@ -335,7 +343,9 @@ def search_intervals(vals, intervals, assume_unique=False):
     from arkouda.join import gen_ranges
 
     if len(intervals) != 2:
-        raise ValueError("intervals must be 2-tuple of (lower_bound_inclusive, upper_bounds_exclusive)")
+        raise ValueError(
+            "intervals must be 2-tuple of (lower_bound_inclusive, upper_bounds_exclusive)"
+        )
 
     def check_numeric(x):
         if not (isinstance(x, pdarray) and x.dtype in (akint64, akfloat64)):

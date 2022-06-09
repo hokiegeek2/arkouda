@@ -88,7 +88,9 @@ class BitVector(pdarray):
         """
         # Start with a fixed-width, zero-padded binary value,
         # and replace 0/1 with ./| for better visibility
-        fmt = "{{:0{}b}}".format(self.width).format(x).replace("0", ".").replace("1", "|")
+        fmt = (
+            "{{:0{}b}}".format(self.width).format(x).replace("0", ".").replace("1", "|")
+        )
         if self.reverse:
             return fmt[::-1]
         else:
@@ -102,12 +104,18 @@ class BitVector(pdarray):
         else:
             vals = [self.format(self.values[i]) for i in range(3)]
             vals.append("...")
-            vals.extend([self.format(self.values[i]) for i in range(self.size - 3, self.size)])
+            vals.extend(
+                [self.format(self.values[i]) for i in range(self.size - 3, self.size)]
+            )
         # Print values as a single, aligned column for easier viewing
         # Also show "width" and "reverse" parameters
         spaces = " " * (len(self.__class__.__name__) + 1)
         return "{}([{}],\n{}width={}, reverse={})".format(
-            self.__class__.__name__, ",\n{} ".format(spaces).join(vals), spaces, self.width, self.reverse
+            self.__class__.__name__,
+            ",\n{} ".format(spaces).join(vals),
+            spaces,
+            self.width,
+            self.reverse,
         )
 
     def __repr__(self):
@@ -229,7 +237,9 @@ class Fields(BitVector):
     typically treat this class like an int64 pdarray.
     """
 
-    def __init__(self, values, names, MSB_left=True, pad="-", separator="", show_int=True):
+    def __init__(
+        self, values, names, MSB_left=True, pad="-", separator="", show_int=True
+    ):
         # Argument validation
         # Normalize names, which can be string or sequence
         self.names = tuple(names)
@@ -406,7 +416,9 @@ def ip_address(values):
     try:
         return IPv4(array([int(_ip_address(x)) for x in values]))
     except Exception as e:
-        raise RuntimeError("Error converting non-arkouda object to list of IP addresses") from e
+        raise RuntimeError(
+            "Error converting non-arkouda object to list of IP addresses"
+        ) from e
 
 
 class IPv4(pdarray):
@@ -478,7 +490,9 @@ class IPv4(pdarray):
         else:
             vals = [self.format(self.values[i]) for i in range(3)]
             vals.append("...")
-            vals.extend([self.format(self.values[i]) for i in range(self.size - 3, self.size)])
+            vals.extend(
+                [self.format(self.values[i]) for i in range(self.size - 3, self.size)]
+            )
         # Display values as single, aligned column for ease of viewing
         spaces = " " * (len(self.__class__.__name__) + 1)
         return "{}([{}],\n{})".format(

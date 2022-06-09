@@ -171,7 +171,9 @@ class ReplyMessage:
         """
         try:
             return ReplyMessage(
-                msg=values["msg"], msgType=MessageType(values["msgType"]), user=values["user"]
+                msg=values["msg"],
+                msgType=MessageType(values["msgType"]),
+                user=values["user"],
             )
         except KeyError as ke:
             raise ValueError(f"values dict missing {ke} field")

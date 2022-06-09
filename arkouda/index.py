@@ -1,9 +1,9 @@
 import json
-from typeguard import typechecked
-from typing import List, Union, Optional
+from typing import List, Optional, Union
 from typing import cast as typecast
 
 import pandas as pd  # type: ignore
+from typeguard import typechecked
 
 from arkouda import Strings
 from arkouda.alignment import in1dmulti
@@ -23,7 +23,9 @@ from arkouda.util import concatenate, convert_if_categorical, get_callback, regi
 class Index:
     @typechecked
     def __init__(
-        self, values: Union[List, pdarray, Strings, pd.Index, "Index"], name: Optional[str] = None
+        self,
+        values: Union[List, pdarray, Strings, pd.Index, "Index"],
+        name: Optional[str] = None,
     ):
         if isinstance(values, Index):
             self.values = values.values
@@ -357,7 +359,10 @@ class MultiIndex(Index):
 
     def _merge(self, other):
         self._check_types(other)
-        idx = [concatenate([ix1, ix2], ordered=False) for ix1, ix2 in zip(self.index, other.index)]
+        idx = [
+            concatenate([ix1, ix2], ordered=False)
+            for ix1, ix2 in zip(self.index, other.index)
+        ]
         return MultiIndex(GroupBy(idx).unique_keys)
 
     def _merge_all(self, array):
@@ -365,7 +370,10 @@ class MultiIndex(Index):
 
         for other in array:
             self._check_types(other)
-            idx = [concatenate([ix1, ix2], ordered=False) for ix1, ix2 in zip(idx, other.index)]
+            idx = [
+                concatenate([ix1, ix2], ordered=False)
+                for ix1, ix2 in zip(idx, other.index)
+            ]
 
         return MultiIndex(GroupBy(idx).unique_keys)
 
@@ -377,7 +385,10 @@ class MultiIndex(Index):
 
     def concat(self, other):
         self._check_types(other)
-        idx = [concatenate([ix1, ix2], ordered=True) for ix1, ix2 in zip(self.index, other.index)]
+        idx = [
+            concatenate([ix1, ix2], ordered=True)
+            for ix1, ix2 in zip(self.index, other.index)
+        ]
         return MultiIndex(idx)
 
     def lookup(self, key):

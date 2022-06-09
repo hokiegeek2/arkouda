@@ -1,10 +1,11 @@
-import json 
+import json
 import os
 import warnings
-from typing import cast, List, Mapping, Optional, Tuple, Union
+from typing import List, Mapping, Optional, Tuple, Union, cast
+
 import pyfiglet  # type: ignore
-import zmq # type: ignore
-from arkouda import security, io_util, __version__
+import zmq  # type: ignore
+
 from arkouda import __version__, io_util, security
 from arkouda.logger import getArkoudaLogger
 from arkouda.message import MessageFormat, MessageType, ReplyMessage, RequestMessage
@@ -35,7 +36,7 @@ verbose = verboseDefVal
 # threshold for __iter__() to limit comms to arkouda_server
 pdarrayIterThreshDefVal = 100
 pdarrayIterThresh = pdarrayIterThreshDefVal
-maxTransferBytesDefVal = 2**30
+maxTransferBytesDefVal = 2 ** 30
 maxTransferBytes = maxTransferBytesDefVal
 regexMaxCaptures: int = -1
 
@@ -143,7 +144,9 @@ def connect(
 
     # set token and username global variables
     username = security.get_username()
-    token = cast(str, _set_access_token(access_token=access_token, connect_string=pspStr))
+    token = cast(
+        str, _set_access_token(access_token=access_token, connect_string=pspStr)
+    )
 
     # connect to arkouda server
     try:
@@ -359,7 +362,9 @@ def _send_string_message(
         Raised if the return message is malformed JSON or is missing 1..n
         expected fields
     """
-    message = RequestMessage(user=username, token=token, cmd=cmd, format=MessageFormat.STRING, args=args)
+    message = RequestMessage(
+        user=username, token=token, cmd=cmd, format=MessageFormat.STRING, args=args
+    )
 
     logger.debug(f"sending message {message}")
 
@@ -423,11 +428,15 @@ def _send_binary_message(
         Raised if the return message is malformed JSON or is missing 1..n
         expected fields
     """
-    message = RequestMessage(user=username, token=token, cmd=cmd, format=MessageFormat.BINARY, args=args)
+    message = RequestMessage(
+        user=username, token=token, cmd=cmd, format=MessageFormat.BINARY, args=args
+    )
 
     logger.debug(f"sending message {message}")
 
-    socket.send(f"{json.dumps(message.asdict())}BINARY_PAYLOAD".encode(), flags=zmq.SNDMORE)
+    socket.send(
+        f"{json.dumps(message.asdict())}BINARY_PAYLOAD".encode(), flags=zmq.SNDMORE
+    )
     socket.send(payload, copy=False)
 
     if recv_binary:
@@ -451,7 +460,9 @@ def _send_binary_message(
         except KeyError as ke:
             raise ValueError(f"Return message is missing the {ke} field")
         except json.decoder.JSONDecodeError:
-            raise ValueError(f"{raw_message} is not valid JSON, may be server-side error")
+            raise ValueError(
+                f"{raw_message} is not valid JSON, may be server-side error"
+            )
 
 
 # message arkouda server the client is disconnecting from the server
@@ -576,7 +587,9 @@ def generic_msg(
     try:
         if send_binary:
             assert payload is not None
-            return _send_binary_message(cmd=cmd, payload=payload, recv_binary=recv_binary, args=args)
+            return _send_binary_message(
+                cmd=cmd, payload=payload, recv_binary=recv_binary, args=args
+            )
         else:
             assert payload is None
             return _send_string_message(cmd=cmd, args=args, recv_binary=recv_binary)
@@ -588,7 +601,8 @@ def generic_msg(
         socket.connect(pspStr)
         raise e
 
-def get_config() -> Mapping[str, Union[str, int, float,List[dict]]]:
+
+def get_config() -> Mapping[str, Union[str, int, float, List[dict]]]:
     """
     Get runtime information about the server.
 
