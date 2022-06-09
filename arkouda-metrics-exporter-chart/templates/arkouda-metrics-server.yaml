@@ -25,4 +25,10 @@ spec:
               value: {{ .Values.arkouda.metrics.service.name | quote }}
             - name: METRICS_SERVICE_PORT
               value: {{ .Values.arkouda.metrics.service.port | quote }}
+          livenessProbe:
+            httpGet:
+              path: /metrics
+              port: {{ .Values.metrics.service.port | quote }}
+              initialDelaySeconds: 5
+              periodSeconds: 15
 

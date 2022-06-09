@@ -1,0 +1,42 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+   name: delete-scrape-target
+   annotations:
+       "helm.sh/hook": "post-delete"
+       "helm.sh/hook-delete-policy": hook-succeeded,hook-failed
+spec:
+  backoffLimit: 0
+  template:
+    metadata: 
+      name: delete-scrape-target
+    spec:
+      restartPolicy: Never
+      containers:
+      - name: delete-scrape-target
+        image: hokiegeek2/kubernetes-integration:0.0.1 
+        imagePullPolicy: IfNotPresent
+        command: ['python', 'scrape-target.py']
+        env:
+          - name: PROMETHEUS_SCRAPE_TARGET_NAME
+            value: {{ .Values.prometheus.deleteScrapeTarget.name }}
+          - name: PROMETHEUS_SCRAPE_TARGET_ACTION
+            value: {{ .Values.prometheus.deleteScrapeTarget.action }}
+          - name: PROMETHEUS_SERVER
+            value: {{ .Values.prometheus.server }}
+          - name: KUBERNETES_HOST
+            value: {{ .Values.prometheus.kubernetes.host }}
+          - name: PROMETHEUS_NAMESPACE
+            value: {{ .Values.prometheus.kubernetes.namespace }}
+          - name: CERT_PATH
+            value: {{ .Values.prometheus.certPath }}
+          - name: KEY_PATH
+            value: {{ .Values.prometheus.keyPath }}
+        volumeMounts:
+          - name: ssl
+            mountPath: "/etc/ssl/arkouda"
+      volumes:              
+        - name: ssl
+          secret:
+            secretName: arkouda-server
+
