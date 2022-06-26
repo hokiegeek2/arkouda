@@ -131,7 +131,7 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'numpy>=1.18.5,<=1.21.5',
+        'numpy>=1.22.2',
         'pandas>=1.4.0',
         'pyzmq>=20.0.0',
         'typeguard==2.10.0',
@@ -143,7 +143,7 @@ setup(
         'pip',
         'types-tabulate',
         'tables>=3.7.0',
-        'pyarrow>=1.0.1',
+        'pyarrow>=7.0.0',
         'kubernetes',
         'python-dateutil',
         'prometheus_client'
@@ -160,7 +160,8 @@ setup(
     extras_require={  # Optional
         'dev': ['pexpect', 'pytest>=6.0', 'pytest-env',
                 'Sphinx', 'sphinx-argparse', 'sphinx-autoapi',
-                'mypy==0.931', 'typed-ast', 'flake8', 'prometheus_client'],
+                'mypy>=0.931', 'typed-ast', 'black', 'isort', 'flake8', 
+                'prometheus_client'],
     },
     # replace original install command with version that also builds
     # chapel and the arkouda server.

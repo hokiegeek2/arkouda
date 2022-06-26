@@ -324,9 +324,7 @@ def zeros(
     # check dtype for error
     if cast(np.dtype, dtype).name not in NumericDTypes:
         raise TypeError(f"unsupported dtype {dtype}")
-    repMsg = generic_msg(
-        cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size)
-    )
+    repMsg = generic_msg(cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, str(size)))
 
     return create_pdarray(repMsg)
 
@@ -377,9 +375,7 @@ def ones(
     # check dtype for error
     if cast(np.dtype, dtype).name not in NumericDTypes:
         raise TypeError(f"unsupported dtype {dtype}")
-    repMsg = generic_msg(
-        cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size)
-    )
+    repMsg = generic_msg(cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, str(size)))
     a = create_pdarray(repMsg)
     a.fill(1)
     return a
@@ -435,9 +431,7 @@ def full(
     # check dtype for error
     if cast(np.dtype, dtype).name not in NumericDTypes:
         raise TypeError(f"unsupported dtype {dtype}")
-    repMsg = generic_msg(
-        cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, size)
-    )
+    repMsg = generic_msg(cmd="create", args="{} {}".format(cast(np.dtype, dtype).name, str(size)))
     a = create_pdarray(repMsg)
     a.fill(fill_value)
     return a
