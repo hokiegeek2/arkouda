@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import builtins
 import json
-from typing import List, Sequence, cast
+from typing import List, Sequence, Union, cast
 
 import numpy as np  # type: ignore
 from typeguard import typechecked
@@ -1636,6 +1636,10 @@ def create_pdarray(repMsg: str) -> pdarray:
         mydtype = fields[2]
         size = int(fields[3])
         ndim = int(fields[4])
+
+        # remove comma from 1 tuple with trailing comma
+        if fields[5][len(fields[5])-2] == ',':
+            fields[5] = fields[5].replace(',', '')
         shape = [int(el) for el in fields[5][1:-1].split(",")]
         itemsize = int(fields[6])
     except Exception as e:
@@ -1920,7 +1924,9 @@ def mean(pda: pdarray) -> np.float64:
     RuntimeError
         Raised if there's a server-side error thrown
     """
-    return np.float64(pda.sum()) / pda.size
+    return np.float64(cast(Union[int, np.int64, np.float64], pda.sum())) / cast(
+        Union[int, np.int64], pda.size
+    )
 
 
 @typechecked

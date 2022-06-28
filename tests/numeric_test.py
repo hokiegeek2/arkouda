@@ -17,12 +17,12 @@ class NumericTest(ArkoudaTest):
         numericdtypes = [ak.int64, ak.float64, ak.bool, ak.uint64]
         for dt in numericdtypes:
             # Make sure unseeded runs differ
-            a = ak.randint(0, 2**32, N, dtype=dt)
-            b = ak.randint(0, 2**32, N, dtype=dt)
+            a = ak.randint(0, 2 ** 32, N, dtype=dt)
+            b = ak.randint(0, 2 ** 32, N, dtype=dt)
             self.assertFalse((a == b).all())
             # Make sure seeded results are same
-            a = ak.randint(0, 2**32, N, dtype=dt, seed=seed)
-            b = ak.randint(0, 2**32, N, dtype=dt, seed=seed)
+            a = ak.randint(0, 2 ** 32, N, dtype=dt, seed=seed)
+            b = ak.randint(0, 2 ** 32, N, dtype=dt, seed=seed)
             self.assertTrue((a == b).all())
         # Uniform
         self.assertFalse((ak.uniform(N) == ak.uniform(N)).all())
@@ -54,7 +54,7 @@ class NumericTest(ArkoudaTest):
     def testCast(self):
         N = 100
         arrays = {
-            ak.int64: ak.randint(-(2**48), 2**48, N),
+            ak.int64: ak.randint(-(2 ** 48), 2 ** 48, N),
             ak.float64: ak.randint(0, 1, N, dtype=ak.float64),
             ak.bool: ak.randint(0, 2, N, dtype=ak.bool),
         }
@@ -91,7 +91,7 @@ class NumericTest(ArkoudaTest):
         )
 
     def testStrCastErrors(self):
-        intNAN = -(2**63)
+        intNAN = -(2 ** 63)
         intstr = ak.array(["1", "2 ", "3?", "!4", "  5", "-45", "0b101", "0x30", "N/A"])
         intans = np.array([1, 2, intNAN, intNAN, 5, -45, 0b101, 0x30, intNAN])
         uintNAN = 0
@@ -140,7 +140,7 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.log(na) == ak.log(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.log(na), ak.log(pda).to_ndarray()))
         with self.assertRaises(TypeError):
             ak.log([range(0, 10)])
 
@@ -148,7 +148,7 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.exp(na) == ak.exp(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.exp(na), ak.exp(pda).to_ndarray()))
         with self.assertRaises(TypeError):
             ak.exp([range(0, 10)])
 
@@ -156,7 +156,7 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.abs(na) == ak.abs(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.abs(na), ak.abs(pda).to_ndarray()))
         self.assertTrue((ak.arange(5, 1, -1) == ak.abs(ak.arange(-5, -1))).all())
         self.assertTrue((ak.array([5, 4, 3, 2, 1]) == ak.abs(ak.linspace(-5, -1, 5))).all())
 
@@ -167,13 +167,13 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.cumsum(na) == ak.cumsum(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.cumsum(na), ak.cumsum(pda).to_ndarray()))
 
         # Test uint case
         na = np.linspace(1, 10, 10, "uint64")
         pda = ak.cast(pda, ak.uint64)
 
-        self.assertTrue((np.cumsum(na) == ak.cumsum(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.cumsum(na), ak.cumsum(pda).to_ndarray()))
 
         with self.assertRaises(TypeError):
             ak.cumsum([range(0, 10)])
@@ -182,7 +182,7 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.cumprod(na) == ak.cumprod(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.cumprod(na), ak.cumprod(pda).to_ndarray()))
         with self.assertRaises(TypeError):
             ak.cumprod([range(0, 10)])
 
@@ -190,7 +190,7 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.sin(na) == ak.sin(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.sin(na), ak.sin(pda).to_ndarray()))
         with self.assertRaises(TypeError):
             ak.cos([range(0, 10)])
 
@@ -198,7 +198,7 @@ class NumericTest(ArkoudaTest):
         na = np.linspace(1, 10, 10)
         pda = ak.array(na)
 
-        self.assertTrue((np.cos(na) == ak.cos(pda).to_ndarray()).all())
+        self.assertTrue(np.allclose(np.cos(na), ak.cos(pda).to_ndarray()))
         with self.assertRaises(TypeError):
             ak.cos([range(0, 10)])
 
@@ -251,9 +251,9 @@ class NumericTest(ArkoudaTest):
         # See https://github.com/Bears-R-Us/arkouda/issues/964
         # Grouped sum was exacerbating floating point errors
         # This test verifies the fix
-        N = 10**6
+        N = 10 ** 6
         G = N // 10
-        ub = 2**63 // N
+        ub = 2 ** 63 // N
         groupnum = ak.randint(0, G, N, seed=1)
         intval = ak.randint(0, ub, N, seed=2)
         floatval = ak.cast(intval, ak.float64)

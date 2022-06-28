@@ -1,5 +1,5 @@
 import datetime
-from typing import Union
+from warnings import warn
 
 import numpy as np  # type: ignore
 from pandas import Series  # type: ignore
@@ -9,7 +9,7 @@ from pandas import date_range as pd_date_range  # type: ignore
 from pandas import timedelta_range as pd_timedelta_range  # type: ignore
 from pandas import to_datetime, to_timedelta  # type: ignore
 
-from arkouda.dtypes import int64, intTypes, isSupportedInt
+from arkouda.dtypes import int64, int_scalars, intTypes, isSupportedInt
 from arkouda.numeric import abs as akabs
 from arkouda.numeric import cast
 from arkouda.pdarrayclass import pdarray
@@ -540,7 +540,7 @@ class Timedelta(_AbstractBaseTime):
         """
         return to_timedelta(self.to_ndarray())
 
-    def std(self, ddof: Union[int, np.int64, np.uint64] = 0):
+    def std(self, ddof: int_scalars = 0):
         """
         Returns the standard deviation as a pd.Timedelta object
         """
@@ -564,6 +564,7 @@ def date_range(
     normalize=False,
     name=None,
     closed=None,
+    inclusive="both",
     **kwargs,
 ):
     """Creates a fixed frequency Datetime range. Alias for
@@ -593,6 +594,9 @@ def date_range(
     closed : {None, 'left', 'right'}, optional
         Make the interval closed with respect to the given frequency to
         the 'left', 'right', or both sides (None, the default).
+        *Deprecated*
+    inclusive : {"both", "neither", "left", "right"}, default "both"
+        Include boundaries. Whether to set each bound as closed or open.
     **kwargs
         For compatibility. Has no effect on the result.
 
@@ -611,8 +615,25 @@ def date_range(
     <https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#offset-aliases>`__.
 
     """
+    if closed is not None:
+        warn(
+            "closed has been deprecated. Please use the inclusive parameter instead.",
+            DeprecationWarning,
+        )
+        inclusive = closed
+
     return Datetime(
-        pd_date_range(start, end, periods, freq, tz, normalize, name, closed, **kwargs)
+        pd_date_range(
+            start,
+            end,
+            periods,
+            freq,
+            tz,
+            normalize,
+            name,
+            inclusive=inclusive,
+            **kwargs,
+        )
     )
 
 

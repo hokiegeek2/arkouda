@@ -17,7 +17,7 @@ from arkouda.pdarrayclass import pdarray
 from arkouda.pdarraycreation import arange, array, ones
 from arkouda.pdarraysetops import argsort, in1d
 from arkouda.sorting import coargsort
-from arkouda.util import concatenate, convert_if_categorical, get_callback, register
+from arkouda.util import convert_if_categorical, generic_concat, get_callback, register
 
 
 class Index:
@@ -146,7 +146,7 @@ class Index:
         self._check_types(other)
 
         callback = get_callback(self.values)
-        idx = concatenate([self.values, other.values], ordered=False)
+        idx = generic_concat([self.values, other.values], ordered=False)
         return Index(callback(unique(idx)))
 
     def _merge_all(self, idx_list):
@@ -155,7 +155,7 @@ class Index:
 
         for other in idx_list:
             self._check_types(other)
-            idx = concatenate([idx, other.values], ordered=False)
+            idx = generic_concat([idx, other.values], ordered=False)
 
         return Index(callback(unique(idx)))
 
@@ -177,7 +177,7 @@ class Index:
     def concat(self, other):
         self._check_types(other)
 
-        idx = concatenate([self.values, other.values], ordered=True)
+        idx = generic_concat([self.values, other.values], ordered=True)
         return Index(idx)
 
     def lookup(self, key):
@@ -298,11 +298,17 @@ class MultiIndex(Index):
         first = True
         for col in self.values:
             if first:
+                # we are implicitly assuming values contains arkouda types and not python lists
+                # because we are using obj.size/obj.dtype instead of len(obj)/type(obj)
+                # this should be made explict using typechecking
                 self.size = col.size
+                self.dtype = col.dtype
                 first = False
             else:
                 if col.size != self.size:
                     raise ValueError("All columns in MultiIndex must have same length")
+                if col.dtype != self.dtype:
+                    raise ValueError("All columns in MultiIndex must have same dtype")
         self.levels = len(self.values)
 
     def __getitem__(self, key):
@@ -359,10 +365,7 @@ class MultiIndex(Index):
 
     def _merge(self, other):
         self._check_types(other)
-        idx = [
-            concatenate([ix1, ix2], ordered=False)
-            for ix1, ix2 in zip(self.index, other.index)
-        ]
+        idx = [generic_concat([ix1, ix2], ordered=False) for ix1, ix2 in zip(self.index, other.index)]
         return MultiIndex(GroupBy(idx).unique_keys)
 
     def _merge_all(self, array):
@@ -370,11 +373,7 @@ class MultiIndex(Index):
 
         for other in array:
             self._check_types(other)
-            idx = [
-                concatenate([ix1, ix2], ordered=False)
-                for ix1, ix2 in zip(idx, other.index)
-            ]
-
+            idx = [generic_concat([ix1, ix2], ordered=False) for ix1, ix2 in zip(idx, other.index)]
         return MultiIndex(GroupBy(idx).unique_keys)
 
     def argsort(self, ascending=True):
@@ -385,10 +384,7 @@ class MultiIndex(Index):
 
     def concat(self, other):
         self._check_types(other)
-        idx = [
-            concatenate([ix1, ix2], ordered=True)
-            for ix1, ix2 in zip(self.index, other.index)
-        ]
+        idx = [generic_concat([ix1, ix2], ordered=True) for ix1, ix2 in zip(self.index, other.index)]
         return MultiIndex(idx)
 
     def lookup(self, key):
