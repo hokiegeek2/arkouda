@@ -68,7 +68,7 @@ affinity: {}
 
 ######################## Pod Settings ########################
 
-releaseVersion: 0.4.4
+releaseVersion: 0.4.5
 imagePullPolicy: IfNotPresent
 
 ################ Arkouda Server Configuration ################
@@ -96,7 +96,7 @@ server:
 
 external:
   persistence: 
-    enabled: true
+    enabled: false
     path: /opt/locale
     hostPath: /mnt/data/arkouda
   certFile: /etc/ssl/arkouda/tls.crt
