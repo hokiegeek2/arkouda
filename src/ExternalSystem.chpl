@@ -65,6 +65,27 @@ module ExternalSystem {
     enum HttpRequestFormat{TEXT,JSON,MULTIPART};    
 
     /*
+     * Retrieves the host ip address of the locale 0 arkouda_server process, which is
+     * useful for registering Arkouda with cloud environments such as Kubernetes.
+     */
+    proc getConnectHostIp() throws {
+        var hostip: string;
+        on Locales[0] {
+            var ipString = getLineFromFile('/etc/hosts',getConnectHostname());
+            try {
+                var splits = ipString.split();
+                hostip = splits[0]:string;
+                hostip.split();
+            } catch (e: Error) {
+                throw new IllegalArgumentError(
+                         "invalid hostname -> ip address entry in /etc/hosts %t".format(
+                                               e));
+            }
+        }
+        return hostip;
+    }
+
+    /*
      * Base class defining the Arkouda Channel interface consisting of a
      * write method that writes a payload to an external system.
      */
@@ -403,7 +424,7 @@ module ExternalSystem {
                                           '[{"addresses": [{"ip": "%s"}],"ports": ',
                                           '[{"port": %i, "protocol": "TCP"}]}]}').format(
                                                 serviceName,
-                                                ServerConfig.getConnectHostIp(),
+                                                getConnectHostIp(),
                                                 servicePort);
         
             channel = getExternalChannel(new HttpChannelParams(
