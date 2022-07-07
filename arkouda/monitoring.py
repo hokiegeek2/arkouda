@@ -362,16 +362,19 @@ class ArkoudaMetrics:
             MetricCategory.SYSTEM: lambda x: self._updateSystemMetrics(x),
         }
 
-        try:
-            ak.connect(self.arkoudaMetricsHost, self.arkoudaMetricsPort)
-        except Exception as e:
-            raise EnvironmentError(e)
+        self.connect()
 
         if not client.connected:
             raise EnvironmentError("Not connected to Arkouda server")
 
         self._initializeServerInfo()
         print("Completed Initialization of Arkouda Metrics Exporter")
+
+    def connect(self, timeout : int=0) -> None:
+        try:
+            ak.connect(self.arkoudaMetricsHost, self.arkoudaMetricsPort)
+        except Exception as e:
+            raise EnvironmentError(e)
 
     def asMetric(self, value: Dict[str, Union[float, int]]) -> Metric:
         scope = MetricScope(value["scope"])
@@ -521,11 +524,28 @@ class ArkoudaMetrics:
         )
 
     def run_metrics_loop(self):
+        def isConnected() -> bool:
+            if client.get_config():
+                return True
+            else:
+                return False
+
+        def reconnect() -> None:
+            self.connect(10)
+
         while True:
-            self.fetch()
+            if isConnected():
+                self.fetch()
+            else:
+                logger.info('Not connected to Arkouda, attempting to reconnect')
+                reconnect()
+                if isConnected():
+                    self.fetch()
+                else:
+                    logger.error('Cannot connect to Arkouda, no metrics produced')
             time.sleep(self.pollingInterval)
 
-    def fetch(self):
+    def fetch(self) -> None:
         metrics = json.loads(
             client.generic_msg(cmd="metrics", args=str(MetricCategory.ALL)),
             object_hook=self.asMetric,
@@ -552,6 +572,12 @@ def main():
     exportPort = int(os.getenv("EXPORT_PORT", "5080"))
     serverName = os.getenv("ARKOUDA_SERVER_NAME", "arkouda-metrics")
 
+    logger.info('Starting Prometheus scrape endpoint')
+
+    start_http_server(exportPort)
+    
+    logger.info('Started Prometheus scrape endpoint')
+
     metrics = ArkoudaMetrics(
         arkoudaMetricsHost=arkoudaMetricsHost,
         arkoudaMetricsPort=arkoudaMetricsPort,
@@ -560,9 +586,9 @@ def main():
         pollingInterval=pollingInterval,
     )
 
-    start_http_server(exportPort)
-    metrics.run_metrics_loop()
+    logger.info('Instantiated ArkoudaMetrics and connected to Arkouda')
 
+    metrics.run_metrics_loop()
 
 if __name__ == "__main__":
     main()

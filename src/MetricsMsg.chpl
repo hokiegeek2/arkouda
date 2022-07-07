@@ -43,7 +43,7 @@ module MetricsMsg {
                 users.add(name,user);
                 return user;
             } else {
-                return users.getValue(name);
+                return try! users.getValue(name);
             }
         }
 
@@ -62,7 +62,7 @@ module MetricsMsg {
 
         proc getUserMetrics(user: User) {
             if this.metrics.contains(user: User) {
-                return this.metrics.getValue(user);
+                return try! this.metrics.getValue(user);
             } else {
                 var userMetrics = new shared CounterTable();
                 this.metrics.add(user, userMetrics);
@@ -115,7 +115,7 @@ module MetricsMsg {
                 this.measurements.add(metric,0.0);
                 return 0;
             } else {
-                return this.measurements.getValue(metric);
+                return try! this.measurements.getValue(metric);
             }
         }   
         
@@ -141,7 +141,7 @@ module MetricsMsg {
                 this.counts.add(metric,0);
                 return 0;
             } else {
-                return this.counts.getValue(metric);
+                return try! this.counts.getValue(metric);
             }
         }   
         

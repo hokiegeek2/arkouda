@@ -1,4 +1,4 @@
-FROM hokiegeek2/udp-arkouda-server-base:0.2.0
+FROM hokiegeek2/chapel-udp:1.26.0
 
 ARG ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}

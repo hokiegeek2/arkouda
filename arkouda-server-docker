@@ -1,4 +1,4 @@
-FROM chapel/chapel-gasnet-smp:1.25.0
+FROM chapel/chapel-gasnet-smp:1.26.0
 
 # hack needed for Kubernetes deploymet
 RUN export CHPL_GASNET_MORE_CFG_OPTIONS=--enable-force-posix-realtime
@@ -12,6 +12,7 @@ ENV ARKOUDA_DIST_FOLDER=${ARKOUDA_DIST_FOLDER}
 
 ADD arkouda.tar.gz /opt/
 RUN mv -v /opt/$ARKOUDA_DIST_FOLDER /opt/arkouda
+ADD ServerModules.cfg /opt/arkouda
 WORKDIR /opt/arkouda
 
 # Install Arkouda pre-reqs

@@ -11,12 +11,11 @@ WORKDIR /opt/arkouda
 # Execute Arkouda pip install
 RUN pip install --upgrade pip
 RUN pip install -e .[dev]
-WORKDIR /opt
 
 # Remove unneeded files
 RUN rm -rf /opt/arkouda/src
-RUN rm -rf arkouda-tar.gz
+RUN rm -rf /opt/arkouda-tar.gz
 
 EXPOSE 5080
 
-ENTRYPOINT python3 arkouda/arkouda/monitoring.py
+ENTRYPOINT python3 arkouda/monitoring.py
