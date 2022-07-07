@@ -297,9 +297,7 @@ class DataFrame(UserDict):
             if type(initialdata) == dict:
                 for key, val in initialdata.items():
                     if not isinstance(val, self.COLUMN_CLASSES):
-                        raise ValueError(
-                            f"Values must be one of {self.COLUMN_CLASSES}."
-                        )
+                        raise ValueError(f"Values must be one of {self.COLUMN_CLASSES}.")
                     if key.lower() == "index":
                         # handles the index as an Index object instead of a column
                         self._set_index(val)
@@ -318,9 +316,7 @@ class DataFrame(UserDict):
                 keys = [str(x) for x in range(len(initialdata))]
                 for key, col in zip(keys, initialdata):
                     if not isinstance(col, self.COLUMN_CLASSES):
-                        raise ValueError(
-                            f"Values must be one of {self.COLUMN_CLASSES}."
-                        )
+                        raise ValueError(f"Values must be one of {self.COLUMN_CLASSES}.")
                     sizes.add(col.size)
                     if len(sizes) > 1:
                         raise ValueError("Input arrays must have equal size.")
@@ -331,9 +327,7 @@ class DataFrame(UserDict):
 
             # Initial data is invalid.
             else:
-                raise ValueError(
-                    f"Initialize with dict or list of {self.COLUMN_CLASSES}."
-                )
+                raise ValueError(f"Initialize with dict or list of {self.COLUMN_CLASSES}.")
 
             # Update the dataframe indices and metadata.
             if len(sizes) > 0:
@@ -466,9 +460,7 @@ class DataFrame(UserDict):
             if not isinstance(value, self.COLUMN_CLASSES):
                 raise ValueError(f"Column must be one of {self.COLUMN_CLASSES}.")
             elif self._size is not None and self._size != value.size:
-                raise ValueError(
-                    f"Expected size {self.size} but received size {value.size}."
-                )
+                raise ValueError(f"Expected size {self.size} but received size {value.size}.")
             else:
                 self._empty = False
                 UserDict.__setitem__(self, key, value)
@@ -519,24 +511,16 @@ class DataFrame(UserDict):
         # Get units that make the most sense.
         if self._bytes < 1024:
             mem = self.memory_usage(unit="B")
-        elif self._bytes < 1024 ** 2:
+        elif self._bytes < 1024**2:
             mem = self.memory_usage(unit="KB")
-        elif self._bytes < 1024 ** 3:
+        elif self._bytes < 1024**3:
             mem = self.memory_usage(unit="MB")
         else:
             mem = self.memory_usage(unit="GB")
         rows = " rows"
         if self._size == 1:
             rows = " row"
-        return (
-            "DataFrame(["
-            + keystr
-            + "], {:,}".format(self._size)
-            + rows
-            + ", "
-            + str(mem)
-            + ")"
-        )
+        return "DataFrame([" + keystr + "], {:,}".format(self._size) + rows + ", " + str(mem) + ")"
 
     def _get_head_tail(self):
         if self._empty:
@@ -553,10 +537,7 @@ class DataFrame(UserDict):
             newdf._set_index(self.index)
             return newdf.to_pandas(retain_index=True)
         # Being 1 above the threshold causes the PANDAS formatter to split the data frame vertically
-        idx = array(
-            list(range(maxrows // 2 + 1))
-            + list(range(self._size - (maxrows // 2), self._size))
-        )
+        idx = array(list(range(maxrows // 2 + 1)) + list(range(self._size - (maxrows // 2), self._size)))
         newdf = DataFrame()
         for col in self._columns:
             if isinstance(self[col], Categorical):
@@ -581,20 +562,13 @@ class DataFrame(UserDict):
             newdf._set_index(self.index)
             return newdf.to_pandas(retain_index=True)
         # Being 1 above the threshold causes the PANDAS formatter to split the data frame vertically
-        idx = array(
-            list(range(maxrows // 2 + 1))
-            + list(range(self._size - (maxrows // 2), self._size))
-        )
+        idx = array(list(range(maxrows // 2 + 1)) + list(range(self._size - (maxrows // 2), self._size)))
         msg_list = []
         for col in self._columns:
             if isinstance(self[col], Categorical):
-                msg_list.append(
-                    f"Categorical+{col}+{self[col].codes.name}+{self[col].categories.name}"
-                )
+                msg_list.append(f"Categorical+{col}+{self[col].codes.name}+{self[col].categories.name}")
             elif isinstance(self[col], SegArray):
-                msg_list.append(
-                    f"SegArray+{col}+{self[col].segments.name}+{self[col].values.name}"
-                )
+                msg_list.append(f"SegArray+{col}+{self[col].segments.name}+{self[col].values.name}")
             elif isinstance(self[col], Strings):
                 msg_list.append(f"Strings+{col}+{self[col].name}")
             else:
@@ -620,9 +594,7 @@ class DataFrame(UserDict):
             elif t == "SegArray":
                 # split creates for segments and values
                 eles = msg[2].split("+")
-                df_dict[msg[1]] = SegArray(
-                    create_pdarray(eles[0]), create_pdarray(eles[1])
-                )
+                df_dict[msg[1]] = SegArray(create_pdarray(eles[0]), create_pdarray(eles[1]))
             else:
                 df_dict[msg[1]] = create_pdarray(msg[2])
 
@@ -799,9 +771,7 @@ class DataFrame(UserDict):
             gp = akGroupBy([self.data[col] for col in subset])
 
         if keep == "last":
-            _segment_ends = concatenate(
-                [gp.segments[1:] - 1, array([gp.permutation.size - 1])]
-            )
+            _segment_ends = concatenate([gp.segments[1:] - 1, array([gp.permutation.size - 1])])
             return self[gp.permutation[_segment_ends]]
         else:
             return self[gp.permutation[gp.segments]]
@@ -832,9 +802,7 @@ class DataFrame(UserDict):
             elif isinstance(val, SegArray):
                 dtypes.append("SegArray")
             else:
-                raise TypeError(
-                    f"Unsupported type encountered for ak.DataFrame, {type(val)}"
-                )
+                raise TypeError(f"Unsupported type encountered for ak.DataFrame, {type(val)}")
         res = Row({key: dtype for key, dtype in zip(keys, dtypes)})
         return res
 
@@ -871,9 +839,7 @@ class DataFrame(UserDict):
             )
 
     @typechecked
-    def reset_index(
-        self, size: bool = False, inplace: bool = False
-    ) -> Union[None, DataFrame]:
+    def reset_index(self, size: bool = False, inplace: bool = False) -> Union[None, DataFrame]:
         """
         Set the index to an integer range.
 
@@ -934,24 +900,16 @@ class DataFrame(UserDict):
         # Get units that make the most sense.
         if self._bytes < 1024:
             mem = self.memory_usage(unit="B")
-        elif self._bytes < 1024 ** 2:
+        elif self._bytes < 1024**2:
             mem = self.memory_usage(unit="KB")
-        elif self._bytes < 1024 ** 3:
+        elif self._bytes < 1024**3:
             mem = self.memory_usage(unit="MB")
         else:
             mem = self.memory_usage(unit="GB")
         rows = " rows"
         if self._size == 1:
             rows = " row"
-        return (
-            "DataFrame(["
-            + keystr
-            + "], {:,}".format(self._size)
-            + rows
-            + ", "
-            + str(mem)
-            + ")"
-        )
+        return "DataFrame([" + keystr + "], {:,}".format(self._size) + rows + ", " + str(mem) + ")"
 
     def update_size(self):
         """
@@ -970,9 +928,7 @@ class DataFrame(UserDict):
             self._size = sizes.pop()
 
     @typechecked
-    def rename(
-        self, mapper: Union[Callable, dict], inplace: bool = False
-    ) -> Union[None, DataFrame]:
+    def rename(self, mapper: Union[Callable, dict], inplace: bool = False) -> Union[None, DataFrame]:
         """
         Rename columns in-place according to a mapping.
 
@@ -1068,9 +1024,7 @@ class DataFrame(UserDict):
             tmp_data = {}
             for key in keylist:
                 try:
-                    tmp_data[key] = util_concatenate(
-                        [self[key], other[key]], ordered=ordered
-                    )
+                    tmp_data[key] = util_concatenate([self[key], other[key]], ordered=ordered)
                 except TypeError as e:
                     raise TypeError(
                         f"Incompatible types for column {key}: {type(self[key])} vs {type(other[key])}"
@@ -1105,9 +1059,7 @@ class DataFrame(UserDict):
                 first = False
             else:
                 if set(df._columns) != columnset:
-                    raise KeyError(
-                        "Cannot concatenate DataFrames with mismatched columns"
-                    )
+                    raise KeyError("Cannot concatenate DataFrames with mismatched columns")
         # if here, columns match
         ret = cls()
         for col in columnlist:
@@ -1364,22 +1316,16 @@ class DataFrame(UserDict):
         """
         prefix, extension = os.path.splitext(prefix_path)
         first_file = f"{prefix}_LOCALE0000{extension}"
-        filetype = (
-            get_filetype(first_file) if file_format.lower() == "infer" else file_format
-        )
+        filetype = get_filetype(first_file) if file_format.lower() == "infer" else file_format
 
         # columns load backwards
         df_dict = load_all(prefix_path, file_format=filetype)
 
         # this assumes segments will always have corresponding values.
         # This should happen due to save config
-        seg_cols = [
-            col.split("_")[0] for col in df_dict.keys() if col.endswith("_segments")
-        ]
+        seg_cols = [col.split("_")[0] for col in df_dict.keys() if col.endswith("_segments")]
         df_dict_keys = [
-            col.split("_")[0]
-            if col.endswith("_segments") or col.endswith("_values")
-            else col
+            col.split("_")[0] if col.endswith("_segments") or col.endswith("_values") else col
             for col in df_dict.keys()
         ]
 
@@ -1420,10 +1366,7 @@ class DataFrame(UserDict):
         if ascending:
             return argsort(self[key])
         else:
-            if isinstance(self[key], pdarray) and self[key].dtype in (
-                akint64,
-                akfloat64,
-            ):
+            if isinstance(self[key], pdarray) and self[key].dtype in (akint64, akfloat64):
                 return argsort(-self[key])
             else:
                 return argsort(self[key])[arange(self.size - 1, -1, -1)]
@@ -1587,9 +1530,7 @@ class DataFrame(UserDict):
             res._size = self._size
             res._bytes = self._bytes
             res._empty = self._empty
-            res._columns = self._columns[
-                :
-            ]  # if this is not a slice, droping columns modifies both
+            res._columns = self._columns[:]  # if this is not a slice, droping columns modifies both
 
             for key, val in self.items():
                 res[key] = val[:]
@@ -1683,15 +1624,9 @@ class DataFrame(UserDict):
             # flatten the DataFrame so single in1d can be used.
             flat_in1d = in1d(concatenate(list(self.data.values())), values)
             segs = concatenate(
-                [
-                    array([0]),
-                    cumsum(array([self.data[col].size for col in self.columns])),
-                ]
+                [array([0]), cumsum(array([self.data[col].size for col in self.columns]))]
             )
-            df_def = {
-                col: flat_in1d[segs[i] : segs[i + 1]]
-                for i, col in enumerate(self.columns)
-            }
+            df_def = {col: flat_in1d[segs[i] : segs[i + 1]] for i, col in enumerate(self.columns)}
         elif isinstance(values, Dict):
             # key is column name, val is the list of values to check
             df_def = {
@@ -1708,9 +1643,7 @@ class DataFrame(UserDict):
             # create the dataframe with all false
             df_def = {col: zeros(self.size, dtype=akbool) for col in self.columns}
             # identify the indexes in both
-            rows_self, rows_val = intersect(
-                self.index.index, values.index.index, unique=True
-            )
+            rows_self, rows_val = intersect(self.index.index, values.index.index, unique=True)
 
             # used to sort the rows with only the indexes in both
             sort_self = self.index[rows_self].argsort()
@@ -1720,13 +1653,11 @@ class DataFrame(UserDict):
             for col in self.columns:
                 if isinstance(values, DataFrame) and col in values.columns:
                     df_def[col][rows_self] = (
-                        self.data[col][rows_self][sort_self]
-                        == values.data[col][rows_val][sort_val]
+                        self.data[col][rows_self][sort_self] == values.data[col][rows_val][sort_val]
                     )
                 elif isinstance(values, Series):
                     df_def[col][rows_self] = (
-                        self.data[col][rows_self][sort_self]
-                        == values.values[rows_val][sort_val]
+                        self.data[col][rows_self][sort_self] == values.values[rows_val][sort_val]
                     )
         else:
             # pandas provides the same error in this case

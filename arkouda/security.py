@@ -79,9 +79,7 @@ def get_arkouda_client_directory() -> Path:
     arkouda_parent_dir = os.getenv("ARKOUDA_CLIENT_DIRECTORY")
     if not arkouda_parent_dir:
         arkouda_parent_dir = get_home_directory()
-    return io_util.get_directory(
-        "{}{}.arkouda".format(arkouda_parent_dir, os.sep)
-    ).absolute()
+    return io_util.get_directory("{}{}.arkouda".format(arkouda_parent_dir, os.sep)).absolute()
 
 
 def get_username() -> str:

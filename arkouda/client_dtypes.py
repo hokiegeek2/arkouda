@@ -1,7 +1,9 @@
 from functools import partial
 from ipaddress import ip_address as _ip_address
+from typing import Optional, Union
 
 import numpy as np  # type: ignore
+from typeguard import typechecked
 
 from arkouda.dtypes import bitType, intTypes, isSupportedInt
 from arkouda.groupbyclass import GroupBy, broadcast
@@ -88,9 +90,7 @@ class BitVector(pdarray):
         """
         # Start with a fixed-width, zero-padded binary value,
         # and replace 0/1 with ./| for better visibility
-        fmt = (
-            "{{:0{}b}}".format(self.width).format(x).replace("0", ".").replace("1", "|")
-        )
+        fmt = "{{:0{}b}}".format(self.width).format(x).replace("0", ".").replace("1", "|")
         if self.reverse:
             return fmt[::-1]
         else:
@@ -104,18 +104,12 @@ class BitVector(pdarray):
         else:
             vals = [self.format(self.values[i]) for i in range(3)]
             vals.append("...")
-            vals.extend(
-                [self.format(self.values[i]) for i in range(self.size - 3, self.size)]
-            )
+            vals.extend([self.format(self.values[i]) for i in range(self.size - 3, self.size)])
         # Print values as a single, aligned column for easier viewing
         # Also show "width" and "reverse" parameters
         spaces = " " * (len(self.__class__.__name__) + 1)
         return "{}([{}],\n{}width={}, reverse={})".format(
-            self.__class__.__name__,
-            ",\n{} ".format(spaces).join(vals),
-            spaces,
-            self.width,
-            self.reverse,
+            self.__class__.__name__, ",\n{} ".format(spaces).join(vals), spaces, self.width, self.reverse
         )
 
     def __repr__(self):
@@ -237,9 +231,7 @@ class Fields(BitVector):
     typically treat this class like an int64 pdarray.
     """
 
-    def __init__(
-        self, values, names, MSB_left=True, pad="-", separator="", show_int=True
-    ):
+    def __init__(self, values, names, MSB_left=True, pad="-", separator="", show_int=True):
         # Argument validation
         # Normalize names, which can be string or sequence
         self.names = tuple(names)
@@ -416,9 +408,7 @@ def ip_address(values):
     try:
         return IPv4(array([int(_ip_address(x)) for x in values]))
     except Exception as e:
-        raise RuntimeError(
-            "Error converting non-arkouda object to list of IP addresses"
-        ) from e
+        raise RuntimeError("Error converting non-arkouda object to list of IP addresses") from e
 
 
 class IPv4(pdarray):
@@ -490,9 +480,7 @@ class IPv4(pdarray):
         else:
             vals = [self.format(self.values[i]) for i in range(3)]
             vals.append("...")
-            vals.extend(
-                [self.format(self.values[i]) for i in range(self.size - 3, self.size)]
-            )
+            vals.extend([self.format(self.values[i]) for i in range(self.size - 3, self.size)])
         # Display values as single, aligned column for ease of viewing
         spaces = " " * (len(self.__class__.__name__) + 1)
         return "{}([{}],\n{})".format(
@@ -561,3 +549,77 @@ class IPv4(pdarray):
         else:
             return NotImplemented
         self.values.opeq(otherdata, op)
+
+
+@typechecked
+def is_ipv4(ip: Union[pdarray, IPv4], ip2: Optional[pdarray] = None) -> pdarray:
+    """
+    Indicate which values are ipv4 when passed data containing IPv4 and IPv6 values.
+
+    Parameters
+    ----------
+    ip: pdarray (int64) or ak.IPv4
+    IPv4 value. High Bits of IPv6 if IPv6 is passed in.
+    ip2: pdarray (int64), Optional
+    Low Bits of IPv6. This is added for support when dealing with data that contains IPv6 as well.
+
+    Returns
+    -------
+    pdarray of bools indicating which indexes are IPv4.
+
+    See Also
+    --------
+    ak.is_ipv6
+    """
+    # grab the ipv4 pdarray of values
+    if isinstance(ip, IPv4):
+        ip = ip.values
+
+    if ip.dtype not in intTypes or (ip2 is not None and ip2.dtype not in intTypes):
+        raise TypeError("ip and ip2 must be int64 pdarrays. ip2 is Optional.")
+
+    if ip2 is not None and ip.size != ip2.size:
+        raise RuntimeError("When supplying a value for ip2, ip and ip2 must be the same size.")
+
+    if ip2 is not None:
+        ans = ip < 2 ** 32
+        ans2 = ip2 == 0
+        return ans & ans2
+    else:
+        return ip < 2 ** 32
+
+
+@typechecked
+def is_ipv6(ip: Union[pdarray, IPv4], ip2: Optional[pdarray] = None) -> pdarray:
+    """
+    Indicate which values are ipv6 when passed data containing IPv4 and IPv6 values.
+
+    Parameters
+    ----------
+    ip: pdarray (int64) or ak.IPv4
+    High Bits of IPv6.
+    ip2: pdarray (int64), Optional
+    Low Bits of IPv6
+
+    Returns
+    -------
+    pdarray of bools indicating which indexes are IPv6.
+
+    See Also
+    --------
+    ak.is_ipv4
+    """
+    # grab the ipv4 pdarray of values
+    if isinstance(ip, IPv4):
+        ip = ip.values
+    if ip.dtype not in intTypes or (ip2 is not None and ip2.dtype not in intTypes):
+        raise TypeError("ip and ip2 must be int64 pdarrays. ip2 is Optional.")
+    if ip2 is not None and ip.size != ip2.size:
+        raise RuntimeError("When supplying a value for ip2, ip and ip2 must be the same size.")
+
+    if ip2 is not None:
+        ans = ip >= 2 ** 32
+        ans2 = ip2 != 0
+        return ans | ans2
+    else:
+        return ip >= 2 ** 32

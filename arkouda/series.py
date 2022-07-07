@@ -8,6 +8,7 @@ import pandas as pd  # type: ignore
 from pandas._config import get_option  # type: ignore
 from typeguard import typechecked
 
+import arkouda.dataframe
 from arkouda.accessor import CachedAccessor, DatetimeAccessor, StringAccessor
 from arkouda.alignment import lookup
 from arkouda.categorical import Categorical
@@ -59,7 +60,10 @@ def natural_binary_operators(cls):
 
 
 def unary_operators(cls):
-    for name, op in {"__invert__": operator.invert, "__neg__": operator.neg,}.items():
+    for name, op in {
+        "__invert__": operator.invert,
+        "__neg__": operator.neg,
+    }.items():
         setattr(cls, name, cls._make_unaryop(op))
 
     return cls
@@ -127,14 +131,8 @@ class Series:
             self.index = Index.factory(data[0])
         else:
             # When only 1 positional argument it will be treated as data and not index
-            self.values = (
-                array(data) if not isinstance(data, (Strings, Categorical)) else data
-            )
-            self.index = (
-                Index.factory(index)
-                if index is not None
-                else Index(arange(self.values.size))
-            )
+            self.values = array(data) if not isinstance(data, (Strings, Categorical)) else data
+            self.index = Index.factory(index) if index is not None else Index(arange(self.values.size))
 
         if self.index.size != self.values.size:
             raise ValueError("Index size does not match data size")
@@ -157,10 +155,7 @@ class Series:
             length_str = ""
         else:
             prt = pd.concat(
-                [
-                    self.head(maxrows // 2 + 2).to_pandas(),
-                    self.tail(maxrows // 2).to_pandas(),
-                ]
+                [self.head(maxrows // 2 + 2).to_pandas(), self.tail(maxrows // 2).to_pandas()]
             )
             length_str = f"\nLength {len(self)}"
         return (
@@ -327,10 +322,7 @@ class Series:
         """
 
         if not ascending:
-            if isinstance(self.values, pdarray) and self.values.dtype in (
-                int64,
-                float64,
-            ):
+            if isinstance(self.values, pdarray) and self.values.dtype in (int64, float64):
                 # For numeric values, negation reverses sort order
                 idx = argsort(-self.values)
             else:
@@ -415,6 +407,7 @@ class Series:
         An arkouda dataframe.
         """
         list_value_label = [value_label] if isinstance(value_label, str) else value_label
+
         return Series.concat([self], axis=1, index_labels=index_labels, value_labels=list_value_label)
 
     @typechecked

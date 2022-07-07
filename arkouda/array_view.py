@@ -44,13 +44,9 @@ class ArrayView:
         self.objtype = type(self).__name__
         self.shape = array(shape)
         if not isinstance(self.shape, pdarray):
-            raise TypeError(
-                f"ArrayView Shape cannot be type {type(self.shape)}. Expecting pdarray."
-            )
+            raise TypeError(f"ArrayView Shape cannot be type {type(self.shape)}. Expecting pdarray.")
         if base.size != self.shape.prod():
-            raise ValueError(
-                f"cannot reshape array of size {base.size} into shape {self.shape}"
-            )
+            raise ValueError(f"cannot reshape array of size {base.size} into shape {self.shape}")
         self.base = base
         self.size = base.size
         self.dtype = base.dtype
@@ -63,9 +59,7 @@ class ArrayView:
         else:
             raise ValueError(f"cannot traverse with order={order}")
         # cache _reverse_shape which is reversed if we're row_major
-        self._reverse_shape = (
-            self.shape if self.order is OrderType.COLUMN_MAJOR else self.shape[::-1]
-        )
+        self._reverse_shape = self.shape if self.order is OrderType.COLUMN_MAJOR else self.shape[::-1]
         if self.shape.min() == 0:
             # avoid divide by 0 if any of the dimensions are 0
             self._dim_prod = zeros(self.shape.size, self.dtype)
@@ -89,9 +83,7 @@ class ArrayView:
             edge_items = np.get_printoptions()["edgeitems"]
             vals = [f"'{self.base[i]}'" for i in range(edge_items)]
             vals.append("... ")
-            vals.extend(
-                [f"'{self.base[i]}'" for i in range(self.size - edge_items, self.size)]
-            )
+            vals.extend([f"'{self.base[i]}'" for i in range(self.size - edge_items, self.size)])
         return f"array([{', '.join(vals)}]), shape {self.shape}"
 
     def __str__(self):
@@ -103,9 +95,7 @@ class ArrayView:
             edge_items = np.get_printoptions()["edgeitems"]
             vals = [f"'{self.base[i]}'" for i in range(edge_items)]
             vals.append("... ")
-            vals.extend(
-                [f"'{self.base[i]}'" for i in range(self.size - edge_items, self.size)]
-            )
+            vals.extend([f"'{self.base[i]}'" for i in range(self.size - edge_items, self.size)])
         return f"[{', '.join(vals)}], shape {self.shape}"
 
     def __getitem__(self, key):
@@ -137,15 +127,13 @@ class ArrayView:
                 if key.all():
                     # every dimension is True, so return this arrayview with shape = [1, self.shape]
                     return self.base.reshape(
-                        concatenate([ones(1, dtype=self.dtype), self.shape]),
-                        order=self.order.name,
+                        concatenate([ones(1, dtype=self.dtype), self.shape]), order=self.order.name
                     )
                 else:
                     # at least one dimension is False,
                     # so return empty arrayview with shape = [0, self.shape]
                     return array([], dtype=self.dtype).reshape(
-                        concatenate([zeros(1, dtype=self.dtype), self.shape]),
-                        order=self.order.name,
+                        concatenate([zeros(1, dtype=self.dtype), self.shape]), order=self.order.name
                     )
             # Interpret negative key as offset from end of array
             key = where(key < 0, akcast(key + self.shape, kind), key)
@@ -158,8 +146,7 @@ class ArrayView:
                 )
             coords = key if self.order is OrderType.COLUMN_MAJOR else key[::-1]
             repMsg = generic_msg(
-                cmd="arrayViewIntIndex",
-                args=f"{self.base.name} {self._dim_prod.name} {coords.name}",
+                cmd="arrayViewIntIndex", args=f"{self.base.name} {self._dim_prod.name} {coords.name}"
             )
             fields = repMsg.split()
             return parse_single_value(" ".join(fields[1:]))
@@ -193,9 +180,7 @@ class ArrayView:
                     index_dim_list.append(slice_size)
                     reshape_dim_list.append(slice_size)
                 elif isinstance(x, pdarray) or isinstance(x, list):
-                    raise TypeError(
-                        f"Advanced indexing is not yet supported {x} ({type(x)})"
-                    )
+                    raise TypeError(f"Advanced indexing is not yet supported {x} ({type(x)})")
                     # x = array(x)
                     # kind, _ = translate_np_dtype(x.dtype)
                     # if kind not in ("bool", "int"):
@@ -213,17 +198,11 @@ class ArrayView:
             repMsg = generic_msg(
                 cmd="arrayViewMixedIndex",
                 args="{} {} {} {} {}".format(
-                    self.base.name,
-                    index_dim.name,
-                    self.ndim,
-                    self._dim_prod.name,
-                    json.dumps(indices),
+                    self.base.name, index_dim.name, self.ndim, self._dim_prod.name, json.dumps(indices)
                 ),
             )
             reshape_dim = (
-                reshape_dim_list
-                if self.order is OrderType.COLUMN_MAJOR
-                else reshape_dim_list[::-1]
+                reshape_dim_list if self.order is OrderType.COLUMN_MAJOR else reshape_dim_list[::-1]
             )
             return create_pdarray(repMsg).reshape(reshape_dim, order=self.order.name)
         else:
@@ -281,9 +260,7 @@ class ArrayView:
                     ),
                 )
         elif isinstance(key, list):
-            raise NotImplementedError(
-                "Setting via slicing and advanced indexing is not yet supported"
-            )
+            raise NotImplementedError("Setting via slicing and advanced indexing is not yet supported")
         else:
             raise TypeError(f"Unhandled key type: {key} ({type(key)})")
 

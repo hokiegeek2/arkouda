@@ -105,9 +105,7 @@ def register_all(data, prefix, overwrite=True):
     if isinstance(data, dict):
         return {k: register(v, f"{prefix}{sanitize(k)}") for k, v in data.items()}
     elif isinstance(data, DataFrame):
-        return DataFrame(
-            {k: register(v, f"{prefix}{sanitize(k)}") for k, v in data.items()}
-        )
+        return DataFrame({k: register(v, f"{prefix}{sanitize(k)}") for k, v in data.items()})
     elif isinstance(data, list):
         return [register(v, f"{prefix}{i}") for i, v in enumerate(data)]
     elif isinstance(data, tuple):
@@ -227,12 +225,10 @@ def arkouda_to_numpy(A: pdarray, tmp_dir: str = "") -> np.ndarray:
         DeprecationWarning,
     )
 
-    rng = np.random.randint(2 ** 64, dtype=np.uint64)
+    rng = np.random.randint(2**64, dtype=np.uint64)
     tmp_dir = os.getcwd() if not tmp_dir else tmp_dir
     A.save(f"{tmp_dir}/{rng}")
-    files = sorted(
-        f"{tmp_dir}/{f}" for f in os.listdir(tmp_dir) if f.startswith(str(rng))
-    )
+    files = sorted(f"{tmp_dir}/{f}" for f in os.listdir(tmp_dir) if f.startswith(str(rng)))
 
     B = np.zeros(A.size, dtype=np.int64)
     i = 0
@@ -258,7 +254,7 @@ def numpy_to_arkouda(
         DeprecationWarning,
     )
 
-    rng = np.random.randint(2 ** 64, dtype=np.uint64)
+    rng = np.random.randint(2**64, dtype=np.uint64)
     tmp_dir = os.getcwd() if not tmp_dir else tmp_dir
     with h5py.File(f"{tmp_dir}/{rng}.hdf5", "w") as f:
         arr = f.create_dataset("arr", (A.shape[0],), dtype="int64")

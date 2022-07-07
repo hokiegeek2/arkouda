@@ -65,7 +65,7 @@ class KubernetesDao:
 
     def get_pods(self, namespace: str, app_name: Optional[str] = None) -> List[V1Pod]:
         """
-        Retrieves a list of V1Pod objects corresponding to pods within a 
+        Retrieves a list of V1Pod objects corresponding to pods within a
         namespace. An app name is optionally provided to narrow the scope
         of pods returned.
 
@@ -94,7 +94,7 @@ class KubernetesDao:
     def _is_named_pod(self, pod: V1Pod, app_name: str) -> bool:
         """
         Indicates where the pod has an app name.
-        
+
         :return: boolean indicating if the pod has an app name
         :rtype: bool
         """
@@ -104,10 +104,10 @@ class KubernetesDao:
         self, namespace: str, app_name: str = None, pretty_print=False
     ) -> Union[List[str], str]:
         """
-        Retrieves the overlay network ip addresses for the pods within a 
+        Retrieves the overlay network ip addresses for the pods within a
         namespace. An app name is optionally provided to narrow the scope
         of ip addresses returned.
-        
+
         :param str namespace: namespace to be queried
         :param str app_name: name of the app corresponding to the pods
         :return: a list of ip addresses
@@ -136,18 +136,18 @@ class KubernetesDao:
         protocol: str = "TCP",
     ) -> None:
         """
-        Creates the Kubernetes service assigned to the specified application, 
+        Creates the Kubernetes service assigned to the specified application,
         ports, and namespace.
-        
+
         :param str service_name: name of the service
         :param str app_name: application selector
         :param int port: port assigned to the service
         :param int target_port: target port assigned to the service
-        :param str namespace: namespace to assign service, defaults to 
+        :param str namespace: namespace to assign service, defaults to
                the default Kubernetes namespace
         :param str protocol: service protocol, defaults to TCP
         :return: None
-        :raises: DaoError if there is an error in creating the service    
+        :raises: DaoError if there is an error in creating the service
         """
         service = V1Service()
         service.kind = "Service"

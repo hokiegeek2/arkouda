@@ -103,9 +103,7 @@ class Strings:
         return Strings(create_pdarray(left), bytes_size)
 
     @staticmethod
-    def from_parts(
-        offset_attrib: Union[pdarray, str], bytes_attrib: Union[pdarray, str]
-    ) -> Strings:
+    def from_parts(offset_attrib: Union[pdarray, str], bytes_attrib: Union[pdarray, str]) -> Strings:
         """
         Factory method for creating a Strings object from an Arkouda server
         response where the arrays are separate components.
@@ -177,9 +175,7 @@ class Strings:
         self.entry: pdarray = strings_pdarray
         try:
             self.size = self.entry.size
-            self.nbytes = (
-                bytes_size  # This is a deficiency of server GenSymEntry right now
-            )
+            self.nbytes = bytes_size  # This is a deficiency of server GenSymEntry right now
             self.ndim = self.entry.ndim
             self.shape = self.entry.shape
             self.name: Optional[str] = self.entry.name
@@ -258,12 +254,7 @@ class Strings:
                 raise ValueError(f"Strings: size mismatch {self.size} {other.size}")
             cmd = "segmentedBinopvv"
             args = "{} {} {} {} {} {}".format(
-                op,
-                self.objtype,
-                self.entry.name,
-                other.objtype,
-                other.entry.name,
-                other.entry.name,
+                op, self.objtype, self.entry.name, other.objtype, other.entry.name, other.entry.name
             )
         elif resolve_scalar_dtype(other) == "str":
             cmd = "segmentedBinopvs"
@@ -290,16 +281,12 @@ class Strings:
                 key += self.size
             if key >= 0 and key < self.size:
                 cmd = "segmentedIndex"
-                args = " {} {} {} {}".format(
-                    "intIndex", self.objtype, self.entry.name, key
-                )
+                args = " {} {} {} {}".format("intIndex", self.objtype, self.entry.name, key)
                 repMsg = generic_msg(cmd=cmd, args=args)
                 _, value = repMsg.split(maxsplit=1)
                 return parse_single_value(value)
             else:
-                raise IndexError(
-                    f"[int] {orig_key} is out of bounds with size {self.size}"
-                )
+                raise IndexError(f"[int] {orig_key} is out of bounds with size {self.size}")
         elif isinstance(key, slice):
             (start, stop, stride) = key.indices(self.size)
             self.logger.debug(f"start: {start}; stop: {stop}; stride: {stride}")
@@ -316,9 +303,7 @@ class Strings:
             if kind == "bool" and self.size != key.size:
                 raise ValueError(f"size mismatch {self.size} {key.size}")
             cmd = "segmentedIndex"
-            args = "{} {} {} {}".format(
-                "pdarrayIndex", self.objtype, self.entry.name, key.name
-            )
+            args = "{} {} {} {}".format("pdarrayIndex", self.objtype, self.entry.name, key.name)
             repMsg = generic_msg(cmd=cmd, args=args)
             return Strings.from_return_msg(repMsg)
         else:
@@ -371,9 +356,7 @@ class Strings:
         >>> strings.to_lower()
         array(['strings 0', 'strings 1', 'strings 2', 'strings 3', 'strings 4'])
         """
-        rep_msg = generic_msg(
-            cmd="caseChange", args=f"toLower {self.objtype} {self.entry.name}"
-        )
+        rep_msg = generic_msg(cmd="caseChange", args=f"toLower {self.objtype} {self.entry.name}")
         return Strings.from_return_msg(cast(str, rep_msg))
 
     @typechecked
@@ -405,9 +388,38 @@ class Strings:
         >>> strings.to_upper()
         array(['STRINGS 0', 'STRINGS 1', 'STRINGS 2', 'STRINGS 3', 'STRINGS 4'])
         """
-        rep_msg = generic_msg(
-            cmd="caseChange", args=f"toUpper {self.objtype} {self.entry.name}"
-        )
+        rep_msg = generic_msg(cmd="caseChange", args=f"toUpper {self.objtype} {self.entry.name}")
+        return Strings.from_return_msg(cast(str, rep_msg))
+
+    @typechecked
+    def to_title(self) -> Strings:
+        """
+        Returns a new Strings from the original replaced with their titlecase equivalent
+
+        Returns
+        -------
+        Strings
+            Strings from the original replaced with their titlecase equivalent
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there is a server-side error thrown
+
+        See Also
+        --------
+        Strings.to_lower
+        String.to_upper
+
+        Examples
+        --------
+        >>> strings = ak.array([f'StrINgS {i}' for i in range(5)])
+        >>> strings
+        array(['StrINgS 0', 'StrINgS 1', 'StrINgS 2', 'StrINgS 3', 'StrINgS 4'])
+        >>> strings.to_title()
+        array(['Strings 0', 'Strings 1', 'Strings 2', 'Strings 3', 'Strings 4'])
+        """
+        rep_msg = generic_msg(cmd="caseChange", args=f"toTitle {self.objtype} {self.entry.name}")
         return Strings.from_return_msg(cast(str, rep_msg))
 
     @typechecked
@@ -441,9 +453,7 @@ class Strings:
         array([True True True False False False])
         """
         return create_pdarray(
-            generic_msg(
-                cmd="checkChars", args=f"isLower {self.objtype} {self.entry.name}"
-            )
+            generic_msg(cmd="checkChars", args=f"isLower {self.objtype} {self.entry.name}")
         )
 
     @typechecked
@@ -477,9 +487,42 @@ class Strings:
         array([False False False True True True])
         """
         return create_pdarray(
-            generic_msg(
-                cmd="checkChars", args=f"isUpper {self.objtype} {self.entry.name}"
-            )
+            generic_msg(cmd="checkChars", args=f"isUpper {self.objtype} {self.entry.name}")
+        )
+
+    @typechecked
+    def is_title(self) -> pdarray:
+        """
+        Returns a boolean pdarray where index i indicates whether string i of the
+        Strings is titlecase
+
+        Returns
+        -------
+        pdarray, bool
+            True for elements that are titlecase, False otherwise
+
+        Raises
+        ------
+        RuntimeError
+            Raised if there is a server-side error thrown
+
+        See Also
+        --------
+        Strings.is_lower
+        Strings.is_upper
+
+        Examples
+        --------
+        >>> mixed = ak.array([f'sTrINgs {i}' for i in range(3)])
+        >>> title = ak.array([f'Strings {i}' for i in range(3)])
+        >>> strings = ak.concatenate([mixed, title])
+        >>> strings
+        array(['sTrINgs 0', 'sTrINgs 1', 'sTrINgs 2', 'Strings 0', 'Strings 1', 'Strings 2'])
+        >>> strings.is_title()
+        array([False False False True True True])
+        """
+        return create_pdarray(
+            generic_msg(cmd="checkChars", args=f"isTitle {self.objtype} {self.entry.name}")
         )
 
     @typechecked
@@ -512,16 +555,12 @@ class Strings:
         if pattern in self._regex_dict:
             matcher = self._regex_dict[pattern]
         elif create:
-            self._regex_dict[pattern] = Matcher(
-                pattern=pattern, parent_entry_name=self.entry.name
-            )
+            self._regex_dict[pattern] = Matcher(pattern=pattern, parent_entry_name=self.entry.name)
             matcher = self._regex_dict[pattern]
         return matcher
 
     @typechecked
-    def find_locations(
-        self, pattern: Union[bytes, str_scalars]
-    ) -> Tuple[pdarray, pdarray, pdarray]:
+    def find_locations(self, pattern: Union[bytes, str_scalars]) -> Tuple[pdarray, pdarray, pdarray]:
         """
         Finds pattern matches and returns pdarrays containing the number, start postitions,
         and lengths of matches
@@ -648,10 +687,7 @@ class Strings:
 
     @typechecked()
     def split(
-        self,
-        pattern: Union[bytes, str_scalars],
-        maxsplit: int = 0,
-        return_segments: bool = False,
+        self, pattern: Union[bytes, str_scalars], maxsplit: int = 0, return_segments: bool = False
     ) -> Union[Strings, Tuple]:
         """
         Returns a new Strings split by the occurrences of pattern.
@@ -729,10 +765,7 @@ class Strings:
 
     @typechecked()
     def sub(
-        self,
-        pattern: Union[bytes, str_scalars],
-        repl: Union[bytes, str_scalars],
-        count: int = 0,
+        self, pattern: Union[bytes, str_scalars], repl: Union[bytes, str_scalars], count: int = 0
     ) -> Strings:
         """
         Return new Strings obtained by replacing non-overlapping occurrences of pattern with the
@@ -779,10 +812,7 @@ class Strings:
 
     @typechecked()
     def subn(
-        self,
-        pattern: Union[bytes, str_scalars],
-        repl: Union[bytes, str_scalars],
-        count: int = 0,
+        self, pattern: Union[bytes, str_scalars], repl: Union[bytes, str_scalars], count: int = 0
     ) -> Tuple:
         """
         Perform the same operation as sub(), but return a tuple (new_Strings, number_of_substitions)
@@ -828,9 +858,7 @@ class Strings:
         return self._get_matcher(pattern).sub(repl, count, return_num_subs=True)
 
     @typechecked
-    def contains(
-        self, substr: Union[bytes, str_scalars], regex: bool = False
-    ) -> pdarray:
+    def contains(self, substr: Union[bytes, str_scalars], regex: bool = False) -> pdarray:
         """
         Check whether each element contains the given substring.
 
@@ -885,15 +913,11 @@ class Strings:
         if matcher is not None:
             return matcher.get_match(MatchType.SEARCH, self).matched()
         cmd = "segmentedSearch"
-        args = "{} {} {} {}".format(
-            self.objtype, self.entry.name, "str", json.dumps([substr])
-        )
+        args = "{} {} {} {}".format(self.objtype, self.entry.name, "str", json.dumps([substr]))
         return create_pdarray(generic_msg(cmd=cmd, args=args))
 
     @typechecked
-    def startswith(
-        self, substr: Union[bytes, str_scalars], regex: bool = False
-    ) -> pdarray:
+    def startswith(self, substr: Union[bytes, str_scalars], regex: bool = False) -> pdarray:
         """
         Check whether each element starts with the given substring.
 
@@ -954,9 +978,7 @@ class Strings:
             return self.contains("^" + substr, regex=True)
 
     @typechecked
-    def endswith(
-        self, substr: Union[bytes, str_scalars], regex: bool = False
-    ) -> pdarray:
+    def endswith(self, substr: Union[bytes, str_scalars], regex: bool = False) -> pdarray:
         """
         Check whether each element ends with the given substring.
 
@@ -1059,19 +1081,12 @@ class Strings:
         else:
             cmd = "segmentedFlatten"
             args = "{} {} {} {} {}".format(
-                self.entry.name,
-                self.objtype,
-                return_segments,
-                regex,
-                json.dumps([delimiter]),
+                self.entry.name, self.objtype, return_segments, regex, json.dumps([delimiter])
             )
             repMsg = cast(str, generic_msg(cmd=cmd, args=args))
             if return_segments:
                 arrays = repMsg.split("+", maxsplit=2)
-                return (
-                    Strings.from_return_msg("+".join(arrays[0:2])),
-                    create_pdarray(arrays[2]),
-                )
+                return Strings.from_return_msg("+".join(arrays[0:2])), create_pdarray(arrays[2])
             else:
                 arrays = repMsg.split("+", maxsplit=1)
                 return Strings.from_return_msg(repMsg)
@@ -1260,10 +1275,7 @@ class Strings:
 
     @typechecked
     def stick(
-        self,
-        other: Strings,
-        delimiter: Union[bytes, str_scalars] = "",
-        toLeft: bool = False,
+        self, other: Strings, delimiter: Union[bytes, str_scalars] = "", toLeft: bool = False
     ) -> Strings:
         """
         Join the strings from another array onto one end of the strings
@@ -1324,9 +1336,7 @@ class Strings:
     def __add__(self, other: Strings) -> Strings:
         return self.stick(other)
 
-    def lstick(
-        self, other: Strings, delimiter: Union[bytes, str_scalars] = ""
-    ) -> Strings:
+    def lstick(self, other: Strings, delimiter: Union[bytes, str_scalars] = "") -> Strings:
         """
         Join the strings from another array onto the left of the strings
         of this array, optionally inserting a delimiter.
@@ -1470,9 +1480,7 @@ class Strings:
         numpy.ndarray
         """
         # Get offsets and append total bytes for length calculation
-        npoffsets = np.hstack(
-            (self._comp_to_ndarray("offsets"), np.array([self.nbytes]))
-        )
+        npoffsets = np.hstack((self._comp_to_ndarray("offsets"), np.array([self.nbytes])))
         # Get contents of strings (will error if too large)
         npvalues = self._comp_to_ndarray("values")
         # Compute lengths, discounting null terminators
@@ -1532,16 +1540,12 @@ class Strings:
             )
         # The reply from the server will be a bytes object
         rep_msg = generic_msg(
-            cmd=CMD_TO_NDARRAY,
-            args="{} {}".format(self.entry.name, comp),
-            recv_binary=True,
+            cmd=CMD_TO_NDARRAY, args="{} {}".format(self.entry.name, comp), recv_binary=True
         )
 
         # Make sure the received data has the expected length
         if len(rep_msg) != array_bytes:
-            raise RuntimeError(
-                f"Expected {array_bytes} bytes but received {len(rep_msg)}"
-            )
+            raise RuntimeError(f"Expected {array_bytes} bytes but received {len(rep_msg)}")
 
         # The server sends us native-endian bytes so we need to account for that.
         # Since bytes are immutable, we need to copy the np array to be mutable
@@ -1933,9 +1937,7 @@ class Strings:
         Registered names/Strings objects in the server are immune to deletion
         until they are unregistered.
         """
-        rep_msg: str = cast(
-            str, generic_msg(cmd="attach", args="{}".format(user_defined_name))
-        )
+        rep_msg: str = cast(str, generic_msg(cmd="attach", args="{}".format(user_defined_name)))
         s = Strings.from_return_msg(rep_msg)
         s.name = user_defined_name
         return s

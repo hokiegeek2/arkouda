@@ -144,9 +144,7 @@ def gen_ranges(starts: pdarray, ends: pdarray) -> Tuple[pdarray, pdarray]:
     segs = cumsum(lengths) - lengths
     totlen = lengths.sum()
     slices = ones(totlen, dtype=akint64)
-    diffs = concatenate(
-        (array([starts[0]]), starts[1:] - starts[:-1] - lengths[:-1] + 1)
-    )
+    diffs = concatenate((array([starts[0]]), starts[1:] - starts[:-1] - lengths[:-1] + 1))
     slices[segs] = diffs
     return segs, cumsum(slices)
 
@@ -208,13 +206,9 @@ def inner_join(
     sample = np.min((left.size, right.size, 5))  # type: ignore
     if wherefunc is not None:
         if len(signature(wherefunc).parameters) != 2:
-            raise ValueError(
-                "wherefunc must be a function that accepts exactly two arguments"
-            )
+            raise ValueError("wherefunc must be a function that accepts exactly two arguments")
         if whereargs is None or len(whereargs) != 2:
-            raise ValueError(
-                "whereargs must be a 2-tuple with left and right arg arrays"
-            )
+            raise ValueError("whereargs must be a 2-tuple with left and right arg arrays")
         if whereargs[0].size != left.size:
             raise ValueError("Left whereargs must be same size as left join values")
         if whereargs[1].size != right.size:
