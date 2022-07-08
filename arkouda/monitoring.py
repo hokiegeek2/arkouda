@@ -13,10 +13,10 @@ from dateutil import parser  # type: ignore
 from prometheus_client import Gauge, Info, start_http_server  # type: ignore
 
 import arkouda as ak
-from arkouda import client, logger
-from arkouda.logger import LogLevel
+from arkouda import client
+from arkouda.logger import LogLevel, getArkoudaLogger
 
-logger = logger.getArkoudaLogger(
+logger = getArkoudaLogger(
     name="Arkouda Monitoring", logFormat="%(message)s", logLevel=LogLevel.DEBUG
 )
 
@@ -370,7 +370,7 @@ class ArkoudaMetrics:
         self._initializeServerInfo()
         print("Completed Initialization of Arkouda Metrics Exporter")
 
-    def connect(self, timeout : int=0) -> None:
+    def connect(self, timeout : int = 0) -> None:
         try:
             ak.connect(self.arkoudaMetricsHost, self.arkoudaMetricsPort)
         except Exception as e:
@@ -575,7 +575,7 @@ def main():
     logger.info('Starting Prometheus scrape endpoint')
 
     start_http_server(exportPort)
-    
+
     logger.info('Started Prometheus scrape endpoint')
 
     metrics = ArkoudaMetrics(
@@ -589,6 +589,7 @@ def main():
     logger.info('Instantiated ArkoudaMetrics and connected to Arkouda')
 
     metrics.run_metrics_loop()
+
 
 if __name__ == "__main__":
     main()

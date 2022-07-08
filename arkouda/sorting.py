@@ -58,17 +58,13 @@ def argsort(
     """
     from arkouda.categorical import Categorical
 
-    check_type(
-        argname="argsort", value=pda, expected_type=Union[pdarray, Strings, Categorical]
-    )
+    check_type(argname="argsort", value=pda, expected_type=Union[pdarray, Strings, Categorical])
     if hasattr(pda, "argsort"):
         return cast(Categorical, pda).argsort()
     if pda.size == 0 and hasattr(pda, "dtype"):
         return zeros(0, dtype=pda.dtype)
     name = pda.entry.name if isinstance(pda, Strings) else pda.name
-    repMsg = generic_msg(
-        cmd="argsort", args="{} {} {}".format(algorithm.name, pda.objtype, name)
-    )
+    repMsg = generic_msg(cmd="argsort", args="{} {} {}".format(algorithm.name, pda.objtype, name))
     return create_pdarray(cast(str, repMsg))
 
 
@@ -126,9 +122,7 @@ def coargsort(
     from arkouda.categorical import Categorical
 
     check_type(
-        argname="coargsort",
-        value=arrays,
-        expected_type=Sequence[Union[pdarray, Strings, Categorical]],
+        argname="coargsort", value=arrays, expected_type=Sequence[Union[pdarray, Strings, Categorical]]
     )
     size: int_scalars = -1
     anames = []
@@ -144,30 +138,22 @@ def coargsort(
             atypes.append(a.objtype)
             anames.append(a.entry.name)
         else:
-            raise ValueError(
-                "Argument must be an iterable of pdarrays, Strings, or Categoricals"
-            )
+            raise ValueError("Argument must be an iterable of pdarrays, Strings, or Categoricals")
         if size == -1:
             size = a.size
         elif size != a.size:
-            raise ValueError(
-                "All pdarrays, Strings, or Categoricals must be of the same size"
-            )
+            raise ValueError("All pdarrays, Strings, or Categoricals must be of the same size")
     if size == 0:
         return zeros(0, dtype=arrays[0].dtype)
     repMsg = generic_msg(
         cmd="coargsort",
-        args="{} {:n} {} {}".format(
-            algorithm.name, len(arrays), " ".join(anames), " ".join(atypes)
-        ),
+        args="{} {:n} {} {}".format(algorithm.name, len(arrays), " ".join(anames), " ".join(atypes)),
     )
     return create_pdarray(cast(str, repMsg))
 
 
 @typechecked
-def sort(
-    pda: pdarray, algorithm: SortingAlgorithm = SortingAlgorithm.RadixSortLSD
-) -> pdarray:
+def sort(pda: pdarray, algorithm: SortingAlgorithm = SortingAlgorithm.RadixSortLSD) -> pdarray:
     """
     Return a sorted copy of the array. Only sorts numeric arrays;
     for Strings, use argsort.

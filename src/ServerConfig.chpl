@@ -11,7 +11,6 @@ module ServerConfig
     use ServerErrorStrings;
     use Reflection;
     use ServerErrors;
-    use FileIO;
     use Logging;
 
     /*
@@ -81,27 +80,6 @@ module ServerConfig
     }
 
     /*
-     * Retrieves the host ip address of the locale 0 arkouda_server process, which is useful 
-     * for registering Arkouda with cloud environments such as Kubernetes.
-     */
-    proc getConnectHostIp() throws {
-        var hostip: string;
-        on Locales[0] {
-            var ipString = getLineFromFile('/etc/hosts',getConnectHostname());
-            try {
-                var splits = ipString.split();
-                hostip = splits[0]:string;
-                hostip.split();
-            } catch (e: Error) {
-                throw new IllegalArgumentError(
-                         "invalid hostname -> ip address entry in /etc/hosts %t".format(
-                                               e));
-            }
-        }
-        return hostip;
-    }
-
-    /*
     Indicates whether token authentication is being used for Akrouda server requests
     */
     config const authenticate : bool = false;
@@ -155,7 +133,6 @@ module ServerConfig
             const regexMaxCaptures: int;
             const byteorder: string;
             const connectHostname: string;
-            const connectHostIp: string;
         }
 
         var (Zmajor, Zminor, Zmicro) = ZMQ.version;
@@ -179,8 +156,7 @@ module ServerConfig
             logLevel = logLevel,
             regexMaxCaptures = regexMaxCaptures,
             byteorder = try! getByteorder(),    
-            connectHostname = try! getConnectHostname(),
-            connectHostIp = try! getConnectHostIp()
+            connectHostname = try! getConnectHostname()
         );
         return try! "%jt".format(cfg);
 

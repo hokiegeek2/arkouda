@@ -23,9 +23,7 @@ from arkouda.util import convert_if_categorical, generic_concat, get_callback, r
 class Index:
     @typechecked
     def __init__(
-        self,
-        values: Union[List, pdarray, Strings, pd.Index, "Index"],
-        name: Optional[str] = None,
+        self, values: Union[List, pdarray, Strings, pd.Index, "Index"], name: Optional[str] = None
     ):
         if isinstance(values, Index):
             self.values = values.values
@@ -374,6 +372,7 @@ class MultiIndex(Index):
         for other in array:
             self._check_types(other)
             idx = [generic_concat([ix1, ix2], ordered=False) for ix1, ix2 in zip(idx, other.index)]
+
         return MultiIndex(GroupBy(idx).unique_keys)
 
     def argsort(self, ascending=True):

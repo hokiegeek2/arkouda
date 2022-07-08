@@ -58,9 +58,7 @@ def ls(filename: str) -> List[str]:
         raise ValueError("filename cannot be an empty string")
 
     cmd = "lsany"
-    return json.loads(
-        cast(str, generic_msg(cmd=cmd, args="{}".format(json.dumps([filename]))))
-    )
+    return json.loads(cast(str, generic_msg(cmd=cmd, args="{}".format(json.dumps([filename])))))
 
 
 def read(
@@ -154,11 +152,7 @@ def read(
     if isinstance(filenames, str):
         filenames = [filenames]
     if datasets is None:
-        datasets = (
-            get_datasets_allow_errors(filenames)
-            if allow_errors
-            else get_datasets(filenames[0])
-        )
+        datasets = get_datasets_allow_errors(filenames) if allow_errors else get_datasets(filenames[0])
     if isinstance(datasets, str):
         datasets = [datasets]
     else:  # ensure dataset(s) exist
@@ -180,9 +174,7 @@ def read(
     elif file_format == "parquet":
         cmd = "readAllParquet"
     else:
-        warnings.warn(
-            f"Unrecognized file format string: {file_format}. Inferring file type"
-        )
+        warnings.warn(f"Unrecognized file format string: {file_format}. Inferring file type")
         cmd = "readany"
     if iterative:  # iterative calls to server readhdf
         return {
@@ -202,15 +194,11 @@ def read(
             args=f"{strictTypes} {len(datasets)} {len(filenames)} {allow_errors} {calc_string_offsets} "
             f"{json.dumps(datasets)} | {json.dumps(filenames)}",
         )
-        rep = json.loads(
-            rep_msg
-        )  # See GenSymIO._buildReadAllHdfMsgJson for json structure
+        rep = json.loads(rep_msg)  # See GenSymIO._buildReadAllHdfMsgJson for json structure
         items = rep["items"] if "items" in rep else []
         file_errors = rep["file_errors"] if "file_errors" in rep else []
         if allow_errors and file_errors:
-            file_error_count = (
-                rep["file_error_count"] if "file_error_count" in rep else -1
-            )
+            file_error_count = rep["file_error_count"] if "file_error_count" in rep else -1
             warnings.warn(
                 f"There were {file_error_count} errors reading files on the server. "
                 + f"Sample error messages {file_errors}",
@@ -372,12 +360,7 @@ def load(
     globstr = f"{prefix}_LOCALE*{extension}"
 
     try:
-        return read(
-            globstr,
-            dataset,
-            calc_string_offsets=calc_string_offsets,
-            file_format=file_format,
-        )
+        return read(globstr, dataset, calc_string_offsets=calc_string_offsets, file_format=file_format)
     except RuntimeError as re:
         if "does not exist" in str(re):
             raise ValueError(
@@ -454,9 +437,7 @@ def get_filetype(filenames: Union[str, List[str]]) -> str:
     if not (fname and fname.strip()):
         raise ValueError("filename cannot be an empty string")
 
-    return cast(
-        str, generic_msg(cmd="getfiletype", args="{}".format(json.dumps([fname])))
-    )
+    return cast(str, generic_msg(cmd="getfiletype", args="{}".format(json.dumps([fname]))))
 
 
 @typechecked
@@ -562,10 +543,7 @@ def load_all(
         if "does not exist" in str(re):
             try:
                 firstname = f"{prefix}_LOCALE0{extension}"
-                return {
-                    dataset: load(prefix, dataset=dataset)
-                    for dataset in get_datasets(firstname)
-                }
+                return {dataset: load(prefix, dataset=dataset) for dataset in get_datasets(firstname)}
             except RuntimeError as re:
                 if "does not exist" in str(re):
                     raise ValueError(
@@ -661,10 +639,9 @@ def save_all(
         if mode.lower() == "truncate":
             mode = "append"
 
+
 @typechecked
-def import_data(
-    read_path: str, write_file: str = None, return_obj: bool = True, index: bool = False
-):
+def import_data(read_path: str, write_file: str = None, return_obj: bool = True, index: bool = False):
     """
     Import data from a file saved by Pandas (HDF5/Parquet) to Arkouda object and/or
     a file formatted to be read by Arkouda.
@@ -805,9 +782,7 @@ def export(
     if write_file:
         if filetype == "HDF5":
             # write to fixed format as this should be the most efficient
-            df.to_hdf(
-                write_file, key=dataset_name, format="fixed", mode="w", index=index
-            )
+            df.to_hdf(write_file, key=dataset_name, format="fixed", mode="w", index=index)
         else:
             # we know this is parquet because otherwise we would have errored at the type check
             df.to_parquet(write_file, index=index)
