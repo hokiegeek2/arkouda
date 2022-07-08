@@ -8,9 +8,9 @@ spec:
       containers:
         {{- if eq .Values.server.metrics.collectMetrics true }}
         - name: arkouda-metrics-server
-          image: hokiegeek2/arkouda-metrics-exporter:{{ .Values.releaseVersion }}
+          image: hokiegeek2/prometheus-arkouda-exporter:{{ .Values.releaseVersion }}
           imagePullPolicy: {{ .Values.imagePullPolicy }}
-          command: [ "python3", "arkouda/arkouda/monitoring.py" ]
+          command: [ "python3", "arkouda/monitoring.py" ]
           ports:
           - containerPort: {{ .Values.metricsServer.port }}
             hostPort: 5080
