@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.arkouda.server.appName }}
+  labels:
+    app: {{ .Values.arkouda.server.appName }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: {{ .Values.arkouda.server.appName }}
+  template:
+    metadata:
+      labels:
+        app: {{ .Values.arkouda.server.appName }}
+    spec:
+      containers:
+        - name: arkouda-full-stack
+          image: hokiegeek2/arkouda-full-stack:{{ .Values.releaseVersion }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          command: [ "jupyter", "notebook", "--ip=0.0.0.0", "--allow-root", "--no-browser" ]
+          ports:
+          - containerPort: {{ .Values.arkouda.service.port }}
+            hostPort: {{ .Values.arkouda.service.port }}
+
+
