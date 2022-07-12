@@ -16,8 +16,6 @@ spec:
         #annotations:
         #k8s.v1.cni.cncf.io/networks: host-device-conf
     spec:
-            #hostNetwork: true
-      nodeName: 10.114.89.224
       containers:
         - name: arkouda-server
           image: hokiegeek2/arkouda-server-no-slurm:{{ .Values.releaseVersion }}
