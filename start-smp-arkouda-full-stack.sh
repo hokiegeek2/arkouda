@@ -1,4 +1,6 @@
+#!/bin/bash
 
-nohup ./arkouda_server -nl ${NUMLOCALES:-1} > nohup.out 2> nohup.err < /dev/null &
+nohup /opt/arkouda/arkouda_server -nl ${NUMLOCALES:-1} > /dev/null &
+
 ipython3
                                                            
