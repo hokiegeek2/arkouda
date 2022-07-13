@@ -94,7 +94,7 @@ prometheus:
     name: arkouda
     action: REMOVE
   kubernetes:
-    host: https://10.114.89.224:6443
+    host:
     namespace: monitoring
   certPath: /etc/ssl/arkouda/tls.crt
   keyPath: /etc/ssl/arkouda/tls.key
