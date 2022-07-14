@@ -6,7 +6,6 @@ import pandas as pd  # type: ignore
 from typeguard import typechecked
 
 from arkouda import Strings
-from arkouda.alignment import in1dmulti
 from arkouda.client import generic_msg
 from arkouda.dtypes import bool as akbool
 from arkouda.dtypes import float64 as akfloat64
@@ -78,6 +77,18 @@ class Index:
     @property
     def shape(self):
         return (self.size,)
+
+    @property
+    def is_unique(self):
+        """
+        Property indicating if all values in the index are unique
+        Returns
+        -------
+            bool - True if all values are unique, False otherwise.
+        """
+        g = GroupBy(self.values)
+        key, ct = g.count()
+        return (ct == 1).all()
 
     @staticmethod
     def factory(index):
@@ -390,4 +401,4 @@ class MultiIndex(Index):
         if type(key) != list and type(key) != tuple:
             raise TypeError("MultiIndex lookup failure")
 
-        return in1dmulti(self.index, key)
+        return in1d(self.index, key)

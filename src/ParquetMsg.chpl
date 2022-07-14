@@ -559,8 +559,11 @@ module ParquetMsg {
     try {
         dsetlist = jsonToPdArray(jsondsets, ndsets);
     } catch {
+        // limit length of dataset names to 2000 chars
+        var n: int = 1000;
+        var dsets: string = if jsondsets.size > 2*n then jsondsets[0..#n]+'...'+jsondsets[jsondsets.size-n..#n] else jsondsets;
         var errorMsg = "Could not decode json dataset names via tempfile (%i files: %s)".format(
-                                            1, jsondsets);
+                                            ndsets, dsets);
         pqLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
         return new MsgTuple(errorMsg, MsgType.ERROR);
     }
@@ -568,7 +571,10 @@ module ParquetMsg {
     try {
         filelist = jsonToPdArray(jsonfiles, nfiles);
     } catch {
-        var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
+        // limit length of file names to 2000 chars
+        var n: int = 1000;
+        var files: string = if jsonfiles.size > 2*n then jsonfiles[0..#n]+'...'+jsonfiles[jsonfiles.size-n..#n] else jsonfiles;
+        var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, files);
         pqLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
         return new MsgTuple(errorMsg, MsgType.ERROR);
     }
@@ -837,22 +843,7 @@ module ParquetMsg {
       try! repMsg = createStringWithNewBuffer(res, strlen(res));
       var items = new list(repMsg.split(",")); // convert to json
 
-      // TODO: There is a bug with json formatting of lists in Chapel 1.24.x fixed in 1.25
-      //       See: https://github.com/chapel-lang/chapel/issues/18156
-      //       Below works in 1.25, but until we are fully off of 1.24 we should format json manually for lists
-      // repMsg = "%jt".format(items); // Chapel >= 1.25.0
-      repMsg = "[";  // Manual json building Chapel <= 1.24.1
-      var first = true;
-      for i in items {
-        i = i.replace(Q, ESCAPED_QUOTES, -1);
-        if first {
-          first = false;
-        } else {
-          repMsg += ",";
-        }
-        repMsg += Q + i + Q;
-      }
-      repMsg += "]";
+      repMsg = "%jt".format(items);
     } catch e : Error {
       var errorMsg = "Failed to process Parquet file %t".format(e.message());
       return new MsgTuple(errorMsg, MsgType.ERROR);
@@ -896,7 +887,10 @@ module ParquetMsg {
     try {
       filelist = jsonToPdArray(jsonfiles, nfiles);
     } catch {
-      var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, jsonfiles);
+      // limit length of file names to 2000 chars
+      var n: int = 1000;
+      var files: string = if jsonfiles.size > 2*n then jsonfiles[0..#n]+'...'+jsonfiles[jsonfiles.size-n..#n] else jsonfiles;
+      var errorMsg = "Could not decode json filenames via tempfile (%i files: %s)".format(nfiles, files);
       pqLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
       return new MsgTuple(errorMsg, MsgType.ERROR);
     }
