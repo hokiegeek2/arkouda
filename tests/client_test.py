@@ -1,6 +1,5 @@
 from base_test import ArkoudaTest
 from context import arkouda as ak
-import pytest
 
 """
 Tests basic Arkouda client functionality
@@ -43,8 +42,7 @@ class ClientTest(ArkoudaTest):
         self.assertFalse(ak.client.connected)
         ak.disconnect()
         ak.connect(server=ArkoudaTest.server, port=ArkoudaTest.port)
- 
-    @pytest.mark.skip(reason="need to troubleshoot test_shutdown")
+
     def test_shutdown(self):
         """
         Tests the ak.shutdown() method

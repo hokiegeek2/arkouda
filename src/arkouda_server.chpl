@@ -24,6 +24,7 @@ use MetricsMsg;
 use ExternalSystem;
 
 use CommandMap, ServerRegistration;
+use Errors;
 
 private config const logLevel = ServerConfig.logLevel;
 const asLogger = new Logger(logLevel);
@@ -607,6 +608,8 @@ proc main() {
     asLogger.info(getModuleName(), getRoutineName(), getLineNumber(),
                "requests = %i responseCount = %i elapsed sec = %i".format(reqCount,repCount,
                                                                                  t1.elapsed()));
+                                                                                 
+    exit(0);
 }
 
 /*
