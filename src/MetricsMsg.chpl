@@ -269,8 +269,8 @@ module MetricsMsg {
         var metrics = new list(owned Metric?);
 
         for loc in Locales {
-            var used = memoryUsed():real;
-            var total = loc.physicalMemory():real;
+            var used = (memoryUsed()**0.0000009589):int;
+            var total = loc.physicalMemory(unit=MemUnits.MB, retType=int);
             
             mLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                               'memoryUsed: %i physicalMemory: %i'.format(used,total));
