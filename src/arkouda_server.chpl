@@ -22,8 +22,7 @@ use ServerErrorStrings;
 use Message;
 use MetricsMsg;
 use ExternalSystem;
-
-use CommandMap, ServerRegistration;
+use CommandMap;
 use Errors;
 
 private config const logLevel = ServerConfig.logLevel;
@@ -160,9 +159,6 @@ proc main() {
         registerFunction("noop", akMsgSign);
         registerFunction("ruok", akMsgSign);
         registerFunction("shutdown", akMsgSign);
-
-        // Add the dynamic Modules/cmds implemented via ServerRegistration.chpl & ServerModules.cfg
-        doRegister();
     }
 
     const arkDirectory = initArkoudaDirectory();
