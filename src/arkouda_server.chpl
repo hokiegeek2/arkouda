@@ -6,7 +6,7 @@ use ServerConfig;
 use IO;
 use Reflection;
 use Logging;
-use ServerDaemon;
+use ServerDaemon, ServerDaemonMap;
 
 private config const logLevel = ServerConfig.logLevel;
 const asLogger = new Logger(logLevel);
@@ -20,7 +20,18 @@ proc main() {
                   getRoutineName(), 
                   getLineNumber(),
                   'Starting Arkouda Server Daemons');
-    coforall daemon in getServerDaemons() {
+    try {
+      coforall daemon in getArkoudaServerDaemons('ARKOUDA_BASE_DAEMON') {
+        asLogger.debug(getModuleName(),
+                       getRoutineName(),
+                       getLineNumber(),
+                       "got non-null ServerDaemon %t".format(daemon.shutdownDaemon));
         daemon.run();
+      }
+    } catch e: Error {
+        asLogger.error(getModuleName(),
+                       getRoutineName(),
+                       getLineNumber(),
+                       "daemon.run() error %t".format(e));
     }
 }

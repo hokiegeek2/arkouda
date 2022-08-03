@@ -288,14 +288,20 @@ module ServerDaemon {
         }
 
         override proc run() throws {
+            sdLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
+                               "initializing the .arkouda directory");
+ 
             this.arkDirectory = this.initArkoudaDirectory();
+            
+            sdLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
+                               "initialized the .arkouda directory");
 
             if authenticate {
                 this.serverToken = getArkoudaToken('%s%s%s'.format(this.arkDirectory, pathSep, 'tokens.txt'));
             }
 
             sdLogger.debug(getModuleName(), getRoutineName(), getLineNumber(),
-                               "initialized the .arkouda directory %s".format(this.arkDirectory));
+                               "the .arkouda directory %s".format(this.arkDirectory));
     
             this.createServerConnectionInfo();
             this.printServerSplashMessage(this.serverToken, this.arkDirectory);
@@ -501,7 +507,7 @@ module ServerDaemon {
     proc getServerDaemons() throws {
         select daemonType {
             when ServerDaemonType.DEFAULT {
-               return [new BaseServerDaemon():ArkoudaServerDaemon];
+               return [new borrowed BaseServerDaemon():ArkoudaServerDaemon];
             }
             otherwise {
                 throw getErrorWithContext(
