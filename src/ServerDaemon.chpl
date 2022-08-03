@@ -507,7 +507,7 @@ module ServerDaemon {
     proc getServerDaemons() throws {
         select daemonType {
             when ServerDaemonType.DEFAULT {
-               return [new borrowed BaseServerDaemon():ArkoudaServerDaemon];
+               return [new shared BaseServerDaemon():ArkoudaServerDaemon];
             }
             otherwise {
                 throw getErrorWithContext(

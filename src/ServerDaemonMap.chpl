@@ -2,8 +2,8 @@ module ServerDaemonMap {
     use Map;
     use ServerDaemon;
 
-    proc getDaemons() : [] borrowed ArkoudaServerDaemon throws {
-        return [new borrowed BaseServerDaemon():ArkoudaServerDaemon];
+    proc getDaemons() : [] shared ArkoudaServerDaemon throws {
+        return [new shared BaseServerDaemon():ArkoudaServerDaemon];
     }
     
     private var f = getDaemons;
