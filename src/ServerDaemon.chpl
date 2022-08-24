@@ -23,7 +23,6 @@ module ServerDaemon {
     use Errors;
     use List;
     use ExternalIntegration;
-    use MetricsMsg;
 
     enum ServerDaemonType {DEFAULT,INTEGRATION,METRICS}
 
@@ -520,10 +519,10 @@ module ServerDaemon {
                     sdLogger.info(getModuleName(),getRoutineName(),getLineNumber(),
                         "bytes of memory used after command %t".format(getMemUsed():uint * numLocales:uint));
                 }
-                if metricsEnabled() {
-                    userMetrics.incrementPerUserRequestMetrics(user,cmd);
-                    requestMetrics.increment(cmd);
-                }
+                //if metricsEnabled() {
+                //    userMetrics.incrementPerUserRequestMetrics(user,cmd);
+                //    requestMetrics.increment(cmd);
+                //}
             } catch (e: ErrorWithMsg) {
                 // Generate a ReplyMsg of type ERROR and serialize to a JSON-formatted string
                 sendRepMsg(serialize(msg=e.msg,msgType=MsgType.ERROR, msgFormat=MsgFormat.STRING, 
@@ -601,7 +600,7 @@ module ServerDaemon {
                 var repTuple: MsgTuple;
 
                 select cmd {
-                    when "metrics" {repTuple = metricsMsg(cmd, args, st);}        
+                    //when "metrics" {repTuple = metricsMsg(cmd, args, st);}        
                     when "connect" {
                         if authenticate {
                             repTuple = new MsgTuple("connected to arkouda metrics server tcp://*:%i as user " +
