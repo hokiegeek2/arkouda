@@ -159,9 +159,9 @@ setup(
     # projects.
     extras_require={  # Optional
         'dev': ['pexpect', 'pytest>=6.0', 'pytest-env',
-                'Sphinx', 'sphinx-argparse', 'sphinx-autoapi',
-                'mypy>=0.931', 'typed-ast', 'black', 'isort', 'flake8', 
-                'prometheus_client'],
+                'Sphinx==5.0.2', 'sphinx-argparse', 'sphinx-autoapi',
+                'mypy>=0.931', 'typed-ast', 'black', 'isort',
+                'flake8', 'prometheus_client'],
     },
     # replace original install command with version that also builds
     # chapel and the arkouda server.
