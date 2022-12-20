@@ -5,7 +5,18 @@ from enum import Enum
 from typing import Dict, Mapping, Optional, Tuple, Union, cast, List
 
 import pyfiglet  # type: ignore
-import zmq  # type: ignore
+import zmq # type: ignore
+import zmq.asyncio # type: ignore
+
+import asyncio, async_timeout
+from asyncio.exceptions import CancelledError, TimeoutError
+from concurrent.futures import ThreadPoolExecutor
+
+#loop = asyncio.get_event_loop()
+
+import threading
+
+event = threading.Event()
 
 from arkouda import __version__, io_util, security
 from arkouda.logger import getArkoudaLogger
@@ -26,12 +37,34 @@ __all__ = [
     "get_server_commands",
     "print_server_commands",
     "ruok",
+    "asyncConnect"
 ]
+
+##################### Asyncio Methods #####################
+
+async def recv():
+    a_ctx = zmq.asyncio.Context.instance()
+
+    s = a_ctx.socket(zmq.REQ)
+    s.connect("tcp://einhorn:5555")
+    s.subscribe('')
+    while True:
+        msg = await s.recv()
+        print('received', msg)
+    s.close()
+
+
+##################### Asyncio Methods #####################
+
 
 # stuff for zmq connection
 pspStr = ""
 context = zmq.Context()
 socket = context.socket(zmq.REQ)
+
+aContext = zmq.asyncio.Context()
+aSocket = aContext.socket(zmq.REQ)
+
 connected = False
 serverConfig = None
 # username and token for when basic authentication is enabled
@@ -99,6 +132,63 @@ def set_defaults() -> None:
     maxTransferBytes = maxTransferBytesDefVal
 
 
+'''def shutdownLoop():
+    import signal
+    os.kill(os.getpid(), signal.SIGUSR1)
+    os._exit(0)
+
+import atexit
+
+atexit.register(shutdownLoop)'''
+
+async def asyncConnector(
+          server: str = "localhost",
+          port: int = 5555,
+          timeout: int = 0,
+          access_token: str = None,
+          connect_url=None
+      ) -> str:
+    #loop = asyncio.get_event_loop()
+    #loop.run_until_complete(asyncConnect())
+    future = asyncio.Future()
+    try:
+        async with async_timeout.timeout(1):
+            res = await asyncio.get_event_loop().run_in_executor(ThreadPoolExecutor(1),connect,server,port)
+    except TimeoutError as te:
+        print(f'timed out {te}')
+        res = 'not connected'
+    finally:
+        return res
+
+def asyncConnect(
+          server: str = "localhost",
+          port: int = 5555,
+          timeout: int = 0,
+          access_token: str = None,
+          connect_url=None,
+      ) -> str:
+    try: 
+        #loop = asyncio.get_event_loop()
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        res = loop.run_until_complete(asyncConnector(server,
+                                               port,
+                                               timeout,
+                                               access_token,
+                                               connect_url,
+                                      ))
+        return res
+    except CancelledError:
+        print('cancelled')
+        res = 'not connected'
+    finally:
+        #shutdownLoop(loop)
+        #loop.close()
+        asyncio.get_event_loop().close()
+        print(asyncio.get_event_loop())
+        #sloop.run_until_complete(loop.shutdown_asyncgens())
+        return res
+
 # create context, request end of socket, and connect to it
 def connect(
     server: str = "localhost",
@@ -106,7 +196,7 @@ def connect(
     timeout: int = 0,
     access_token: str = None,
     connect_url=None,
-) -> None:
+) -> str:
     """
     Connect to a running arkouda server.
 
@@ -206,7 +296,7 @@ def connect(
         )
     regexMaxCaptures = serverConfig["regexMaxCaptures"]  # type:ignore
     clientLogger.info(return_message)
-
+    return 'connected'
 
 def _parse_url(url: str) -> Tuple[str, int, Optional[str]]:
     """
@@ -820,3 +910,58 @@ def ruok() -> str:
             return f"imnotok because: {res}"
     except Exception as e:
         return f"ruok did not return response: {str(e)}"
+
+def shutdownLoop(loop):
+    for task in asyncio.all_tasks(loop):
+        task.cancel()
+
+def main():
+    from concurrent.futures import ThreadPoolExecutor
+    import asyncio, async_timeout
+    from asyncio.exceptions import CancelledError, TimeoutError
+    
+    loop = asyncio.get_event_loop()
+
+    def shutdownLoop(loop):
+        for task in asyncio.all_tasks(loop):
+            task.cancel()
+
+    async def asyncConnect():
+        #loop = asyncio.get_event_loop()
+        #loop.run_until_complete(asyncConnect())
+        future = asyncio.Future()
+        executor = ThreadPoolExecutor(1)
+        result: str
+        try:
+            async with async_timeout.timeout(1):
+                result = await loop.run_in_executor(executor,connect,'localhos')
+        except TimeoutError as te:
+            print(f'timed out {te}')
+            shutdown(loop)
+            future.cancel()
+        finally:
+            executor.shutdown(wait=True)
+        return result
+    #loop = asyncio.get_event_loop()
+    try: 
+        loop.run_until_complete(asyncConnect())
+    except CancelledError as ce:
+        print(ce)
+    finally:
+        loop.run_until_complete(loop.shutdown_asyncgens())
+        loop.close()
+        print('closed loop')
+
+def new_main():
+    res = asyncConnect('einhorn')
+    #sres = yield from asyncConnect('einhorn')
+    print(f'the result {res}')
+    #sshutdownLoop(asyncio.get_event_loop())
+    event.set()
+
+    #import os
+    #os._exit(0)
+
+if __name__ == "__main__":
+    new_main()
+    #shutdownLoop(loop)
