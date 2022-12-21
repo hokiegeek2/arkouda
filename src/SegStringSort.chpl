@@ -1,9 +1,9 @@
 module SegStringSort {
-  use SegmentedArray;
+  use SegmentedString;
   use Sort;
   use Time;
   use IO;
-  use CPtr;
+  use CTypes;
   use CommAggregation;
   use PrivateDist;
   use Reflection;
@@ -31,7 +31,7 @@ module SegStringSort {
     }
   }
   
-  proc twoPhaseStringSort(ss: SegString): [ss.offsets.aD] int throws {
+  proc twoPhaseStringSort(ss: SegString): [ss.offsets.a.domain] int throws {
     var t = getCurrentTime();
     const lengths = ss.getLengths();
     ssLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
@@ -44,13 +44,15 @@ module SegStringSort {
     ssLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                        "Pivot = %t, nShort = %t".format(pivot, nShort)); 
     t = getCurrentTime();
-    const longStart = ss.offsets.aD.low + nShort;
+    const longStart = ss.offsets.a.domain.low + nShort;
     const isLong = (lengths >= pivot);
-    var locs = [i in ss.offsets.aD] i;
+    var locs = [i in ss.offsets.a.domain] i;
+    // check there's enough room to create a copy for scan and throw if creating a copy would go over memory limit
+    overMemLimit(numBytes(int) * isLong.size);
     var longLocs = + scan isLong;
     locs -= longLocs;
-    var gatherInds: [ss.offsets.aD] int;
-    forall (i, l, ll, t) in zip(ss.offsets.aD, locs, longLocs, isLong) 
+    var gatherInds: [ss.offsets.a.domain] int;
+    forall (i, l, ll, t) in zip(ss.offsets.a.domain, locs, longLocs, isLong) 
       with (var agg = newDstAggregator(int)) {
       if !t {
         agg.copy(gatherInds[l], i);
@@ -62,7 +64,7 @@ module SegStringSort {
                    "Partitioned short/long strings in %t seconds".format(getCurrentTime() - t));
     on Locales[Locales.domain.high] {
       var tl = getCurrentTime();
-      const ref highDom = {longStart..ss.offsets.aD.high};
+      const ref highDom = {longStart..ss.offsets.a.domain.high};
       ref highInds = gatherInds[highDom];
       // Get local copy of the long strings as Chapel strings, and their original indices
       var stringsWithInds = gatherLongStrings(ss, lengths, highInds);
@@ -92,7 +94,7 @@ module SegStringSort {
     return ranks;
   }
   
-  proc getPivot(lengths: [?D] int): 2*int {
+  proc getPivot(lengths: [?D] int): 2*int throws {
     if !PARTITION_LONG_STRING {
       var pivot = max reduce lengths + 1;
       pivot = max(pivot + (pivot % 2), MINBYTES);
@@ -120,6 +122,8 @@ module SegStringSort {
       }
       const bins = + reduce [loc in PrivateSpace] pBins[loc];
       // Number of bytes in strings longer than or equal to the current bin
+      // check there's enough room to create a copy for scan and throw if creating a copy would go over memory limit
+      overMemLimit(numBytes(int) * bins.size);
       const tailPop = (+ reduce bins) - (+ scan bins) + bins;
       // Find the largest value of "long" such that long strings fit in one local subdomain
       const singleLocale = (tailPop < (MEMFACTOR * D.localSubdomain().size));
@@ -252,7 +256,9 @@ module SegStringSort {
           }//coforall task
         }//on loc
       }//coforall loc
-            
+
+      // check there's enough room to create a copy for scan and throw if creating a copy would go over memory limit
+      overMemLimit(numBytes(int) * globalCounts.size);
       // scan globalCounts to get bucket ends on each locale/task
       globalStarts = + scan globalCounts;
       globalStarts = globalStarts - globalCounts;

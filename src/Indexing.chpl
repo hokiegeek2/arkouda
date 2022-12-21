@@ -36,26 +36,18 @@ module Indexing {
     }
 
     // return an array of all values from array a whose index corresponds to a true value in array truth
-    proc boolIndexer(a: [?aD] ?t, truth: [aD] bool) {
+    proc boolIndexer(a: [?aD] ?t, truth: [aD] bool) throws {
+        // check there's enough room to create a copy for scan and throw if creating a copy would go over memory limit
+        overMemLimit(numBytes(int) * truth.size);
         var iv: [truth.domain] int = (+ scan truth);
         var pop = iv[iv.size-1];
-        var ret = makeDistArray(pop, int);
+        var ret = makeDistArray(pop, t);
 
-        forall (i, eai) in zip(a.domain, a) with (var agg = newDstAggregator(int)) {
+        forall (i, eai) in zip(a.domain, a) with (var agg = newDstAggregator(t)) {
           if (truth[i]) {
             agg.copy(ret[iv[i]-1], eai);
           }
         }
         return ret;
-    }
-
-    // concatenate 2 distributed arrays and return the result
-    proc concatset(a: [?aD] ?t, b: [?bD] t) {
-      var ret = makeDistArray((a.size + b.size), t);
-      
-      ret[{0..#a.size}] = a;
-      ret[{a.size..#b.size}] = b;
-
-      return ret;
     }
 }

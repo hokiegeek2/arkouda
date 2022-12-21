@@ -65,7 +65,7 @@ setup(
     #
     # This field corresponds to the "Home-Page" metadata field:
     # https://packaging.python.org/specifications/core-metadata/#home-page-optional
-    url='https://github.com/mhmerrill/arkouda',  # Optional
+    url='https://github.com/Bears-R-Us/arkouda',  # Optional
 
     # This should be your name or the name of the organization which owns the
     # project.
@@ -97,7 +97,7 @@ setup(
         # These classifiers are *not* checked by 'pip install'. See instead
         # 'python_requires' below.
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
+        'Programming Language :: Python :: 3.8',
     ],
 
     # This field adds keywords for your project which will appear on the
@@ -122,7 +122,7 @@ setup(
     # and refuse to install the project if the version does not match. If you
     # do not support Python 2, you can simplify this to '>=3.5' or similar, see
     # https://packaging.python.org/guides/distributing-packages-using-setuptools/#python-requires
-    python_requires='>=3.7',
+    python_requires='>=3.8',
 
     # This field lists other packages that your project depends on to run.
     # Any package you put here will be installed by pip when your project is
@@ -131,12 +131,19 @@ setup(
     # For an analysis of "install_requires" vs pip's requirements files see:
     # https://packaging.python.org/en/latest/requirements.html
     install_requires=[
-        'numpy>=1.16.5,<=1.19.5',
-        'pandas>=1.1.0',
+        'numpy>=1.22.2',
+        'pandas>=1.4.0',
         'pyzmq>=20.0.0',
         'typeguard==2.10.0',
+        'tabulate',
         'pyfiglet',
-        'versioneer'
+        'versioneer',
+        'matplotlib>=3.3.2',
+        'h5py',
+        'pip',
+        'types-tabulate',
+        'tables>=3.7.0',
+        'pyarrow==9.0.0',
     ],
 
     # List additional groups of dependencies here (e.g. development
@@ -148,9 +155,10 @@ setup(
     # Similar to `install_requires` above, these must be valid existing
     # projects.
     extras_require={  # Optional
-        'dev': ['h5py','pexpect', 'pytest', 
-                'pytest-env','Sphinx', 'sphinx-argparse', 
-                'sphinx-autoapi', 'mypy'],
+        'dev': ['pexpect', 'pytest>=6.0', 'pytest-env',
+                'Sphinx>=5.1.1', 'sphinx-argparse', 'sphinx-autoapi',
+                'mypy>=0.931,<0.990', 'typed-ast', 'black', 'isort',
+                'flake8'],
     },
     # replace original install command with version that also builds
     # chapel and the arkouda server.
@@ -198,8 +206,8 @@ setup(
     # maintainers, and where to support the project financially. The key is
     # what's used to render the link text on PyPI.
     project_urls={  # Optional
-        'Bug Reports': 'https://github.com/mhmerrill/arkouda/issues',
-        'Source': 'https://github.com/mhmerrill/arkouda',
+        'Bug Reports': 'https://github.com/Bears-R-Us/arkouda/issues',
+        'Source': 'https://github.com/Bears-R-Us/arkouda',
         'Chapel': 'https://chapel-lang.org'
     },
 )

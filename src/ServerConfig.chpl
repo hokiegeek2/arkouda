@@ -6,12 +6,21 @@ module ServerConfig
     use SymArrayDmap only makeDistDom;
 
     public use IO;
-    private use SysCTypes;
+    private use CTypes;
 
     use ServerErrorStrings;
     use Reflection;
     use ServerErrors;
     use Logging;
+    
+    enum Deployment {STANDARD,KUBERNETES}
+    
+    /*
+    Type of deployment, which currently is either STANDARD, meaning
+    that Arkouda is deployed bare-metal or within an HPC environment, 
+    or on Kubernetes, defaults to Deployment.STANDARD
+    */
+    config const deployment = Deployment.STANDARD;
 
     /*
     Trace logging flag
@@ -34,14 +43,29 @@ module ServerConfig
     config const perLocaleMemLimit = 90;
 
     /*
+    Bit width of digits for the LSD radix sort and related ops
+     */
+    config param RSLSD_bitsPerDigit = 16;
+    
+    /*
     Arkouda version
     */
-    config param arkoudaVersion:string;
+    config param arkoudaVersion:string = "Please set during compilation";
 
     /*
     Write the server `hostname:port` to this file.
     */
     config const serverConnectionInfo: string = getEnv("ARKOUDA_SERVER_CONNECTION_INFO", "");
+
+    /*
+    Flag to shut down the arkouda server automatically when the client disconnects
+    */
+    config const autoShutdown = false;
+
+    /*
+    Flag to print the server information on startup
+    */
+    config const serverInfoNoSplash = false;
 
     /*
     Hostname where I am running
@@ -53,15 +77,49 @@ module ServerConfig
     }
 
     /*
+     * Retrieves the hostname of the locale 0 arkouda_server process, which is useful for 
+     * registering Arkouda with cloud environments such as Kubernetes.
+     */
+    proc getConnectHostname() throws {
+        var hostname: string;
+        on Locales[0] {
+            hostname = here.name.strip('-0');
+        }
+        return hostname;
+    }
+
+    /*
+     * Returns the version of Chapel arkouda was built with
+     */
+    proc getChplVersion() throws {
+        use Version;
+        // Prior to 1.28, chplVersion had a prepended version that has
+        // since been removed
+        return (chplVersion:string).replace('version ', '');
+    }
+
+    /*
+    Indicates the version of Chapel Arkouda was built with
+    */
+    const chplVersion = try! getChplVersion();
+
+    /*
     Indicates whether token authentication is being used for Akrouda server requests
     */
     config const authenticate : bool = false;
+
+    /*
+    Determines the maximum number of capture groups returned by Regex.matches
+    */
+    config param regexMaxCaptures = 20;
+
+    config const saveUsedModules : bool = false;
 
     private config const lLevel = ServerConfig.logLevel;
     const scLogger = new Logger(lLevel);
    
     proc createConfig() {
-        use SysCTypes;
+        use CTypes;
 
         class LocaleConfig {
             const id: int;
@@ -80,8 +138,10 @@ module ServerConfig
                 }
             }
         }
+
         class Config {
             const arkoudaVersion: string;
+            const chplVersion: string;
             const ZMQVersion: string;
             const HDF5Version: string;
             const serverHostname: string;
@@ -94,13 +154,19 @@ module ServerConfig
             const LocaleConfigs: [LocaleSpace] owned LocaleConfig;
             const authenticate: bool;
             const logLevel: LogLevel;
+            const regexMaxCaptures: int;
             const byteorder: string;
+            const autoShutdown: bool;
+            const serverInfoNoSplash: bool;
         }
+
         var (Zmajor, Zminor, Zmicro) = ZMQ.version;
         var H5major: c_uint, H5minor: c_uint, H5micro: c_uint;
         H5get_libversion(H5major, H5minor, H5micro);
+        
         const cfg = new owned Config(
             arkoudaVersion = (ServerConfig.arkoudaVersion:string),
+            chplVersion = chplVersion,
             ZMQVersion = try! "%i.%i.%i".format(Zmajor, Zminor, Zmicro),
             HDF5Version = try! "%i.%i.%i".format(H5major, H5minor, H5micro),
             serverHostname = serverHostname,
@@ -113,16 +179,18 @@ module ServerConfig
             LocaleConfigs = [loc in LocaleSpace] new owned LocaleConfig(loc),
             authenticate = authenticate,
             logLevel = logLevel,
-            byteorder = try! getByteorder()
+            regexMaxCaptures = regexMaxCaptures,
+            byteorder = try! getByteorder(),
+            autoShutdown = autoShutdown,
+            serverInfoNoSplash = serverInfoNoSplash
         );
+        return try! "%jt".format(cfg);
 
-        return cfg;
     }
-    private const cfg = createConfig();
+    private var cfgStr = createConfig();
 
     proc getConfig(): string {
-        var res: string = try! "%jt".format(cfg);
-        return res;
+        return cfgStr;
     }
 
     proc getEnv(name: string, default=""): string {
@@ -136,7 +204,7 @@ module ServerConfig
     Get the physical memory available on this locale
     */ 
     proc getPhysicalMemHere() {
-        use MemDiagnostics;
+        use Memory.Diagnostics;
         return here.physicalMemory();
     }
 
@@ -148,7 +216,7 @@ module ServerConfig
         var writeVal = 1, readVal = 0;
         var tmpf = openmem();
         tmpf.writer(kind=iobig).write(writeVal);
-        tmpf.reader(kind=ionative, start=0).read(readVal);
+        tmpf.reader(kind=ionative).read(readVal);
         return if writeVal == readVal then "big" else "little";
     }
 
@@ -156,7 +224,7 @@ module ServerConfig
     Get the memory used on this locale
     */
     proc getMemUsed() {
-        use MemDiagnostics;
+        use Memory.Diagnostics;
         return memoryUsed();
     }
 
@@ -275,4 +343,24 @@ module ServerConfig
       return tup;
     }
 
+    proc getEnvInt(name: string, default: int): int {
+      extern proc getenv(name : c_string) : c_string;
+      var strval = getenv(name.localize().c_str()): string;
+      if strval.isEmpty() { return default; }
+      return try! strval: int;
+    }
+
+    /*
+     * String constants for use in constructing JSON formatted messages
+     */
+    const Q = '"'; // Double Quote, escaping quotes often throws off syntax highlighting.
+    const QCQ = Q + ":" + Q; // `":"` -> useful for closing and opening quotes for named json k,v pairs
+    const BSLASH = '\\';
+    const ESCAPED_QUOTES = BSLASH + Q;
+
+    proc appendToConfigStr(key:string, val:string) {
+      var idx_close = cfgStr.rfind("}"):int;
+      var tmp_json = cfgStr(0..idx_close-1);
+      cfgStr = tmp_json + "," + Q + key + QCQ + val + Q + "}";
+    }
 }

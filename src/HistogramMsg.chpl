@@ -12,6 +12,7 @@ module HistogramMsg
     use ServerErrorStrings;
 
     use Histogram;
+    use Message;
  
     private config const logLevel = ServerConfig.logLevel;
     const hgmLogger = new Logger(logLevel);
@@ -20,19 +21,18 @@ module HistogramMsg
     private config const mBound = 2**25;
 
     /* histogram takes a pdarray and returns a pdarray with the histogram in it */
-    proc histogramMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc histogramMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
-        // split request into fields
-        var (name, binsStr) = payload.splitMsgToTuple(2);
-        var bins = try! binsStr:int;
+        const bins = msgArgs.get("bins").getIntValue();
+        const name = msgArgs.getValueOf("array");
         
         // get next symbol name
         var rname = st.nextName();
         hgmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                       "cmd: %s name: %s bins: %i rname: %s".format(cmd, name, bins, rname));
 
-        var gEnt: borrowed GenSymEntry = st.lookup(name);
+        var gEnt: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
 
         // helper nested procedure
         proc histogramHelper(type t) throws {
@@ -77,4 +77,7 @@ module HistogramMsg
         hgmLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
         return new MsgTuple(repMsg, MsgType.NORMAL);
     }
+
+    use CommandMap;
+    registerFunction("histogram", histogramMsg, getModuleName());
 }

@@ -1,11 +1,12 @@
 module CommAggregation {
-  use SysCTypes;
-  use CPtr;
+  use CTypes;
+  use ServerConfig;
   use UnorderedCopy;
   use CommPrimitives;
+  use ChplConfig;
 
   // TODO should tune these values at startup
-  param defaultBuffSize = if CHPL_COMM == "ugni" then 4096 else 8096;
+  param defaultBuffSize = if CHPL_COMM == "ugni" then 4096 else 8192;
   private config const yieldFrequency = getEnvInt("ARKOUDA_SERVER_AGGREGATION_YIELD_FREQUENCY", 1024);
   private config const dstBuffSize = getEnvInt("ARKOUDA_SERVER_AGGREGATION_DST_BUFF_SIZE", defaultBuffSize);
   private config const srcBuffSize = getEnvInt("ARKOUDA_SERVER_AGGREGATION_SRC_BUFF_SIZE", defaultBuffSize);
@@ -38,7 +39,8 @@ module CommAggregation {
     type elemType;
     type aggType = (c_ptr(elemType), elemType);
     const bufferSize = dstBuffSize;
-    const myLocaleSpace = LocaleSpace;
+    const myLocaleSpace = 0..<numLocales;
+    var lastLocale: int;
     var opsUntilYield = yieldFrequency;
     var lBuffers: c_ptr(c_ptr(aggType));
     var rBuffers: [myLocaleSpace] remoteBuffer(aggType);
@@ -64,7 +66,8 @@ module CommAggregation {
     }
 
     proc flush() {
-      for loc in myLocaleSpace {
+      for offsetLoc in myLocaleSpace + lastLocale {
+        const loc = offsetLoc % numLocales;
         _flushBuffer(loc, bufferIdxs[loc], freeData=true);
       }
     }
@@ -72,6 +75,7 @@ module CommAggregation {
     inline proc copy(ref dst: elemType, const in srcVal: elemType) {
       // Get the locale of dst and the local address on that locale
       const loc = dst.locale.id;
+      lastLocale = loc;
       const dstAddr = getAddr(dst);
 
       // Get our current index into the buffer for dst's locale
@@ -150,14 +154,14 @@ module CommAggregation {
     type elemType;
     type aggType = c_ptr(elemType);
     const bufferSize = srcBuffSize;
-    const myLocaleSpace = LocaleSpace;
+    const myLocaleSpace = 0..<numLocales;
+    var lastLocale: int;
     var opsUntilYield = yieldFrequency;
     var dstAddrs: c_ptr(c_ptr(aggType));
     var lSrcAddrs: c_ptr(c_ptr(aggType));
     var lSrcVals: [myLocaleSpace][0..#bufferSize] elemType;
     var rSrcAddrs: [myLocaleSpace] remoteBuffer(aggType);
     var rSrcVals: [myLocaleSpace] remoteBuffer(elemType);
-
     var bufferIdxs: c_ptr(int);
 
     proc postinit() {
@@ -185,7 +189,8 @@ module CommAggregation {
     }
 
     proc flush() {
-      for loc in myLocaleSpace {
+      for offsetLoc in myLocaleSpace + lastLocale {
+        const loc = offsetLoc % numLocales;
         _flushBuffer(loc, bufferIdxs[loc], freeData=true);
       }
     }
@@ -197,6 +202,7 @@ module CommAggregation {
       const dstAddr = getAddr(dst);
 
       const loc = src.locale.id;
+      lastLocale = loc;
       const srcAddr = getAddr(src);
 
       ref bufferIdx = bufferIdxs[loc];
@@ -339,7 +345,7 @@ module CommAggregation {
         assert(lArr.domain.low == 0);
         assert(lArr.locale.id == here.id);
       }
-      const byte_size = size:size_t * c_sizeof(elemType);
+      const byte_size = size:c_size_t * c_sizeof(elemType);
       CommPrimitives.PUT(c_ptrTo(lArr[0]), loc, data, byte_size);
     }
 
@@ -347,7 +353,7 @@ module CommAggregation {
       if boundsChecking {
         assert(size <= this.size);
       }
-      const byte_size = size:size_t * c_sizeof(elemType);
+      const byte_size = size:c_size_t * c_sizeof(elemType);
       CommPrimitives.PUT(lArr, loc, data, byte_size);
     }
 
@@ -358,7 +364,7 @@ module CommAggregation {
         assert(lArr.domain.low == 0);
         assert(lArr.locale.id == here.id);
       }
-      const byte_size = size:size_t * c_sizeof(elemType);
+      const byte_size = size:c_size_t * c_sizeof(elemType);
       CommPrimitives.GET(c_ptrTo(lArr[0]), loc, data, byte_size);
     }
 
@@ -381,12 +387,5 @@ module CommAggregation {
   inline proc bufferIdxAlloc() {
     const cachePaddedLocales = (numLocales + 7) & ~7;
     return c_aligned_alloc(int, 64, cachePaddedLocales);
-  }
-
-  private proc getEnvInt(name: string, default: int): int {
-    extern proc getenv(name : c_string) : c_string;
-    var strval = getenv(name.localize().c_str()): string;
-    if strval.isEmpty() { return default; }
-    return try! strval: int;
   }
 }

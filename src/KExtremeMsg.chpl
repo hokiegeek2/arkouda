@@ -15,7 +15,7 @@ module KExtremeMsg
 
     use MultiTypeSymbolTable;
     use MultiTypeSymEntry;
-    use SegmentedArray;
+    use SegmentedString;
     use ServerErrorStrings;
 
     use KReduce;
@@ -34,25 +34,25 @@ module KExtremeMsg
     :type st: borrowed SymTab
     :returns: (MsgTuple) response message
     */
-    proc minkMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc minkMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
-        // split request into fields
-        var (name, k, returnIndices) = payload.splitMsgToTuple(3);
 
         var vname = st.nextName();
 
-        var gEnt: borrowed GenSymEntry = st.lookup(name);
+        var gEnt: borrowed GenSymEntry = getGenericTypedArrayEntry(msgArgs.getValueOf("array"), st);
+        var k = msgArgs.get("k").getIntValue();
+        var returnIndices = msgArgs.get("rtnInd").getBoolValue();
 
         select(gEnt.dtype) {
             when (DType.Int64) {
                 var e = toSymEntry(gEnt,int);
                 var aV;
 
-                if !stringtobool(returnIndices) {
-                    aV = computeExtremaValues(e.a, k:int);
+                if !returnIndices {
+                    aV = computeExtremaValues(e.a, k);
                 } else {
-                    aV = computeExtremaIndices(e.a, k:int);
+                    aV = computeExtremaIndices(e.a, k);
                 }
 
                 st.addEntry(vname, new shared SymEntry(aV));
@@ -62,9 +62,9 @@ module KExtremeMsg
                 return new MsgTuple(repMsg, MsgType.NORMAL);
             }
             when (DType.Float64) {
-                if !stringtobool(returnIndices) {
+                if !returnIndices {
                     var e = toSymEntry(gEnt,real);
-                    var aV = computeExtremaValues(e.a, k:int);
+                    var aV = computeExtremaValues(e.a, k);
                     st.addEntry(vname, new shared SymEntry(aV));
 
                     repMsg = "created " + st.attrib(vname);
@@ -72,7 +72,7 @@ module KExtremeMsg
                     return new MsgTuple(repMsg, MsgType.NORMAL);
                 } else {
                     var e = toSymEntry(gEnt,real);
-                    var aV = computeExtremaIndices(e.a, k:int);
+                    var aV = computeExtremaIndices(e.a, k);
                     st.addEntry(vname, new shared SymEntry(aV));
 
                     repMsg = "created " + st.attrib(vname);
@@ -96,23 +96,23 @@ module KExtremeMsg
     :type st: borrowed SymTab
     :returns: (MsgTuple) response message
     */
-    proc maxkMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc maxkMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
-        // split request into fields
-        var (name, k, returnIndices) = payload.splitMsgToTuple(3);
 
         var vname = st.nextName();
-        var gEnt: borrowed GenSymEntry = st.lookup(name);
+        var gEnt: borrowed GenSymEntry = getGenericTypedArrayEntry(msgArgs.getValueOf("array"), st);
+        var k = msgArgs.get("k").getIntValue();
+        var returnIndices = msgArgs.get("rtnInd").getBoolValue();
 
         select(gEnt.dtype) {
             when (DType.Int64) {
                 var e = toSymEntry(gEnt,int);
                 var aV;
-                if !stringtobool(returnIndices) {
-                    aV = computeExtremaValues(e.a, k:int, false);
+                if !returnIndices {
+                    aV = computeExtremaValues(e.a, k, false);
                 } else {
-                    aV = computeExtremaIndices(e.a, k:int, false);
+                    aV = computeExtremaIndices(e.a, k, false);
                 }
 
                 st.addEntry(vname, new shared SymEntry(aV));
@@ -122,9 +122,9 @@ module KExtremeMsg
                 return new MsgTuple(repMsg, MsgType.NORMAL);
            }
            when (DType.Float64) {
-               if !stringtobool(returnIndices) {
+               if !returnIndices {
                    var e = toSymEntry(gEnt,real);
-                   var aV = computeExtremaValues(e.a, k:int, false);
+                   var aV = computeExtremaValues(e.a, k, false);
 
                    st.addEntry(vname, new shared SymEntry(aV));
 
@@ -133,7 +133,7 @@ module KExtremeMsg
                    return new MsgTuple(repMsg, MsgType.NORMAL);
                } else {
                    var e = toSymEntry(gEnt,real);
-                   var aV = computeExtremaIndices(e.a, k:int, false);
+                   var aV = computeExtremaIndices(e.a, k, false);
 
                    st.addEntry(vname, new shared SymEntry(aV));
 
@@ -151,4 +151,8 @@ module KExtremeMsg
            }
         }
     }
+
+    use CommandMap;
+    registerFunction("mink", minkMsg, getModuleName());
+    registerFunction("maxk", maxkMsg, getModuleName());
 }

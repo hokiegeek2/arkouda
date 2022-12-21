@@ -1,7 +1,7 @@
 module Logging {
     use Set;
     use IO;
-    use DateTime;
+    use ArkoudaDateTimeCompat;
     use Reflection;
     use ServerErrors;
 
@@ -112,7 +112,7 @@ module Logging {
         }
          
         proc generateDateTimeString() throws {
-            var dts = datetime.today():string;
+            var dts = datetime.now():string;
             var vals = dts.split("T");
             var cd = vals(0);
             var rawCms = vals(1).split(".");

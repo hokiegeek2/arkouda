@@ -19,7 +19,7 @@ These env vars can be used to configure your build of Arkouda when running `make
 #### Chapel Compiler Flags
   - CHPL_FLAGS : A number of flags will be added automatically to the `chpl` compiler in the Makefile, you can add your
     own, additional ones here.
-    - `-smemTrack=true -lhdf5 -lhdf5_hl -lzmq`, will add `--fast` unless one of the following env vars are set.
+    - `-smemTrack=true -lhdf5 -lhdf5_hl -lzmq -liconv -lidn2`, will add `--fast` unless one of the following env vars are set.
   - ARKOUDA_DEVELOPER : Setting this to 1 or true will add the `-O1` flag to CHPL_FLAGS.  NOTE: _mutually exclusive_ with
     `ARKOUDA_QUICK_COMPILE`
   - ARKOUDA_QUICK_COMPILE : Setting this to 1 or true will add the following flags.  NOTE: _mutually exclusive_ with
@@ -28,14 +28,23 @@ These env vars can be used to configure your build of Arkouda when running `make
   - ARKOUDA_PRINT_PASSES_FILE : Setting this adds `--print-passes-file <file>` to the Chapel compiler flags and writes
     the associated "pass timing" output to the specified file.  This is mainly used in the nightly testing infrastructure.
   - CHPL_DEBUG_FLAGS : We add `--print-passes` automatically, but you can add additional flags here.
+  - REGEX_MAX_CAPTURES : Set this to an integer to change the maximum number of capture groups accessible using ``Match.group``
+    (set to 20 by default)
 
 #### Dependency Paths
 Most folks install anaconda and link to these libraries through Makefile.paths instructions.  If you have an alternative
 setup you can set them explicitly via:
   - ARKOUDA_ZMQ_PATH : Path to ZMQ library
   - ARKOUDA_HDF5_PATH : Path to HDF5 library
+  - ARKOUDA_ARROW_PATH : Path to Arrow library
+  - ARKOUDA_ICONV_PATH : Path to iconv library
+  - ARKOUDA_IDN2_PATH : Path to idn2 library
+  - LD_LIBRARY_PATH : Path to environment `lib` directory.
   - ARKOUDA_SKIP_CHECK_DEPS : Setting this will skip the automated checks for dependencies (i.e. ZMQ, HDF5). This is
     useful for developers doing repeated Arkouda builds since they should have already verified the deps have been set up.
+
+#### Adding a Module from Outside the Arkouda src Directory
+  - ARKOUDA_SERVER_USER_MODULES : Absolute path or string of absolute paths separated by a space to modules outside of the Arkouda source directory to be included in the Arkouda build. The module name must also be included in `ServerModules.cfg` for the function to be registered with the server.
 
 ## Testing
 Also see the python tests [README](tests/README.md) for more information on Python based unit & functional testing.
@@ -58,3 +67,4 @@ Also see the python tests [README](tests/README.md) for more information on Pyth
   - ARKOUDA_KEY_FILE : Client env var for keyfile when using ssh tunnel
   - ARKOUDA_PASSWORD : Client env var for password when using ssh tunnel
   - ARKOUDA_LOG_LEVEL : Client env var to control client side Logging Level
+  - ARKOUDA_CLIENT_MODE: Client env var controlling client mode (UI or API), where UI mode displays the Arkouda client splash message. 

@@ -16,27 +16,6 @@ module MsgProcessing
 
     use AryUtil;
     
-    public use OperatorMsg;
-    public use RandMsg;
-    public use IndexingMsg;
-    public use UniqueMsg;
-    public use In1dMsg;
-    public use HistogramMsg;
-    public use ArgSortMsg;
-    public use SortMsg;
-    public use ReductionMsg;
-    public use FindSegmentsMsg;
-    public use EfuncMsg;
-    public use ConcatenateMsg;
-    public use SegmentedMsg;
-    public use JoinEqWithDTMsg;
-    public use RegistrationMsg;
-    public use ArraySetopsMsg;
-    public use KExtremeMsg;
-    public use CastMsg;
-    public use BroadcastMsg;
-    public use FlattenMsg;
-    
     private config const logLevel = ServerConfig.logLevel;
     const mpLogger = new Logger(logLevel);
     
@@ -51,12 +30,10 @@ module MsgProcessing
 
     :returns: (MsgTuple) response message
     */
-    proc createMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc createMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        // split request into fields
-        var (dtypestr, sizestr) = payload.splitMsgToTuple(2);
-        var dtype = str2dtype(dtypestr);
-        var size = try! sizestr:int;
+        var dtype = str2dtype(msgArgs.getValueOf("dtype"));
+        var size = msgArgs.get("size").getIntValue();
         if (dtype == DType.UInt8) || (dtype == DType.Bool) {
           overMemLimit(size);
         } else {
@@ -91,10 +68,9 @@ module MsgProcessing
 
     :returns: MsgTuple
     */
-    proc deleteMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc deleteMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        // split request into fields
-        var (name) = payload.splitMsgToTuple(1);
+        const name = msgArgs.getValueOf("name");
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
                                      "cmd: %s array: %s".format(cmd,st.attrib(name)));
         // delete entry from symbol table
@@ -119,9 +95,8 @@ module MsgProcessing
 
     :returns: MsgTuple
      */
-    proc clearMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc clearMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        var (_) = payload.splitMsgToTuple(1); // split request into fields
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), "cmd: %s".format(cmd));
         st.clear();
 
@@ -142,10 +117,9 @@ module MsgProcessing
 
     :returns: MsgTuple
      */
-    proc infoMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc infoMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        // split request into fields
-        var (name) = payload.splitMsgToTuple(1);
+        const name = msgArgs.getValueOf("names");
  
         // if name == "__AllSymbols__" passes back info on all symbols       
         repMsg = st.info(name);
@@ -164,9 +138,8 @@ module MsgProcessing
 
     :returns: MsgTuple
      */
-    proc getconfigMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc getconfigMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        var (_) = payload.splitMsgToTuple(1); // split request into fields
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),"cmd: %s".format(cmd));
         return new MsgTuple(getConfig(), MsgType.NORMAL);
     }
@@ -182,9 +155,8 @@ module MsgProcessing
 
     :returns: MsgTuple
      */
-    proc getmemusedMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc getmemusedMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        var (_) = payload.splitMsgToTuple(1); // split request into fields
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),"cmd: %s".format(cmd));
         if (memTrack) {
             return new MsgTuple((getMemUsed():uint * numLocales:uint):string, MsgType.NORMAL);
@@ -194,6 +166,37 @@ module MsgProcessing
         }
     }
     
+    /**
+     * Generate the mapping of server command to function as JSON
+     * encoded string.
+     *
+     * The args are IGNORED. They are only here to match the CommandMap
+     * standard function signature, similar to other procs.
+     *
+     * :arg cmd: Ignored
+     * :type cmd: string 
+     *
+     * :arg payload: Ignored
+     * :type payload: string
+     *
+     * :arg st: Ignored
+     * :type st: borrowed SymTab 
+     *
+     * :returns: MsgTuple containing JSON formatted string of cmd -> function mapping
+     */
+    proc getCommandMapMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab) throws {
+        // We can ignore the args, we just need it to match the CommandMap call signature
+        import CommandMap;
+        try {
+            const json:string = CommandMap.dumpCommandMap();
+            return new MsgTuple(CommandMap.dumpCommandMap():string, MsgType.NORMAL);
+        } catch {
+            var errorMsg = "Error converting CommandMap to JSON";
+            mpLogger.error(getModuleName(), getRoutineName(), getLineNumber(), errorMsg);
+            return new MsgTuple(errorMsg, MsgType.ERROR);
+        }
+    }
+
     /* 
     Response to __str__ method in python str convert array data to string 
 
@@ -205,11 +208,11 @@ module MsgProcessing
 
     :returns: (string,MsgType)
    */
-    proc strMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc strMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        // split request into fields
-        var (name, ptstr) = payload.splitMsgToTuple(2);
-        var printThresh = try! ptstr:int;
+        const name = msgArgs.getValueOf("array");
+
+        var printThresh = msgArgs.get("printThresh").getIntValue();
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
                                               "cmd: %s name: %s threshold: %i".format(
                                                cmd,name,printThresh));  
@@ -230,109 +233,13 @@ module MsgProcessing
 
        :returns: MsgTuple
       */ 
-    proc reprMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc reprMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         var repMsg: string; // response message
-        // split request into fields
-        var (name, ptstr) = payload.splitMsgToTuple(2);
-        var printThresh = try! ptstr:int;
+        const name = msgArgs.getValueOf("array");
+        var printThresh = msgArgs.get("printThresh").getIntValue();
 
         repMsg = st.datarepr(name,printThresh);
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg); 
-        return new MsgTuple(repMsg,MsgType.NORMAL);
-    }
-
-
-    /*
-    Creates a sym entry with distributed array adhering to the Msg parameters (start, stop, stride)
-
-    :arg reqMsg: request containing (cmd,start,stop,stride)
-    :type reqMsg: string 
-
-    :arg st: SymTab to act on
-    :type st: borrowed SymTab 
-
-    :returns: MsgTuple
-    */
-    proc arangeMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-        var repMsg: string; // response message
-        var (startstr, stopstr, stridestr) = payload.splitMsgToTuple(3);
-        var start = try! startstr:int;
-        var stop = try! stopstr:int;
-        var stride = try! stridestr:int;
-        // compute length
-        var len = (stop - start + stride - 1) / stride;
-        overMemLimit(8*len);
-        // get next symbol name
-        var rname = st.nextName();
-
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                       "cmd: %s start: %i stop: %i stride: %i : len: %i rname: %s".format(
-                        cmd, start, stop, stride, len, rname));
-        
-        var t1 = Time.getCurrentTime();
-        var e = st.addEntry(rname, len, int);
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                      "alloc time = %i sec".format(Time.getCurrentTime() - t1));
-
-        t1 = Time.getCurrentTime();
-        ref ea = e.a;
-        ref ead = e.aD;
-        forall (ei, i) in zip(ea,ead) {
-            ei = start + (i * stride);
-        }
-
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                      "compute time = %i sec".format(Time.getCurrentTime() - t1));
-
-        repMsg = "created " + st.attrib(rname);
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
-        return new MsgTuple(repMsg, MsgType.NORMAL);
-    }            
-
-    /* 
-    Creates a sym entry with distributed array adhering to the Msg parameters (start, stop, len)
-
-    :arg reqMsg: request containing (cmd,start,stop,len)
-    :type reqMsg: string 
-
-    :arg st: SymTab to act on
-    :type st: borrowed SymTab 
-
-    :returns: MsgTuple
-    */
-    proc linspaceMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
-        var repMsg: string; // response message
-        var (startstr, stopstr, lenstr) = payload.splitMsgToTuple(3);
-        var start = try! startstr:real;
-        var stop = try! stopstr:real;
-        var len = try! lenstr:int;
-        // compute stride
-        var stride = (stop - start) / (len-1);
-        overMemLimit(8*len);
-        // get next symbol name
-        var rname = st.nextName();
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                        "cmd: %s start: %r stop: %r len: %i stride: %r rname: %s".format(
-                         cmd, start, stop, len, stride, rname));
-
-        var t1 = Time.getCurrentTime();
-        var e = st.addEntry(rname, len, real);
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                      "alloc time = %i".format(Time.getCurrentTime() - t1));
-
-        t1 = Time.getCurrentTime();
-        ref ea = e.a;
-        ref ead = e.aD;
-        forall (ei, i) in zip(ea,ead) {
-            ei = start + (i * stride);
-        }
-        ea[0] = start;
-        ea[len-1] = stop;
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
-                                   "compute time = %i".format(Time.getCurrentTime() - t1));
-
-        repMsg = "created " + st.attrib(rname);
-        mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);       
         return new MsgTuple(repMsg,MsgType.NORMAL);
     }
 
@@ -348,13 +255,14 @@ module MsgProcessing
     :returns: MsgTuple
     :throws: `UndefinedSymbolError(name)`
     */
-    proc setMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc setMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
-        var (name, dtypestr, value) = payload.splitMsgToTuple(3);
-        var dtype = str2dtype(dtypestr);
+        const name = msgArgs.getValueOf("array");
+        var dtype = str2dtype(msgArgs.getValueOf("dtype"));
+        const value = msgArgs.get("val");
 
-        var gEnt: borrowed GenSymEntry = st.lookup(name);
+        var gEnt: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
 
         mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                             "cmd: %s value: %s in pdarray %s".format(cmd,name,st.attrib(name)));
@@ -362,13 +270,13 @@ module MsgProcessing
         select (gEnt.dtype, dtype) {
             when (DType.Int64, DType.Int64) {
                 var e = toSymEntry(gEnt,int);
-                var val: int = try! value:int;
+                var val: int = value.getIntValue();
                 e.a = val;
                 repMsg = "set %s to %t".format(name, val);
             }
             when (DType.Int64, DType.Float64) {
                 var e = toSymEntry(gEnt,int);
-                var val: real = try! value:real;
+                var val: real = value.getRealValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                         "cmd: %s name: %s to val: %t".format(cmd,name,val:int));
                 e.a = val:int;
@@ -376,9 +284,7 @@ module MsgProcessing
             }
             when (DType.Int64, DType.Bool) {
                 var e = toSymEntry(gEnt,int);
-                value = value.replace("True","true");
-                value = value.replace("False","false");
-                var val: bool = try! value:bool;
+                var val: bool = value.getBoolValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                         "cmd: %s name: %s to val: %t".format(cmd,name,val:int));
                 e.a = val:int;
@@ -386,7 +292,7 @@ module MsgProcessing
             }
             when (DType.Float64, DType.Int64) {
                 var e = toSymEntry(gEnt,real);
-                var val: int = try! value:int;
+                var val: int = value.getIntValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                       "cmd: %s name: %s to value: %t".format(cmd,name,val:real));
                 e.a = val:real;
@@ -394,17 +300,15 @@ module MsgProcessing
             }
             when (DType.Float64, DType.Float64) {
                 var e = toSymEntry(gEnt,real);
-                var val: real = try! value:real;
+                var val: real = value.getRealValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                            "cmd: %s name; %s to value: %t".format(cmd,name,val));
                 e.a = val;
                 repMsg = "set %s to %t".format(name, val);
             }
             when (DType.Float64, DType.Bool) {
-                var e = toSymEntry(gEnt,real);
-                value = value.replace("True","true");
-                value = value.replace("False","false");                
-                var val: bool = try! value:bool;
+                var e = toSymEntry(gEnt,real);           
+                var val: bool = value.getBoolValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                        "cmd: %s name: %s to value: %t".format(cmd,name,val:real));
                 e.a = val:real;
@@ -412,7 +316,7 @@ module MsgProcessing
             }
             when (DType.Bool, DType.Int64) {
                 var e = toSymEntry(gEnt,bool);
-                var val: int = try! value:int;
+                var val: int = value.getIntValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                        "cmd: %s name: %s to value: %t".format(cmd,name,val:bool));
                 e.a = val:bool;
@@ -420,7 +324,7 @@ module MsgProcessing
             }
             when (DType.Bool, DType.Float64) {
                 var e = toSymEntry(gEnt,int);
-                var val: real = try! value:real;
+                var val: real = value.getRealValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                       "cmd: %s name: %s to  value: %t".format(cmd,name,val:bool));
                 e.a = val:bool;
@@ -428,18 +332,22 @@ module MsgProcessing
             }
             when (DType.Bool, DType.Bool) {
                 var e = toSymEntry(gEnt,bool);
-                value = value.replace("True","true");
-                value = value.replace("False","false");
-                var val: bool = try! value:bool;
+                var val: bool = value.getBoolValue();
                 mpLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                                             "cmd: %s name: %s to value: %t".format(cmd,name,val));
                 e.a = val;
                 repMsg = "set %s to %t".format(name, val);
             }
+            when (DType.UInt64, DType.UInt64) {
+                var e = toSymEntry(gEnt,uint);
+                var val: uint = value.getUIntValue();
+                e.a = val;
+                repMsg = "set %s to %t".format(name, val);
+            }
             otherwise {
                 mpLogger.error(getModuleName(),getRoutineName(),
-                                               getLineNumber(),"dtype: %s".format(dtypestr));
-                return new MsgTuple(unrecognizedTypeError(pn,dtypestr), MsgType.ERROR);
+                                               getLineNumber(),"dtype: %s".format(msgArgs.getValueOf("dtype")));
+                return new MsgTuple(unrecognizedTypeError(pn,msgArgs.getValueOf("dtype")), MsgType.ERROR);
             }
         }
 

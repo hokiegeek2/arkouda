@@ -6,11 +6,11 @@ module ArgSortMsg
 {
     use ServerConfig;
     
-    use CPtr;
+    use CTypes;
 
     use Time only;
     use Math only;
-    use Sort only;
+    private use Sort;
     use Reflection only;
     
     use PrivateDist;
@@ -24,7 +24,7 @@ module ArgSortMsg
     use ServerErrorStrings;
 
     use RadixSortLSD;
-    use SegmentedArray;
+    use SegmentedString;
     use Reflection;
     use ServerErrors;
     use Logging;
@@ -46,6 +46,74 @@ module ArgSortMsg
     var mBins = 2**25;
     var lBins = 2**25 * numLocales;
 
+    enum SortingAlgorithm {
+      RadixSortLSD,
+      TwoArrayRadixSort
+    };
+    config const defaultSortAlgorithm: SortingAlgorithm = SortingAlgorithm.RadixSortLSD;
+
+    // proc DefaultComparator.keyPart(x: _tuple, i:int) where !isHomogeneousTuple(x) &&
+    // (isInt(x(0)) || isUint(x(0)) || isReal(x(0))) {
+    
+    import Reflection.canResolveMethod;
+    record ContrivedComparator {
+      const dc = new DefaultComparator();
+      proc keyPart(a, i: int) {
+        if canResolveMethod(dc, "keyPart", a, 0) {
+          return dc.keyPart(a, i);
+        } else if isTuple(a) {
+          return tupleKeyPart(a, i);
+        } else {
+          compilerError("No keyPart method for eltType ", a.type:string);
+        }
+      }
+      proc tupleKeyPart(x: _tuple, i:int) {
+        proc makePart(y): uint(64) {
+          var part: uint(64);
+          // get the part, ignore the section
+          const p = dc.keyPart(y, 0)(1);
+          // assuming result of keyPart is int or uint <= 64 bits
+          part = p:uint(64); 
+          // If the number is signed, invert the top bit, so that
+          // the negative numbers sort below the positive numbers
+          if isInt(p) {
+            const one:uint(64) = 1;
+            part = part ^ (one << 63);
+          }
+          return part;
+        }
+        var part: uint(64);
+        if isTuple(x[0]) && (x.size == 2) {
+          for param j in 0..<x[0].size {
+            if i == j {
+              part = makePart(x[0][j]);
+            }
+          }
+          if i == x[0].size {
+            part = makePart(x[1]);
+          }
+          if i > x[0].size {
+            return (-1, 0:uint(64));
+          } else {
+            return (0, part);
+          }
+        } else {
+          for param j in 0..<x.size {
+            if i == j {
+              part = makePart(x[j]);
+            }
+          }
+          if i >= x.size {
+            return (-1, 0:uint(64));
+          } else {
+            return (0, part);
+          }
+        }
+      }
+    }
+    
+    const myDefaultComparator = new ContrivedComparator();
+
     /* Perform one step in a multi-step argsort, starting with an initial 
        permutation vector and further permuting it in the manner required
        to sort an array of keys.
@@ -58,23 +126,35 @@ module ArgSortMsg
           when DType.Int64 {
               var e = toSymEntry(g, int);
               // Permute the keys array with the initial iv
-              var newa: [e.aD] int;
+              var newa: [e.a.domain] int;
               ref olda = e.a;
               // Effectively: newa = olda[iv]
               forall (newai, idx) in zip(newa, iv) with (var agg = newSrcAggregator(int)) {
                   agg.copy(newai, olda[idx]);
               }
               // Generate the next incremental permutation
-              deltaIV = radixSortLSD_ranks(newa);
+              deltaIV = argsortDefault(newa);
+          }
+          when DType.UInt64 {
+              var e = toSymEntry(g, uint);
+              // Permute the keys array with the initial iv
+              var newa: [e.a.domain] uint;
+              ref olda = e.a;
+              // Effectively: newa = olda[iv]
+              forall (newai, idx) in zip(newa, iv) with (var agg = newSrcAggregator(uint)) {
+                  agg.copy(newai, olda[idx]);
+              }
+              // Generate the next incremental permutation
+              deltaIV = argsortDefault(newa);
           }
           when DType.Float64 {
               var e = toSymEntry(g, real);
-              var newa: [e.aD] real;
+              var newa: [e.a.domain] real;
               ref olda = e.a;
               forall (newai, idx) in zip(newa, iv) with (var agg = newSrcAggregator(real)) {
                   agg.copy(newai, olda[idx]);
               }
-              deltaIV = radixSortLSD_ranks(newa);
+              deltaIV = argsortDefault(newa);
           }
           otherwise { throw getErrorWithContext(
                                 msg="Unsupported DataType: %t".format(dtype2str(g.dtype)),
@@ -95,12 +175,12 @@ module ArgSortMsg
     }
 
     proc incrementalArgSort(s: SegString, iv: [?aD] int): [] int throws {
-      var hashes = s.hash();
+      var hashes = s.siphash();
       var newHashes: [aD] 2*uint;
       forall (nh, idx) in zip(newHashes, iv) with (var agg = newSrcAggregator((2*uint))) {
         agg.copy(nh, hashes[idx]);
       }
-      var deltaIV = radixSortLSD_ranks(newHashes);
+      var deltaIV = argsortDefault(newHashes);
       // var (newOffsets, newVals) = s[iv];
       // var deltaIV = newStr.argGroup();
       var newIV: [aD] int;
@@ -127,66 +207,30 @@ module ArgSortMsg
     /* Find the permutation that sorts multiple arrays, treating each array as a
        new level of the sorting key.
      */
-    proc coargsortMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc coargsortMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
       param pn = Reflection.getRoutineName();
       var repMsg: string;
-      var (nstr, rest) = payload.splitMsgToTuple(2);
-      var n = nstr:int; // number of arrays to sort
-      var fields = rest.split();
+      var algoName = msgArgs.getValueOf("algoName");
+      var algorithm: SortingAlgorithm = defaultSortAlgorithm;
+      if algoName != "" {
+        try {
+          algorithm = algoName: SortingAlgorithm;
+        } catch {
+          throw getErrorWithContext(
+                                    msg="Unrecognized sorting algorithm: %s".format(algoName),
+                                    lineNumber=getLineNumber(),
+                                    routineName=getRoutineName(),
+                                    moduleName=getModuleName(),
+                                    errorClass="NotImplementedError"
+                                    );
+        }
+      }
+      var n = msgArgs.get("nstr").getIntValue();  // number of arrays to sort
+      var arrNames = msgArgs.get("arr_names").getList(n);
+      var arrTypes = msgArgs.get("arr_types").getList(n);
       asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(), 
-                                  "number of arrays: %i fields: %t".format(n,fields));
-      // Check that fields contains the stated number of arrays
-      if (fields.size != 2*n) { 
-          var errorMsg = incompatibleArgumentsError(pn, 
-                        "Expected %i arrays but got %i".format(n, fields.size/2 - 1));
-          asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-          return new MsgTuple(errorMsg, MsgType.ERROR);
-      }
-      const low = fields.domain.low;
-      var names = fields[low..#n];
-      var types = fields[low+n..#n];
-      /* var arrays: [0..#n] borrowed GenSymEntry; */
-      var size: int;
-      // Check that all arrays exist in the symbol table and have the same size
-      var hasStr = false;
-      for (name, objtype, i) in zip(names, types, 1..) {
-        // arrays[i] = st.lookup(name): borrowed GenSymEntry;
-        var thisSize: int;
-        select objtype {
-          when "pdarray" {
-            var g = st.lookup(name);
-            thisSize = g.size;
-          }
-          when "str" {
-            var (myNames, _) = name.splitMsgToTuple('+', 2);
-            var g = st.lookup(myNames);
-            thisSize = g.size;
-            hasStr = true;
-          }
-          when "category" {
-            // passed only Categorical.codes.name to be sorted on
-            var g = st.lookup(name);
-            thisSize = g.size;
-          }
-          otherwise {
-              var errorMsg = unrecognizedTypeError(pn, objtype);
-              asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);  
-              return new MsgTuple(errorMsg, MsgType.ERROR);
-          }
-        }
-        
-        if (i == 1) {
-            size = thisSize;
-        } else {
-            if (thisSize != size) { 
-                var errorMsg = incompatibleArgumentsError(pn, 
-                                               "Arrays must all be same size");
-                asLogger.error(getModuleName(),getRoutineName(),getLineNumber(),errorMsg);
-                return new MsgTuple(errorMsg, MsgType.ERROR);
-            }
-        }
-        
-      }
+                                   "number of arrays: %i arrNames: %t, arrTypes: %t".format(n,arrNames, arrTypes));
+      var (arrSize, hasStr, names, types) = validateArraysSameLength(n, arrNames, arrTypes, st);
 
       // If there were no string arrays, merge the arrays into a single array and sort
       // that. This eliminates having to merge index vectors, but has a memory overhead
@@ -199,71 +243,19 @@ module ArgSortMsg
       // TODO support string? This further increases size (128-bits for each hash), so we
       // need to be OK with memory overhead and comm from the KEY)
       if !hasStr {
-        param bitsPerDigit = RSLSD_bitsPerDigit;
-        var bitWidths: [names.domain] int;
-        var negs: [names.domain] bool;
-        var totalDigits: int;
-
-        for (bitWidth, name, neg) in zip(bitWidths, names, negs) {
-          // TODO checkSorted and exclude array if already sorted?
-          var g: borrowed GenSymEntry = st.lookup(name);
-          select g.dtype {
-              when DType.Int64   { (bitWidth, neg) = getBitWidth(toSymEntry(g, int ).a); }
-              when DType.Float64 { (bitWidth, neg) = getBitWidth(toSymEntry(g, real).a); }
-              otherwise { 
-                  throw getErrorWithContext(
-                      msg=dtype2str(g.dtype),
-                      lineNumber=getLineNumber(),
-                      routineName=getRoutineName(),
-                      moduleName=getModuleName(),
-                      errorClass="TypeError"
-                  );
-              }
-          }
-          totalDigits += (bitWidth + (bitsPerDigit-1)) / bitsPerDigit;
-        }
+        var (totalDigits, bitWidths, negs) = getNumDigitsNumericArrays(names, st);
 
         // TODO support arbitrary size with array-of-arrays or segmented array
         proc mergedArgsort(param numDigits) throws {
 
-          overMemLimit(((4 + 3) * size * (numDigits * bitsPerDigit / 8))
-                       + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+          // check mem limit for merged array and sort on merged array
+          const itemsize = numDigits * bitsPerDigit / 8;
+          overMemLimit(arrSize*itemsize + radixSortLSD_memEst(arrSize, itemsize));
 
           var ivname = st.nextName();
-          var merged = makeDistArray(size, numDigits*uint(bitsPerDigit));
-          var curDigit = numDigits - totalDigits;
-          for (name, nBits, neg) in zip(names, bitWidths, negs) {
-              var g: borrowed GenSymEntry = st.lookup(name);
-              proc mergeArray(type t) {
-                var e = toSymEntry(g, t);
-                ref A = e.a;
+          var merged = mergeNumericArrays(numDigits, arrSize, totalDigits, bitWidths, negs, names, st);
 
-                const r = 0..#nBits by bitsPerDigit;
-                for rshift in r {
-                  const myDigit = (r.high - rshift) / bitsPerDigit;
-                  const last = myDigit == 0;
-                  forall (m, a) in zip(merged, A) {
-                    m[curDigit+myDigit] =  getDigit(a, rshift, last, neg):uint(bitsPerDigit);
-                  }
-                }
-                curDigit += r.size;
-              }
-              select g.dtype {
-                when DType.Int64   { mergeArray(int); }
-                when DType.Float64 { mergeArray(real); }
-                otherwise { 
-                    throw getErrorWithContext(
-                        msg=dtype2str(g.dtype),
-                        lineNumber=getLineNumber(),
-                        routineName=getRoutineName(),
-                        moduleName=getModuleName(),
-                        errorClass="IllegalArgumentError"
-                    ); 
-                }
-              }
-          }
-
-          var iv = argsortDefault(merged);
+          var iv = argsortDefault(merged, algorithm=algorithm);
           st.addEntry(ivname, new shared SymEntry(iv));
 
           var repMsg = "created " + st.attrib(ivname);
@@ -278,24 +270,23 @@ module ArgSortMsg
         if totalDigits <= 16 { return new MsgTuple(mergedArgsort(16), MsgType.NORMAL); }
       }
 
-      // check and throw if over memory limit
-      overMemLimit(((4 + 3) * size * numBytes(int))
-                   + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+      // check mem limit for permutation vectors and sort
+      const itemsize = numBytes(int);
+      overMemLimit(2*arrSize*itemsize + radixSortLSD_memEst(arrSize, itemsize));
       
       // Initialize the permutation vector in the symbol table with the identity perm
       var rname = st.nextName();
-      st.addEntry(rname, size, int);
-      var iv = toSymEntry(st.lookup(rname), int);
-      iv.a = 0..#size;
+      st.addEntry(rname, arrSize, int);
+      var iv = toSymEntry(getGenericTypedArrayEntry(rname, st), int);
+      iv.a = 0..#arrSize;
       // Starting with the last array, incrementally permute the IV by sorting each array
       for (i, j) in zip(names.domain.low..names.domain.high by -1,
                         types.domain.low..types.domain.high by -1) {
         if (types[j] == "str") {
-          var (myNames1,myNames2) = names[i].splitMsgToTuple('+', 2);
-          var strings = getSegString(myNames1, myNames2, st);
+          var strings = getSegString(names[i], st);
           iv.a = incrementalArgSort(strings, iv.a);
         } else {
-          var g: borrowed GenSymEntry = st.lookup(names[i]);
+          var g: borrowed GenSymEntry = getGenericTypedArrayEntry(names[i], st);
           // Perform the coArgSort and store in the new SymEntry
           iv.a = incrementalArgSort(g, iv.a);
         }
@@ -305,40 +296,74 @@ module ArgSortMsg
       return new MsgTuple(repMsg, MsgType.NORMAL);
     }
     
-    proc argsortDefault(A:[?D] ?t):[D] int {
+    proc argsortDefault(A:[?D] ?t, algorithm:SortingAlgorithm=defaultSortAlgorithm):[D] int throws {
       var t1 = Time.getCurrentTime();
-      //var AI = [(a, i) in zip(A, D)] (a, i);
-      //Sort.TwoArrayRadixSort.twoArrayRadixSort(AI);
-      //var iv = [(a, i) in AI] i;
-      var iv = radixSortLSD_ranks(A);
+      var iv: [D] int;
+      select algorithm {
+        when SortingAlgorithm.TwoArrayRadixSort {
+          var AI = [(a, i) in zip(A, D)] (a, i);
+          Sort.TwoArrayRadixSort.twoArrayRadixSort(AI, comparator=myDefaultComparator);
+          iv = [(a, i) in AI] i;
+        }
+        when SortingAlgorithm.RadixSortLSD {
+          iv = radixSortLSD_ranks(A);
+        }
+        otherwise {
+          throw getErrorWithContext(
+                                    msg="Unrecognized sorting algorithm: %s".format(algorithm:string),
+                                    lineNumber=getLineNumber(),
+                                    routineName=getRoutineName(),
+                                    moduleName=getModuleName(),
+                                    errorClass="NotImplementedError"
+                  );
+        }
+      }
       try! asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                              "argsort time = %i".format(Time.getCurrentTime() - t1));
       return iv;
     }
     
     /* argsort takes pdarray and returns an index vector iv which sorts the array */
-    proc argsortMsg(cmd: string, payload: string, st: borrowed SymTab): MsgTuple throws {
+    proc argsortMsg(cmd: string, msgArgs: borrowed MessageArgs, st: borrowed SymTab): MsgTuple throws {
         param pn = Reflection.getRoutineName();
         var repMsg: string; // response message
-        // split request into fields
-        var (objtype, name) = payload.splitMsgToTuple(2);
-
+        var name = msgArgs.getValueOf("name");
+        var algoName = msgArgs.getValueOf("algoName");
+        var algorithm: SortingAlgorithm = defaultSortAlgorithm;
+        if algoName != "" {
+          try {
+            algorithm = algoName: SortingAlgorithm;
+          } catch {
+            throw getErrorWithContext(
+                                    msg="Unrecognized sorting algorithm: %s".format(algoName),
+                                    lineNumber=getLineNumber(),
+                                    routineName=getRoutineName(),
+                                    moduleName=getModuleName(),
+                                    errorClass="NotImplementedError"
+                  );
+          }
+        }
         // get next symbol name
         var ivname = st.nextName();
         asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),
                               "cmd: %s name: %s ivname: %s".format(cmd, name, ivname));
 
+        var objtype = msgArgs.getValueOf("objType");
         select objtype {
           when "pdarray" {
-            var gEnt: borrowed GenSymEntry = st.lookup(name);
+            var gEnt: borrowed GenSymEntry = getGenericTypedArrayEntry(name, st);
             // check and throw if over memory limit
-            overMemLimit(((4 + 1) * gEnt.size * gEnt.itemsize)
-                         + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
+            overMemLimit(radixSortLSD_memEst(gEnt.size, gEnt.itemsize));
         
             select (gEnt.dtype) {
                 when (DType.Int64) {
                     var e = toSymEntry(gEnt,int);
-                    var iv = argsortDefault(e.a);
+                    var iv = argsortDefault(e.a, algorithm=algorithm);
+                    st.addEntry(ivname, new shared SymEntry(iv));
+                }
+                when (DType.UInt64) {
+                    var e = toSymEntry(gEnt,uint);
+                    var iv = argsortDefault(e.a, algorithm=algorithm);
                     st.addEntry(ivname, new shared SymEntry(iv));
                 }
                 when (DType.Float64) {
@@ -354,8 +379,7 @@ module ArgSortMsg
             }
           }
           when "str" {
-            var (names1, names2) = name.splitMsgToTuple('+', 2);
-            var strings = getSegString(names1, names2, st);
+            var strings = getSegString(name, st);
             // check and throw if over memory limit
             overMemLimit((8 * strings.size * 8)
                          + (2 * here.maxTaskPar * numLocales * 2**16 * 8));
@@ -373,4 +397,8 @@ module ArgSortMsg
         asLogger.debug(getModuleName(),getRoutineName(),getLineNumber(),repMsg);
         return new MsgTuple(repMsg, MsgType.NORMAL);
     }
+
+    use CommandMap;
+    registerFunction("argsort", argsortMsg, getModuleName());
+    registerFunction("coargsort", coargsortMsg, getModuleName());
 }

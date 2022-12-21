@@ -1,7 +1,8 @@
 module ServerErrors {
 
-    use SysError;
     private use IO; // for string.format
+
+    class OutOfBoundsError: Error {}
 
     /*
      * Generates an error message that provides a fuller context to the error
@@ -117,14 +118,14 @@ module ServerErrors {
     }
 
     /*
-     * The SegArrayError is thrown if the file corresponding to the SegArray lacks either the
-     * SEGARRAY_OFFSET_NAME or SEGARRAY_VALUE_NAME dataset.
+     * The SegStringError is thrown if the file corresponding to the SegString lacks either the
+     * SEGSTRING_OFFSET_NAME or SEGSTRING_VALUE_NAME dataset.
      */
-    class SegArrayError: ErrorWithContext { 
+    class SegStringError: ErrorWithContext { 
 
         proc init(msg : string, lineNumber: int, routineName: string, 
                                                            moduleName: string) { 
-           super.init(msg,lineNumber,routineName,moduleName,errorClass='SegArrayError'); 
+           super.init(msg,lineNumber,routineName,moduleName,errorClass='SegStringError'); 
         } 
 
         proc init(){ super.init(); }

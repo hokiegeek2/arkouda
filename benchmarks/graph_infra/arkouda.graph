@@ -64,6 +64,12 @@ files: reduce.dat, reduce.dat, reduce.dat, reduce.dat
 graphtitle: Reduce Performance
 ylabel: Performance (GiB/s)
 
+perfkeys: Medium average rate =, Large average rate =
+graphkeys: Medium GiB/s, Large GiB/s
+files: in1d.dat, in1d.dat
+graphtitle: in1d Performance
+ylabel: Performance (GiB/s)
+
 perfkeys: intersect1d Average rate =, union1d Average rate =, setxor1d Average rate =, setdiff1d Average rate =
 graphkeys: Intersect GiB/s, Union GiB/s, Xor GiB/s, Diff GiB/s
 files: setops.dat, setops.dat, setops.dat, setops.dat
@@ -86,6 +92,48 @@ perfkeys: write Average rate =, read Average rate =
 graphkeys: Write GiB/s, Read GiB/s
 files: IO.dat, IO.dat
 graphtitle: IO Performance
+ylabel: Performance (GiB/s)
+
+perfkeys: write Average rate =, read Average rate =
+graphkeys: Write GiB/s, Read GiB/s
+files: multiIO.dat, multiIO.dat
+graphtitle: HDF5 10 Files/Loc IO Performance
+ylabel: Performance (GiB/s)
+
+perfkeys: write Average rate =, read Average rate =
+graphkeys: Write GiB/s, Read GiB/s
+files: parquetIO.dat, parquetIO.dat
+graphtitle: Parquet IO Performance
+ylabel: Performance (GiB/s)
+
+perfkeys: write Average rate =, read Average rate =
+graphkeys: Write GiB/s, Read GiB/s
+files: parquetMultiIO.dat, parquetMultiIO.dat
+graphtitle: Parquet 10 Files/Loc IO Performance
+ylabel: Performance (GiB/s)
+
+perfkeys: non-regex with literal substring Average rate =, regex with literal substring Average rate =, regex with pattern Average rate =
+graphkeys: non-regex with literal substring GiB/s, regex with literal substring GiB/s, regex with pattern GiB/s
+files: substring_search.dat, substring_search.dat, substring_search.dat
+graphtitle: Substring Search Performance
+ylabel: Performance (GiB/s)
+
+perfkeys: non-regex flatten with literal delimiter Average rate =, regex flatten with literal delimiter Average rate =, regex flatten with pattern delimiter Average rate =
+graphkeys: non-regex flatten with literal delimiter GiB/s, regex flatten with literal delimiter GiB/s, regex flatten with pattern delimiter GiB/s
+files: flatten.dat, flatten.dat, flatten.dat
+graphtitle: Flatten Performance
+ylabel: Performance (GiB/s)
+
+perfkeys: _get_head_tail_server Average time =, _get_head_tail Average time =
+graphkeys: _get_head_tail_server Average time s, _get_head_tail Average time s
+files: dataframe.dat, dataframe.dat
+graphtitle: DataFrame Display Performance
+ylabel: Time (Seconds)
+
+perfkeys: Average idna encode rate =, Average idna decode rate =, Average ascii encode rate =, Average ascii decode rate =
+graphkeys: idna encode GiB/s, idna decode GiB/s, ascii encode GiB/s, ascii decode GiB/s
+files: encode.dat, encode.dat, encode.dat, encode.dat
+graphtitle: Encode/Decode Performance
 ylabel: Performance (GiB/s)
 
 perfkeys: Average rate =
