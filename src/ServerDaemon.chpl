@@ -25,7 +25,7 @@ module ServerDaemon {
     use ExternalIntegration;
     use MetricsMsg;
 
-    enum ServerDaemonType {DEFAULT,INTEGRATION,METRICS}
+    enum ServerDaemonType {DEFAULT,INTEGRATION,METRICS,MULTIUSER}
 
     private config const logLevel = ServerConfig.logLevel;
     const sdLogger = new Logger(logLevel);
@@ -127,12 +127,28 @@ module ServerDaemon {
         }
         
         /**
-         * Encapsulates logic that is to be invoked once a ArkoduaSeverDaemon
+         * Encapsulates logic that is to be invoked once a ArkoduaServerDaemon
          * has exited the daemon loop.
          */
         proc shutdown() throws {
-            sdLogger.error(getModuleName(),getRoutineName(),getLineNumber(),
-                              "shutdown sequence complete");   
+            sdLogger.info(getModuleName(),
+                          getRoutineName(),
+                          getLineNumber(),
+                          "shutdown sequence complete");   
+        }
+
+        proc handleConnect(user: string) throws {
+            sdLogger.info(getModuleName(),
+                          getRoutineName(),
+                          getLineNumber(),
+                          '%s connected'.format(user));
+        }
+        
+        proc handleDisconnect(user: string) throws {
+            sdLogger.info(getModuleName(),
+                          getRoutineName(),
+                          getLineNumber(),
+                          '%s disconnected'.format(user));
         }
     }
 
@@ -522,7 +538,7 @@ module ServerDaemon {
                 /**
                  * Command processing: Look for our specialized, default commands first, then check the command maps
                  * Note: Our specialized commands have been added to the commandMap with dummy signatures so they show
-                 *  up in the client.print_server_commands() function, but we need to intercept & process them as appropriate
+                 * fup in the client.print_server_commands() function, but we need to intercept & process them as appropriate
                  */
                 select cmd {
                     when "array"   { repTuple = arrayMsg(cmd, msgArgs, payload, st); }
@@ -533,6 +549,7 @@ module ServerDaemon {
                         } else {
                             repTuple = new MsgTuple("connected to arkouda server tcp://*:%i".format(ServerPort), MsgType.NORMAL);
                         }
+                        handleConnect(user);
                     }
                     when "disconnect" {
                         if autoShutdown {
@@ -541,6 +558,7 @@ module ServerDaemon {
                         }
                         
                         repTuple = new MsgTuple("disconnected from arkouda server tcp://*:%i".format(ServerPort), MsgType.NORMAL);
+                        handleDisconnect(user);
                     }
                     when "noop" {
                         repTuple = new MsgTuple("noop", MsgType.NORMAL);
@@ -732,6 +750,52 @@ module ServerDaemon {
             super.shutdown();
         }
     }
+    
+    /**
+     * The MultiuserServerDaemon provides an endpoint for pub-sub traffic for 
+     * notifying users of events such as users connecting/disconnecting or 
+     * server-side operations completing.
+     */
+    class MultiuserServerDaemon : DefaultServerDaemon {
+        var pubSocket: ZMQ.Socket;
+        var pubPort: int;
+        
+        override proc init() {
+            super.init();
+
+            this.pubSocket = this.context.socket(ZMQ.PUB);
+            this.pubPort = try! getEnv('PUB_SERVER_PORT','6555'):int;
+
+            try! this.socket.bind("tcp://*:%t".format(this.pubPort));
+            try! sdLogger.debug(getModuleName(), 
+                                getRoutineName(), 
+                                getLineNumber(),
+                                "initialized and listening pub-sub port %i".format(
+                                this.pubPort));
+        }
+        
+        /**
+         * Overridden shutdown function deregisters Arkouda from an external
+         * system and then invokes the parent shutdown() function.
+         */
+        override proc shutdown() throws {
+            this.socket.send(serialize(msg="Arkouda is being shutdown", 
+                             msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user='dood'));         
+            super.shutdown();
+        }
+        
+        override proc handleConnect(user: string) throws {
+            super.handleConnect(user);
+            this.pubSocket.send(serialize(msg="%s connected to Arkouda".format(user), 
+                             msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));          
+        }
+        
+        override proc handleDisconnect(user: string) throws {
+            super.handleDisconnect(user);
+            this.pubSocket.send(serialize(msg="%s disconnected Arkouda".format(user), 
+                             msgType=MsgType.NORMAL,msgFormat=MsgFormat.STRING, user=user));          
+        }
+    }
 
     proc getServerDaemon(daemonType: ServerDaemonType) : shared ArkoudaServerDaemon throws {
         select daemonType {
@@ -743,6 +807,9 @@ module ServerDaemon {
             }
             when ServerDaemonType.METRICS {
                return new shared MetricsServerDaemon();
+            }
+            when ServerDaemonType.MULTIUSER {
+               return new shared MultiuserServerDaemon();
             }
             otherwise {
                 throw getErrorWithContext(
