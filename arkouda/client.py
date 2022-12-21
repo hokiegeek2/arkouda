@@ -288,6 +288,7 @@ async def _run_async_connect(
             await asyncio.sleep(5)
     except Exception as e:
         print(f'THE EXCEPTION {e}')
+        future.close()
     finally:
         return future
             
@@ -343,7 +344,7 @@ def connect(
                                        timeout,
                                        access_token,
                                        connect_url))
-    except Exception:
+    except KeyboardInterrupt:
         pass
 
 # create context, request end of socket, and connect to it
