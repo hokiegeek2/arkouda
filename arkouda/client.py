@@ -30,6 +30,10 @@ __all__ = [
     "ruok",
 ]
 
+from zmq.eventloop.future import Context as FutureContext
+
+
+from asyncio.exceptions import CancelledError
 import signal
 signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
 
@@ -61,7 +65,7 @@ def goodbye():
     import threading
     for thread in threading.enumerate(): 
         print(thread.name)
-    print("Clearing unregistered Arkouda arrays, Strings, and Categoricals")
+    #print("Clearing unregistered Arkouda arrays, Strings, and Categoricals")
     #import sys
     #sys.exit(0)
 
@@ -165,12 +169,15 @@ __all__ = ["connect", "disconnect", "shutdown", "get_config", "get_mem_used", "r
 pspStr = ""
 context = zmq.Context()
 socket = context.socket(zmq.REQ)
+#context = FutureContext.instance()
+#socket = context.socket(zmq.REQ)
 
 ############## Alerter Thread Subscribes to ZMQ Topic ##############
 
 class Alerter(threading.Thread):
     
     def run(self):
+        logger.debug('starting Alerter')
         sock = context.socket(zmq.SUB)
         sock.connect("tcp://localhost:5566")
         sock.subscribe('')  
@@ -181,9 +188,9 @@ class Alerter(threading.Thread):
             
 
 # Instantiate the Alerter thread and start it      
-alerter = Alerter()
-alerter.daemon = True
-alerter.start()
+#alerter = Alerter()
+#alerter.daemon = True
+#alerter.start()
 
 ############## Alerter Thread Subscribes to ZMQ Topic ##############
 
@@ -254,6 +261,9 @@ def set_defaults() -> None:
     maxTransferBytes = maxTransferBytesDefVal
 
 
+def get_event_loop():
+    loop = asyncio.get_event_loop()
+
 def _async_connect(
     server: str = "localhost",
     port: int = 5555,
@@ -276,20 +286,27 @@ async def _run_async_connect(
     access_token: str = None,
     connect_url=None
 ) -> None:
-    future = _async_connect(server,
+    try: 
+        future = _async_connect(server,
                            port,
                            timeout,
                            access_token,
                            connect_url)
-    
-    try: 
         while not future.done():
             print("connecting...")
             await asyncio.sleep(5)
-    except Exception as e:
-        print(f'THE EXCEPTION {e}')
-        future.close()
+    except CancelledError:
+        future.set_result('cancelled')
+        import threading
+        for t in threading.enumerate():
+            if 'asyncio' in t.name:
+                t.join()
+    except KeyboardInterrupt:
+        future.set_result('interrupted')
+        #await asyncio.get_running_loop().shutdown_default_executor()
     finally:
+        print(f'THE RESULT {future.result()} IS FUTURE DONE {future.done()}')
+        await asyncio.get_running_loop().shutdown_default_executor()
         return future
             
 def connect(
