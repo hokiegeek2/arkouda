@@ -65,9 +65,6 @@ def goodbye():
     import threading
     for thread in threading.enumerate(): 
         print(thread.name)
-    #print("Clearing unregistered Arkouda arrays, Strings, and Categoricals")
-    #import sys
-    #sys.exit(0)
 
 async def task():
     a_ctx = zmq.asyncio.Context.instance()
@@ -262,53 +259,68 @@ def set_defaults() -> None:
 
 
 def get_event_loop():
-    loop = asyncio.get_event_loop()
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    return loop
 
-def _async_connect(
+def async_connect(
     server: str = "localhost",
     port: int = 5555,
     timeout: int = 0,
     access_token: str = None,
-    connect_url=None,
+    connect_url = None,
+    loop: asyncio.BaseEventLoop = None
 ) -> asyncio.Future:
-    return asyncio.get_event_loop().run_in_executor(None,
-                                                    _connect,
-                                                    server,
-                                                    port,
-                                                    timeout,
-                                                    access_token,
-                                                    connect_url)
+    if not loop:
+        loop = get_event_loop()
+    loop.run_in_executor(None,
+                         _connect,
+                         server,
+                         port,
+                         timeout,
+                         access_token,
+                         connect_url)
     
 async def _run_async_connect(
+    loop: asyncio.BaseEventLoop,
     server: str = "localhost",
     port: int = 5555,
     timeout: int = 0,
     access_token: str = None,
-    connect_url=None
+    connect_url = None
 ) -> None:
     try: 
-        future = _async_connect(server,
-                           port,
-                           timeout,
-                           access_token,
-                           connect_url)
-        while not future.done():
+        if not loop:
+            loop = get_event_loop()
+        future = loop.run_in_executor(None,
+                                      _connect,
+                                      server,
+                                      port,
+                                      timeout,
+                                      access_token,
+                                      connect_url)
+        while not future.done() and not connected:
             print("connecting...")
             await asyncio.sleep(5)
     except CancelledError:
         future.set_result('cancelled')
+        future.cancel()
         import threading
         for t in threading.enumerate():
             if 'asyncio' in t.name:
-                t.join()
+                t.join(0)
     except KeyboardInterrupt:
         future.set_result('interrupted')
-        #await asyncio.get_running_loop().shutdown_default_executor()
+        future.cancel()
     finally:
-        print(f'THE RESULT {future.result()} IS FUTURE DONE {future.done()}')
-        await asyncio.get_running_loop().shutdown_default_executor()
+        #print(f'THE RESULT {future.result()} IS FUTURE DONE {future.done()}')
+        #await asyncio.get_running_loop().shutdown_default_executor()
         return future
-            
+
+def exit():
+    import os
+    os._exit(0)
+          
 def connect(
     server: str = "localhost",
     port: int = 5555,
@@ -355,14 +367,31 @@ def connect(
     with an existing connection, the socket will be re-initialized.
     """
     try:
-        future = asyncio.run(_run_async_connect(
+        loop = get_event_loop()
+
+        task = loop.create_task(_run_async_connect(loop,
                                        server,
                                        port,
                                        timeout,
                                        access_token,
                                        connect_url))
+
+        loop.run_until_complete(task)
+        logger.debug(f' the loop {loop}')
     except KeyboardInterrupt:
-        pass
+        logger.debug('interrupted')
+        task.cancel()
+        loop.run_until_complete(loop.create_task(cancel_task()))
+        logger.debug(f'is connect task done {task.done()}')
+
+async def cancel_task() -> None:
+    #task.cancel()
+    await asyncio.sleep(0)
+    #while not task.done():
+    #    task.cancel()
+    #    asyncio.sleep(1)
+    #    print(f'is task done {task.done()}')
+    logger.debug('task cancelled')
 
 # create context, request end of socket, and connect to it
 def _connect(
