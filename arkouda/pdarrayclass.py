@@ -7,7 +7,7 @@ from warnings import warn
 import numpy as np  # type: ignore
 from typeguard import typechecked
 
-from arkouda.client import generic_msg
+from arkouda.client import generic_msg, RequestMode
 from arkouda.dtypes import NUMBER_FORMAT_STRINGS, DTypes
 from arkouda.dtypes import bool as akbool
 from arkouda.dtypes import bool as npbool
@@ -26,6 +26,8 @@ from arkouda.dtypes import translate_np_dtype
 from arkouda.dtypes import uint64 as akuint64
 from arkouda.infoclass import information, list_registry, pretty_print_information
 from arkouda.logger import getArkoudaLogger
+
+import atexit
 
 __all__ = [
     "pdarray",
@@ -181,11 +183,14 @@ class pdarray:
         self.ndim = ndim
         self.shape = shape
         self.itemsize = itemsize
+        atexit.register(self.__del__)
 
-    def __del__(self):
+    import contextlib
+    @contextlib.contextmanager
+    def __del__(self, generic_msg=generic_msg, RequestMode=RequestMode):
         try:
-            logger.debug(f"deleting pdarray with name {self.name}")
-            generic_msg(cmd="delete", args={"name": self.name})
+            logger.info(f"deleting pdarray with name {self.name}")
+            generic_msg(cmd="delete", args={"name": self.name}, mode=RequestMode.SYNC)
         except RuntimeError:
             pass
 
