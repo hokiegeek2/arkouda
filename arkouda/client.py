@@ -748,7 +748,10 @@ def _send_string_message(cmd: str,
 
     loop = get_event_loop()
 
-    if requestMode == RequestMode.ASYNC and cmd not in {'delete','connect','getconfig'}:
+    def asyncEligible(cmd: str) -> bool:
+        return cmd not in {'delete','connect','getconfig'}
+
+    if requestMode == RequestMode.ASYNC and asyncEligible(cmd):
         _execute_async_send(message, loop)
         
     else:
