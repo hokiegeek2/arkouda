@@ -190,7 +190,7 @@ class pdarray:
     def __del__(self, generic_msg=generic_msg, RequestMode=RequestMode):
         try:
             logger.info(f"deleting pdarray with name {self.name}")
-            generic_msg(cmd="delete", args={"name": self.name}, mode=RequestMode.SYNC)
+            generic_msg(cmd="delete", args={"name": self.name})
         except RuntimeError:
             pass
 

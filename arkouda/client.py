@@ -31,10 +31,6 @@ __all__ = [
     "RequestMode"
 ]
 
-from zmq.eventloop.future import Context as FutureContext
-
-request_mode = 'MULTIUSER'
-
 from asyncio.exceptions import CancelledError
 import signal
 signals = (signal.SIGHUP, signal.SIGTERM, signal.SIGINT)
@@ -258,11 +254,13 @@ class ClientMode(Enum):
         return self.value
 
 
-# Get ClientMode, defaulting to UI
-mode = ClientMode(os.getenv("ARKOUDA_CLIENT_MODE", "UI").upper())
+requestMode = RequestMode(os.getenv("ARKOUDA_REQUEST_MODE", 'SYNC').upper())
 
-# Print splash message if in UI mode
-if mode == ClientMode.UI:
+# Get ClientMode, defaulting to UI
+clientMode = ClientMode(os.getenv("ARKOUDA_CLIENT_MODE", "UI").upper())
+
+# Print splash message if in UI clientMode
+if clientMode == ClientMode.UI:
     print("{}".format(pyfiglet.figlet_format("Arkouda")))
     print(f"Client Version: {__version__}")  # type: ignore
 
@@ -504,7 +502,7 @@ def _connect(
 
     # send connect request to server and get the response confirming if
     # the connect request succeeded and, if not not, the error message
-    return_message = _send_string_message(cmd=cmd,mode=RequestMode.SYNC)
+    return_message = _send_string_message(cmd=cmd)
     logger.debug(f"[Python] Received response: {str(return_message)}")
     connected = True
 
@@ -706,8 +704,7 @@ def _execute_async_send(message: RequestMessage, loop=None):
 
 def _send_string_message(cmd: str, 
                          recv_binary: bool = False, 
-                         args: str = None, size: int = -1, 
-                         mode: RequestMode=RequestMode.SYNC) -> Union[str, memoryview]:
+                         args: str = None, size: int = -1) -> Union[str, memoryview]:
     """
     Generates a RequestMessage encapsulating command and requesting
     user information, sends it to the Arkouda server, and returns
@@ -751,7 +748,7 @@ def _send_string_message(cmd: str,
 
     loop = get_event_loop()
 
-    if mode == RequestMode.ASYNC:
+    if requestMode == RequestMode.ASYNC and cmd not in {'delete','connect','getconfig'}:
         _execute_async_send(message, loop)
         
     else:
@@ -966,8 +963,7 @@ def generic_msg(
     args: Dict = None,
     payload: memoryview = None,
     send_binary: bool = False,
-    recv_binary: bool = False,
-    mode: RequestMode=RequestMode.ASYNC
+    recv_binary: bool = False
 ) -> Union[str, memoryview]:
     """
     Sends a binary or string message composed of a command and corresponding
@@ -1023,8 +1019,7 @@ def generic_msg(
             return _send_string_message(cmd=cmd, 
                                         args=msg_args, 
                                         size=size, 
-                                        recv_binary=recv_binary,
-                                        mode=mode)
+                                        recv_binary=recv_binary)
 
     except KeyboardInterrupt as e:
         # if the user interrupts during command execution, the socket gets out
@@ -1072,8 +1067,7 @@ def _get_config_msg() -> Mapping[str, Union[str, int, float]]:
         Raised if there's an error in parsing the JSON-formatted server config
     """
     try:
-        raw_message = cast(str, generic_msg(cmd="getconfig",
-                                            mode=RequestMode.SYNC))
+        raw_message = cast(str, generic_msg(cmd="getconfig"))
         return json.loads(raw_message)
     except json.decoder.JSONDecodeError:
         raise ValueError(f"Returned config is not valid JSON: {raw_message}")
