@@ -7,8 +7,12 @@ from typing import Dict, List, Mapping, Optional, Tuple, Union, cast
 import pyfiglet  # type: ignore
 import zmq  # type: ignore
 
+import grpc
+import arkouda_pb2
+import arkouda_pb2_grpc
+
 from arkouda import __version__, io_util, security
-from arkouda.logger import getArkoudaLogger
+from arkouda.logger import getArkoudaLogger, LogLevel
 from arkouda.message import (
     MessageFormat,
     MessageType,
@@ -67,6 +71,146 @@ _memunit2factor = {
 }
 
 
+class Channel():
+    
+    __slots__ = ('url', 'user', 'token')
+    
+    def __init__(self, url: str, user: str, token: Optional[str]=None):
+        self.url = url
+        self.user = user
+        self.token = token
+    
+    def send_string_message(self, cmd: str, recv_binary: bool = False, args: str = None, size: int = -1) -> Union[str, memoryview]:
+        """
+        Generates a RequestMessage encapsulating command and requesting
+        user information, sends it to the Arkouda server, and returns
+        either a string or binary depending upon the message format.
+
+        Parameters
+        ----------
+        cmd : str
+            The name of the command to be executed by the Arkouda server
+        recv_binary : bool, defaults to False
+            Indicates if the return message will be a string or binary data
+        args : str
+            A delimited string containing 1..n command arguments
+        size : int
+            Default -1
+            Number of parameters contained in args. Only set if args is json.
+
+        Returns
+        -------
+        Union[str,memoryview]
+            The response string or binary data sent back from the Arkouda server
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the return message contains the word "Error", indicating
+            a server-side error was thrown
+        ValueError
+         Raised if the return message is malformed JSON or is missing 1..n
+        expected fields
+
+        Notes
+        -----
+        s- Size is not yet utilized. It is being provided in preparation for further development.
+        """
+        pass
+    
+    def send_binary_message(self, cmd: str, payload: memoryview, recv_binary: bool = False, 
+                            args: str = None, size: int = -1) -> Union[str, memoryview]:
+        """
+        Generates a RequestMessage encapsulating command and requesting user information,
+        information prepends the binary payload, sends the binary request to the Arkouda
+        server, and returns either a string or binary depending upon the message format.
+
+        Parameters
+        ----------
+        cmd : str
+            The name of the command to be executed by the Arkouda server
+        payload : memoryview
+            The binary data to be converted to a pdarray, Strings, or Categorical
+            object on the Arkouda server
+        recv_binary : bool, defaults to False
+            Indicates if the return message will be a string or binary data
+        args : str
+            A delimited string containing 1..n command arguments
+
+        Returns
+        -------
+        Union[str,memoryview]
+            The response string or binary data sent back from the Arkouda server
+
+        Raises
+        ------
+        RuntimeError
+            Raised if the return message contains the word "Error", indicating
+            a server-side error was thrown
+        ValueError
+            Raised if the return message is malformed JSON or is missing 1..n
+            expected fields
+        """
+        pass
+    
+class ZmqChannel(Channel):
+    
+    def send_string_message(self, cmd: str, recv_binary: bool = False, args: str = None, 
+                            size: int = -1) -> Union[str, memoryview]:
+
+        message = RequestMessage(
+            user=username, token=token, cmd=cmd, format=MessageFormat.STRING, args=args, size=size
+        )
+
+        logger.debug(f"sending message {json.dumps(message.asdict())}")
+
+        socket.send_string(json.dumps(message.asdict()))
+
+        if recv_binary:
+            frame = socket.recv(copy=False)
+            view = frame.buffer
+            # raise errors sent back from the server
+            if bytes(view[0 : len(b"Error:")]) == b"Error:":
+                raise RuntimeError(frame.bytes.decode())
+            return view
+        else:
+            raw_message = socket.recv_string()
+            try:
+                return_message = ReplyMessage.fromdict(json.loads(raw_message))
+
+                # raise errors or warnings sent back from the server
+                if return_message.msgType == MessageType.ERROR:
+                    raise RuntimeError(return_message.msg)
+                elif return_message.msgType == MessageType.WARNING:
+                    warnings.warn(return_message.msg)
+                return return_message.msg
+            except KeyError as ke:
+                raise ValueError(f"Return message is missing the {ke} field")
+            except json.decoder.JSONDecodeError:
+                raise ValueError(f"Return message is not valid JSON: {raw_message}")
+    
+    def send_binary_message(self):
+        pass    
+    
+class GrpcChannel(Channel):
+    
+    def send_string_message(self, cmd: str, recv_binary: bool = False, args: str = None, 
+                            size: int = -1) -> Union[str, memoryview]:
+        logger.debug("Sending request to Arkouda gRPC ...")
+        with grpc.insecure_channel(self.url) as channel:
+            stub = arkouda_pb2_grpc.ArkoudaStub(channel)
+            raw_response = stub.HandleRequest(arkouda_pb2.ArkoudaRequest(user=self.user,
+                                                                     token=self.token,
+                                                                     cmd=cmd,
+                                                                     format='STRING',
+                                                                     size=size,
+                                                                     args=args))
+            response = raw_response.message
+            logger.debug(f"Arkouda gRPC client received response {response}")
+            return response     
+    
+channel = GrpcChannel(url='localhost:50053', user='kjyost')
+
 def _mem_get_factor(unit: str) -> int:
     unit = unit.lower()
     if unit in _memunit2factor:
@@ -80,7 +224,7 @@ def _mem_get_factor(unit: str) -> int:
         )
 
 
-logger = getArkoudaLogger(name="Arkouda Client")
+logger = getArkoudaLogger(name="Arkouda Client", logLevel=LogLevel.DEBUG)
 clientLogger = getArkoudaLogger(name="Arkouda User Logger", logFormat="%(message)s")
 
 
@@ -130,7 +274,6 @@ def set_defaults() -> None:
     verbose = verboseDefVal
     pdarrayIterThresh = pdarrayIterThreshDefVal
     maxTransferBytes = maxTransferBytesDefVal
-
 
 # create context, request end of socket, and connect to it
 def connect(
@@ -182,40 +325,9 @@ def connect(
 
     logger.debug(f"ZMQ version: {zmq.zmq_version()}")
 
-    if connect_url:
-        url_values = _parse_url(connect_url)
-        server = url_values[0]
-        port = url_values[1]
-        if len(url_values) == 3:
-            access_token = url_values[2]
-
-    # "protocol://server:port"
-    pspStr = f"tcp://{server}:{port}"
-
-    # check to see if tunnelled connection is desired. If so, start tunnel
-    tunnel_server = os.getenv("ARKOUDA_TUNNEL_SERVER")
-    if tunnel_server:
-        (pspStr, _) = _start_tunnel(addr=pspStr, tunnel_server=tunnel_server)
-
-    logger.debug(f"psp = {pspStr}")
-
-    # create and configure socket for connections to arkouda server
-    socket = context.socket(zmq.REQ)  # request end of the zmq connection
-
-    # if timeout is specified, set send and receive timeout params
-    if timeout > 0:
-        socket.setsockopt(zmq.SNDTIMEO, timeout * 1000)
-        socket.setsockopt(zmq.RCVTIMEO, timeout * 1000)
-
     # set token and username global variables
     username = security.get_username()
     token = cast(str, _set_access_token(access_token=access_token, connect_string=pspStr))
-
-    # connect to arkouda server
-    try:
-        socket.connect(pspStr)
-    except Exception as e:
-        raise ConnectionError(e)
 
     # send the connect message
     cmd = "connect"
@@ -223,7 +335,7 @@ def connect(
 
     # send connect request to server and get the response confirming if
     # the connect request succeeded and, if not not, the error message
-    return_message = _send_string_message(cmd=cmd)
+    return_message = channel.send_string_message(cmd=cmd)
     logger.debug(f"[Python] Received response: {str(return_message)}")
     connected = True
 
@@ -432,37 +544,10 @@ def _send_string_message(
     -----
     - Size is not yet utilized. It is being provided in preparation for further development.
     """
-    message = RequestMessage(
-        user=username, token=token, cmd=cmd, format=MessageFormat.STRING, args=args, size=size
-    )
-
-    logger.debug(f"sending message {message}")
-
-    socket.send_string(json.dumps(message.asdict()))
-
-    if recv_binary:
-        frame = socket.recv(copy=False)
-        view = frame.buffer
-        # raise errors sent back from the server
-        if bytes(view[0 : len(b"Error:")]) == b"Error:":
-            raise RuntimeError(frame.bytes.decode())
-        return view
-    else:
-        raw_message = socket.recv_string()
-        try:
-            return_message = ReplyMessage.fromdict(json.loads(raw_message))
-
-            # raise errors or warnings sent back from the server
-            if return_message.msgType == MessageType.ERROR:
-                raise RuntimeError(return_message.msg)
-            elif return_message.msgType == MessageType.WARNING:
-                warnings.warn(return_message.msg)
-            return return_message.msg
-        except KeyError as ke:
-            raise ValueError(f"Return message is missing the {ke} field")
-        except json.decoder.JSONDecodeError:
-            raise ValueError(f"Return message is not valid JSON: {raw_message}")
-
+    return channel.send_string_message(cmd=cmd, 
+                                       recv_binary=recv_binary, 
+                                       args=args, 
+                                       size=size)
 
 def _send_binary_message(
     cmd: str, payload: memoryview, recv_binary: bool = False, args: str = None, size: int = -1
@@ -700,7 +785,10 @@ def generic_msg(
             )
         else:
             assert payload is None
-            return _send_string_message(cmd=cmd, args=msg_args, size=size, recv_binary=recv_binary)
+
+            raw_message = channel.send_string_message(cmd=cmd, args=msg_args, size=size, recv_binary=recv_binary) 
+            intermediate_message = json.loads(raw_message)
+            return intermediate_message['msg']
 
     except KeyboardInterrupt as e:
         # if the user interrupts during command execution, the socket gets out
@@ -895,3 +983,7 @@ def ruok() -> str:
             return f"imnotok because: {res}"
     except Exception as e:
         return f"ruok did not return response: {str(e)}"
+
+if __name__ == '__main__':
+    connect()
+    
