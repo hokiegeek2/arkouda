@@ -5,11 +5,7 @@ from enum import Enum
 from typing import Dict, List, Mapping, Optional, Tuple, Union, cast
 
 import pyfiglet  # type: ignore
-import zmq  # type: ignore
-
-import grpc
-import arkouda_pb2
-import arkouda_pb2_grpc
+import zmq  # type: ignores
 
 from arkouda import __version__, io_util, security
 from arkouda.logger import getArkoudaLogger, LogLevel
@@ -191,25 +187,6 @@ class ZmqChannel(Channel):
     
     def send_binary_message(self):
         pass    
-    
-class GrpcChannel(Channel):
-    
-    def send_string_message(self, cmd: str, recv_binary: bool = False, args: str = None, 
-                            size: int = -1) -> Union[str, memoryview]:
-        logger.debug("Sending request to Arkouda gRPC ...")
-        with grpc.insecure_channel(self.url) as channel:
-            stub = arkouda_pb2_grpc.ArkoudaStub(channel)
-            raw_response = stub.HandleRequest(arkouda_pb2.ArkoudaRequest(user=self.user,
-                                                                     token=self.token,
-                                                                     cmd=cmd,
-                                                                     format='STRING',
-                                                                     size=size,
-                                                                     args=args))
-            response = raw_response.message
-            logger.debug(f"Arkouda gRPC client received response {response}")
-            return response     
-    
-channel = GrpcChannel(url='localhost:50053', user='kjyost')
 
 def _mem_get_factor(unit: str) -> int:
     unit = unit.lower()
